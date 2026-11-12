@@ -1,0 +1,184 @@
+# ============================================================================
+#  TERRA FRATURADA - constantes de ajuste
+#
+#  Formato: chave = valor   (# inicia comentário)
+#  Cores são três números de 0 a 255: vermelho verde azul.
+#
+#  Durante o jogo, a tecla F5 recarrega este arquivo. Se houver erro (chave
+#  faltando, valor fora da faixa), os valores antigos são mantidos e o erro
+#  aparece na tela.
+#
+#  Toda chave daqui precisa existir na tabela de src/game/tuning.c e
+#  vice-versa: chave sobrando ou faltando é erro, para pegar erros de digitação.
+# ============================================================================
+
+# --- janela (só vale ao iniciar o jogo) -------------------------------------
+window.width   = 1280
+window.height  = 720
+window.vsync   = 1        # 1 = sincroniza com o monitor
+window.msaa    = 1        # 1 = antisserrilhado 4x
+window.fps_cap = 0        # limite de FPS; 0 = sem limite (o vsync já limita)
+
+# --- simulação --------------------------------------------------------------
+sim.hz        = 60        # passos de lógica por segundo
+sim.max_steps = 5         # teto de passos por quadro quando o jogo atrasa
+sim.seed      = 20261111  # seed da partida
+
+# --- câmera -----------------------------------------------------------------
+camera.fov  = 60          # campo de visão vertical, em graus
+camera.near = 0.1
+camera.far  = 4000
+
+# câmera de apresentação: gira sozinha em volta do planeta
+orbit.radius = 175
+orbit.height = 45
+orbit.speed  = 4          # graus por segundo
+
+# câmera livre (F2): WASD move, mouse olha, Espaço/Ctrl sobe/desce, Shift acelera
+freecam.speed      = 60   # unidades por segundo
+freecam.boost      = 4    # multiplicador com Shift
+freecam.smooth     = 8    # quanto maior, mais rápido a velocidade responde
+freecam.mouse_sens = 0.12 # graus por pixel de mouse
+
+# --- campo de estrelas ------------------------------------------------------
+stars.count          = 6000
+stars.seed           = 7
+stars.size_min       = 0.0042  # tamanho angular da menor estrela, em radianos
+stars.size_max       = 0.011   # ... e da maior (acima disso viram borrões nas bordas da tela)
+stars.size_power     = 20      # quanto maior, mais raras as estrelas grandes
+stars.brightness_min = 0.40    # brilho das estrelas mais fracas (0 a 1)
+stars.band_fraction  = 0.45    # parcela das estrelas na faixa da "Via Láctea"
+stars.band_width     = 0.16    # espessura da faixa (fração do céu)
+stars.band_tilt      = 35      # inclinação da faixa, em graus
+
+# --- planeta: forma ---------------------------------------------------------
+# 1 voxel = 1 unidade do mundo. Com grade 128 e raio 0.45, o planeta tem raio 57.6.
+planet.grid          = 128     # pontos da grade por eixo (só vale ao iniciar)
+planet.chunk         = 16      # tamanho do chunk (só vale ao iniciar)
+planet.seed          = 42      # muda o desenho dos continentes
+planet.radius_frac   = 0.45    # raio do nível do mar, como fração da grade
+planet.land_height   = 3.2     # altura máxima das montanhas, em voxels
+planet.ocean_depth   = 2.5     # profundidade máxima do mar, em voxels
+planet.land_bias     = -0.03   # positivo = mais terra; negativo = mais mar
+planet.noise_freq    = 1.7     # maior = continentes menores e mais numerosos
+planet.noise_octaves = 5       # camadas de detalhe no contorno dos continentes
+planet.relief_span   = 0.42    # menor = relevo sobe mais rápido a partir da costa
+planet.moisture_freq = 2.3     # tamanho das manchas de floresta e deserto
+planet.ice_latitude  = 0.88    # onde começam as calotas (0 = equador, 1 = polo)
+planet.surface_depth = 2.5     # espessura da camada de cima (bioma, água ou gelo) sobre a crosta
+planet.mantle_radius = 0.72    # fração do raio onde termina a crosta
+planet.core_radius   = 0.35    # fração do raio onde começa o núcleo
+
+biome.sand_height     = 0.35   # abaixo desta altura (voxels) a costa é areia
+biome.rock_height     = 0.55   # fração da altura máxima onde começa a rocha
+biome.snow_height     = 0.80   # ... e a neve (desce perto dos polos)
+biome.desert_moisture = -0.15  # umidade abaixo disto vira deserto
+biome.forest_moisture = 0.10   # umidade acima disto vira floresta
+
+# --- planeta: cores ---------------------------------------------------------
+color.water_shallow = 52 132 178
+color.water      = 28 86 156
+color.water_deep = 12 42 98
+color.ice        = 226 236 244
+color.sand       = 204 188 136
+color.grass      = 88 142 64
+color.forest     = 42 98 50
+color.desert     = 196 162 100
+color.rock       = 120 102 86
+color.snow       = 240 244 248
+color.crust      = 58 50 46
+color.mantle     = 232 110 28
+color.core       = 255 226 140
+color.jitter     = 0.06        # variação de brilho entre vértices vizinhos
+emission.mantle  = 0.85        # quanto o manto brilha sozinho (0 a 1)
+emission.core    = 1.0
+gloss.water      = 0.9         # quanto a água espelha o Sol (0 a 1)
+gloss.ice        = 0.35
+
+# --- shader do planeta (sem efeito com --no-shaders) ------------------------
+shader.detail_scale    = 1.1   # grão do detalhe de perto (maior = grão menor)
+shader.detail_strength = 0.20  # quanto o detalhe varia a cor
+shader.bump_strength   = 0.55  # quanto o detalhe "enruga" a superfície
+shader.spec_strength   = 0.55  # força do reflexo do Sol na água
+shader.spec_power      = 90    # maior = reflexo menor e mais concentrado
+shader.pulse_amount    = 0.25  # quanto manto e núcleo pulsam
+shader.pulse_speed     = 2.2   # velocidade do pulso
+
+# Quanto o fundo das crateras escurece (0 = nada, 1 = preto). É o que faz
+# uma cratera parecer um buraco e não uma bola. Vale com e sem shader.
+cavity.darkness = 0.72
+
+# --- sol e iluminação -------------------------------------------------------
+sun.azimuth    = 35            # direção do Sol em volta do planeta, em graus
+sun.elevation  = 12            # altura do Sol acima do equador, em graus
+sun.wrap       = 0.12          # quanto a luz "dobra" o terminador (0 = corte seco)
+sun.size       = 0.07          # tamanho do disco, em radianos
+sun.glow_size  = 0.70          # tamanho do brilho em volta
+sun.glow_alpha = 0.16
+sun.color      = 255 244 220
+light.sun      = 255 250 240   # cor da luz no lado do dia
+light.ambient  = 7 10 20       # luz mínima no lado da noite
+
+# --- luzes de cidades -------------------------------------------------------
+city.count            = 5000   # pontos de luz no lado noturno
+city.seed             = 11
+city.size             = 0.75   # tamanho de cada ponto, em voxels
+city.brightness       = 0.9
+city.region_freq      = 3.0    # tamanho das regiões povoadas
+city.region_threshold = -0.05  # maior = menos regiões com cidades
+city.cluster_max      = 40     # luzes na maior metrópole
+city.cluster_spread   = 0.045  # espalhamento de uma metrópole, em radianos
+city.lift             = 0.15   # altura acima do solo, em voxels
+city.color            = 255 206 138
+
+# --- atmosfera --------------------------------------------------------------
+atmo.height   = 0.11           # espessura da atmosfera, como fração do raio
+atmo.falloff  = 2.0            # maior = brilho mais colado na borda do planeta
+atmo.strength = 0.85           # intensidade do brilho na borda
+atmo.haze     = 0.03           # névoa extra sobre o disco do planeta
+atmo.color    = 96 160 255
+
+# --- crateras da ferramenta de debug ----------------------------------------
+# Clique esquerdo abre uma cratera; clique direito troca o tamanho.
+# radius = raio da boca; depth = profundidade (em voxels).
+crater.small_radius  = 2.5
+crater.small_depth   = 1.6
+crater.medium_radius = 5
+crater.medium_depth  = 3.5
+crater.large_radius  = 9
+crater.large_depth   = 7
+crater.huge_radius   = 15
+crater.huge_depth    = 13
+
+# --- remalhamento -----------------------------------------------------------
+# Quando o planeta muda, as malhas dos chunks afetados são refeitas aos
+# poucos, para nenhum quadro travar. O que parar antes vale.
+remesh.max_chunks = 12         # no máximo este número de chunks por quadro
+remesh.budget_ms  = 4.0        # ... ou este tempo por quadro, em milissegundos
+
+# --- derrota ----------------------------------------------------------------
+defeat.planet_hp = 0.35        # colapso quando a massa restante cai abaixo disto
+defeat.core_hp   = 0.60        # ... ou quando o núcleo cai abaixo disto
+
+# --- partículas de impacto --------------------------------------------------
+particles.gravity     = 12     # puxão em direção ao centro do planeta
+particles.rock_count  = 2.2    # pedras por unidade de (raio da cratera)²
+particles.rock_speed  = 7      # velocidade de lançamento
+particles.rock_life   = 3.0    # segundos
+particles.rock_size   = 0.32
+particles.dust_count  = 4      # nuvens de poeira por unidade de raio
+particles.dust_life   = 2.4
+particles.dust_size   = 0.55   # tamanho da nuvem, em raios da cratera
+particles.ember_count = 1.6    # brasas por unidade de raio², se sair manto ou núcleo
+particles.flash_size  = 3.2    # tamanho do clarão, em raios da cratera
+particles.flash_life  = 0.22
+
+# --- tremor de câmera -------------------------------------------------------
+shake.strength  = 0.07         # tremor por unidade de raio da cratera
+shake.falloff   = 150          # distância em que o tremor cai pela metade
+shake.max_angle = 1.8          # balanço máximo da câmera, em graus
+shake.decay     = 1.8          # quanto do tremor some por segundo
+shake.frequency = 22           # rapidez do balanço
+
+# --- autoplay ---------------------------------------------------------------
+autoplay.warmup_frames = 10    # quadros iniciais ignorados nas medições de tempo

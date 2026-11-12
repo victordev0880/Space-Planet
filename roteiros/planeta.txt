@@ -1,0 +1,46 @@
+# Roteiro do marco 2 (planeta estático): fotografa o planeta de vários ângulos.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/planeta.txt"
+#
+# Com sun.azimuth = 35 e sun.elevation = 12, o Sol fica na direção
+# (0.56, 0.21, 0.80). As posições de câmera abaixo foram escolhidas a partir
+# dela: de frente para o Sol é dia, de costas é noite.
+
+frames 120
+seed 1
+
+# Lado do dia, com e sem o overlay de debug.
+at 0   press overlay
+at 0   cam 104 38 148
+at 5   shot planeta_01_dia_overlay
+at 6   press overlay
+at 10  shot planeta_02_dia
+
+# Terminador: a linha entre o dia e a noite.
+at 20  cam 151 18 -105
+at 20  shot planeta_03_terminador
+
+# Lado da noite, com um crescente iluminado: luzes de cidades e atmosfera.
+at 30  cam -14 -24 -181
+at 30  shot planeta_04_noite
+
+# Calota do polo norte.
+at 40  cam 20 185 30
+at 40  shot planeta_05_polo_norte
+
+# De perto, olhando de lado para o horizonte.
+at 50  cam 24.6 36.9 68.9 43.7 17.5 32.1
+at 50  shot planeta_06_perto
+
+# A mesma vista em wireframe (F3), para ver os triângulos.
+at 60  press wireframe
+at 62  shot planeta_07_wireframe
+at 64  press wireframe
+
+# Cidades de perto, à noite.
+at 70  cam -25 17 -79
+at 70  shot planeta_08_noite_perto
+
+# De volta à câmera de apresentação.
+at 80  press freecam
+at 119 shot planeta_09_orbita

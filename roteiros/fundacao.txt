@@ -1,0 +1,31 @@
+# Roteiro do marco 1 (fundação): câmera de apresentação, câmera livre,
+# overlay de debug e recarga do tuning.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/fundacao.txt"
+
+frames 420
+seed 1
+
+at 0    press overlay           # F1: liga o overlay de debug
+at 60   shot fundacao_01_orbita
+
+at 90   press freecam           # F2: entra na câmera livre
+at 91   hold forward
+at 91   hold boost
+at 91   look 6 -1               # gira para a direita e um pouco para cima
+at 200  look 0 0
+at 200  release boost
+at 210  shot fundacao_02_livre
+
+at 220  hold left
+at 220  look -4 2
+at 300  release left
+at 300  release forward
+at 300  look 0 0
+
+at 310  press reload            # F5: recarrega data/tuning.txt
+at 330  press overlay           # F1: desliga o overlay
+at 360  shot fundacao_03_sem_overlay
+
+at 380  press freecam           # F2: volta para a câmera de apresentação
+at 419  shot fundacao_04_final

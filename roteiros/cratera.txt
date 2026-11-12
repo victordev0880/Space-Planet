@@ -1,0 +1,62 @@
+# Roteiro do marco 3 (planeta destrutível): crateras de vários tamanhos, um
+# túnel até o núcleo, um impacto sobre cidades à noite, um bombardeio (teste
+# de estresse do remalhamento) e, por fim, o colapso do planeta.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/cratera.txt"
+#
+# O Sol fica na direção (0.56, 0.21, 0.80); as crateras do começo caem no
+# lado do dia, de frente para a câmera.
+
+frames 480
+seed 1
+
+at 0   press overlay
+at 0   cam 104 38 148
+
+# --- três tamanhos de cratera -----------------------------------------------
+at 10  crater 0.30 0.50 0.80   2.5 1.6
+at 20  crater 0.75 0.10 0.65   5 3.5
+at 30  crater 0.45 -0.25 0.85  9 7
+at 33  shot cratera_01_impacto
+at 70  shot cratera_02_tres_tamanhos
+
+# --- túnel até o núcleo: vários impactos no mesmo ponto ---------------------
+at 80  crater 0.56 0.21 0.80  6 8
+at 86  crater 0.56 0.21 0.80  6 8
+at 92  crater 0.56 0.21 0.80  6 8
+at 98  crater 0.56 0.21 0.80  6 8
+at 104 crater 0.56 0.21 0.80  6 8
+at 110 crater 0.56 0.21 0.80  6 8
+at 113 shot cratera_03_tunel_impacto
+at 150 cam 53 20 76
+at 151 shot cratera_04_nucleo_exposto
+
+# --- de lado, sem o overlay --------------------------------------------------
+at 160 press overlay
+at 160 cam 95 15 70  40 12 62
+at 161 shot cratera_05_de_lado
+
+# --- noite: impacto em cima de cidades ---------------------------------------
+# A direção aponta para o aglomerado de luzes acima e à direita do centro da
+# tela nesta posição de câmera.
+at 170 cam -25 17 -79
+at 171 shot cratera_06_noite_antes
+at 175 crater -0.395 0.284 -0.874  7 4
+at 178 shot cratera_07_noite_impacto
+at 215 shot cratera_08_noite_depois
+
+# --- bombardeio: teste de estresse do remalhamento ---------------------------
+at 220 press overlay
+at 220 cam 104 38 148
+at 230 barrage 60 4 3
+at 232 shot cratera_09_bombardeio
+at 250 barrage 60 4 3
+at 270 barrage 60 4 3
+at 330 shot cratera_10_depois_do_bombardeio
+
+# --- colapso: impactos gigantes até o planeta passar do limite ---------------
+at 340 barrage 40 15 13
+at 360 barrage 40 15 13
+at 380 barrage 40 15 13
+at 384 shot cratera_11_colapso_impacto
+at 479 shot cratera_12_colapso

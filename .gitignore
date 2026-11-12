@@ -1,0 +1,11 @@
+# Saídas de compilação
+build/
+terra.exe
+terra
+
+# raylib é baixado pelo Makefile (tag fixa), não entra no repositório
+vendor/raylib/
+
+# Evidências geradas pelo autoplay e dados locais do jogador
+captures/
+save/

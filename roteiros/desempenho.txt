@@ -1,0 +1,21 @@
+# Roteiro de desempenho: 10 segundos de jogo sem capturas no meio, para medir
+# o tempo de quadro em regime (gravar um PNG atrapalha os quadros vizinhos).
+#
+#   custo puro do quadro:   mingw32-make run ARGS="--autoplay roteiros/desempenho.txt"
+#   ritmo com vsync:        mingw32-make run ARGS="--autoplay roteiros/desempenho.txt --realtime"
+#
+# No relatório, olhe frame_ms_median, frame_ms_p99 e frames_over_budget.
+
+frames 600
+seed 1
+
+# Primeira metade: câmera de apresentação, planeta inteiro na tela.
+at 0   press overlay
+
+# Segunda metade: três vistas de perto, com o planeta ocupando a tela toda
+# (o pior caso para a placa de vídeo, que precisa pintar todos os pixels).
+at 300 cam 60 30 75                         # lado do dia
+at 400 cam -45 10 -85                       # lado da noite, com as cidades
+at 500 cam 24.6 36.9 68.9 43.7 17.5 32.1    # rasante, olhando para o horizonte
+
+at 599 shot desempenho_fim
