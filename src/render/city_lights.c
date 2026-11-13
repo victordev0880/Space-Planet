@@ -141,6 +141,10 @@ void city_lights_build(CityLights *c, const Planet *p, const Tuning *t, Texture2
         MemFree(c->ground);
         c->ground = NULL;
     }
+    if (c->alpha != NULL) {
+        MemFree(c->alpha);
+        c->alpha = NULL;
+    }
     c->count = 0;
     c->lit = 0;
 
@@ -202,6 +206,8 @@ void city_lights_build(CityLights *c, const Planet *p, const Tuning *t, Texture2
     mesh.vertexCount = made * 4;
     mesh.triangleCount = made * 2;
     UploadMesh(&mesh, true);   // dinâmica: as cores mudam quando luzes se apagam
+    c->alpha = MemAlloc((unsigned int)made);
+    for (int i = 0; i < made; i++) c->alpha[i] = mesh.colors[i * 16 + 3];
     c->mesh = mesh;
     c->ground = grounds;
     c->has_mesh = true;
@@ -238,6 +244,26 @@ void city_lights_impact(CityLights *c, const Planet *p, Vector3 pos, float radiu
     }
 }
 
+void city_lights_restore(CityLights *c, const Planet *p, Vector3 pos, float radius)
+{
+    if (!c->has_mesh || c->alpha == NULL) return;
+    float reach = radius + IMPACT_MARGIN;
+    bool changed = false;
+    for (int i = 0; i < c->count; i++) {
+        if (c->mesh.colors[i * 16 + 3] != 0) continue;   // já acesa
+        Vector3 ground = { c->ground[i * 3], c->ground[i * 3 + 1], c->ground[i * 3 + 2] };
+        if (Vector3DistanceSqr(ground, pos) > reach * reach) continue;
+        Vector3 below = Vector3Scale(ground, 1.0f - GROUND_PROBE_DEPTH / Vector3Length(ground));
+        if (planet_sample(p, below) < VOXEL_ISO) continue;   // o chão ainda não voltou
+        for (int corner = 0; corner < 4; corner++) c->mesh.colors[(i * 4 + corner) * 4 + 3] = c->alpha[i];
+        c->lit++;
+        changed = true;
+    }
+    if (changed) {
+        UpdateMeshBuffer(c->mesh, RL_DEFAULT_SHADER_ATTRIB_LOCATION_COLOR, c->mesh.colors, c->count * 16, 0);
+    }
+}
+
 void city_lights_draw(const CityLights *c)
 {
     if (!c->has_mesh || c->count <= 0) return;
@@ -260,6 +286,7 @@ void city_lights_unload(CityLights *c)
 {
     if (c->has_mesh) UnloadMesh(c->mesh);
     if (c->ground != NULL) MemFree(c->ground);
+    if (c->alpha != NULL) MemFree(c->alpha);
     if (c->has_material) {
         // A textura é emprestada: tira do material antes de liberá-lo.
         c->material.maps[MATERIAL_MAP_DIFFUSE].texture = (Texture2D){ 0 };

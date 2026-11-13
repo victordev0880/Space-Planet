@@ -47,6 +47,9 @@
 //                                 data/evolutions.txt: escort, spread, crit...)
 //   at 140 boss breaker 0 1 0     põe um boss em cena, chegando da direção (x y z)
 //   at 145 bosshp 0.2             põe a vida do boss em 20% (com a troca de fase)
+//   at 146 rock meteor 0 90 40 -12 0 0   um meteoro em (x y z) voando com a
+//                                 velocidade (vx vy vz)
+//   at 147 rock fragment 0 80 30  um fragmento já em órbita, passando por (x y z)
 //   at 150 cam boss 80 60 10      câmera livre seguindo o boss: 80 acima dele, 60
 //                                 atrás (no sentido da órbita) e 10 de lado. Olha
 //                                 para o boss, ou, na carga e no disparo, para o
@@ -76,10 +79,11 @@
 #define AUTOPLAY_MAX_BARRAGE 500    // crateras de um único "barrage"
 #define AUTOPLAY_MAX_SPAWNS  8      // comandos "spawn" em um mesmo quadro
 #define AUTOPLAY_MAX_BOSS_DOWNS 4   // quadros de boss derrotado listados no relatório
+#define AUTOPLAY_MAX_ROCKS   8      // comandos "rock" em um mesmo quadro
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP, AP_ROCK
 } AutoplayCmd;
 
 typedef struct {
@@ -107,6 +111,12 @@ typedef struct {
     int       variant;   // -1 = sorteada
     Vector3   center;
 } AutoplaySpawn;
+
+typedef struct {
+    int     kind;        // RockKind
+    Vector3 pos;
+    Vector3 vel;         // meteoro: velocidade (fragmento: ignorada, ele orbita)
+} AutoplayRock;
 
 // O que o roteiro manda fazer em um quadro.
 typedef struct {
@@ -136,6 +146,8 @@ typedef struct {
 
     AutoplaySpawn spawns[AUTOPLAY_MAX_SPAWNS];
     int           spawn_count;
+    AutoplayRock  rocks[AUTOPLAY_MAX_ROCKS];
+    int           rock_count;
 
     AutoplayCrater craters[AUTOPLAY_MAX_CRATERS];
     int            crater_count;
@@ -260,6 +272,12 @@ typedef struct {
     int         boss_downs;
     int         boss_down_frames[AUTOPLAY_MAX_BOSS_DOWNS];
     bool        ability_owned;     // a nave tem o núcleo do Rompe-Mundos
+
+    // Conserto: rochas que tocaram o chão e a fração do planeta devolvida.
+    int         rocks_delivered;
+    float       planet_restored;
+    int         rocks_alive;
+    int         scars_open;        // cicatrizes ainda não consertadas
 
     int         warnings;        // avisos e erros emitidos durante a execução
     int         errors;

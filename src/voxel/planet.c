@@ -171,6 +171,9 @@ void planet_generate(Planet *p, const PlanetParams *params)
     p->initial_volume = volume;
     p->core_volume = core_volume;
     p->initial_core_volume = core_volume;
+    size_t count = (size_t)n * (size_t)n * (size_t)n;
+    memcpy(p->original_density, p->density, count);
+    memcpy(p->original_material, p->material, count);
 
     // Tudo mudou: todas as malhas ficam desatualizadas.
     int chunks = planet_chunk_count(p);
@@ -197,8 +200,13 @@ bool planet_init(Planet *p, const PlanetParams *params, Arena *arena)
     p->center = (float)params->grid * 0.5f;
     p->density = ARENA_ARRAY(arena, uint8_t, count);
     p->material = ARENA_ARRAY(arena, uint8_t, count);
+    p->original_density = ARENA_ARRAY(arena, uint8_t, count);
+    p->original_material = ARENA_ARRAY(arena, uint8_t, count);
     p->chunk_version = ARENA_ARRAY(arena, uint32_t, planet_chunk_count(p));
-    if (p->density == NULL || p->material == NULL || p->chunk_version == NULL) return false;
+    if (p->density == NULL || p->material == NULL || p->chunk_version == NULL || p->original_density == NULL
+        || p->original_material == NULL) {
+        return false;
+    }
 
     planet_generate(p, params);
     return true;
@@ -208,6 +216,34 @@ float planet_hp(const Planet *p)
 {
     if (p->initial_volume <= 0) return 0.0f;
     return (float)((double)p->volume / (double)p->initial_volume);
+}
+
+static int clamp_int(int v, int lo, int hi)
+{
+    return (v < lo) ? lo : (v > hi) ? hi : v;
+}
+
+int planet_touch(Planet *p, int min_x, int min_y, int min_z, int max_x, int max_y, int max_z)
+{
+    if (max_x < min_x || max_y < min_y || max_z < min_z) return 0;
+    const int chunk = p->chunk_size;
+    const int last_chunk = p->chunks_per_axis - 1;
+    int cx0 = clamp_int((min_x - VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int cy0 = clamp_int((min_y - VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int cz0 = clamp_int((min_z - VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int cx1 = clamp_int((max_x + VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int cy1 = clamp_int((max_y + VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int cz1 = clamp_int((max_z + VOXEL_REMESH_MARGIN) / chunk, 0, last_chunk);
+    int touched = 0;
+    for (int cz = cz0; cz <= cz1; cz++) {
+        for (int cy = cy0; cy <= cy1; cy++) {
+            for (int cx = cx0; cx <= cx1; cx++) {
+                p->chunk_version[planet_chunk_index(p, cx, cy, cz)]++;
+                touched++;
+            }
+        }
+    }
+    return touched;
 }
 
 float planet_core_hp(const Planet *p)

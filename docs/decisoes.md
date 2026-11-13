@@ -903,6 +903,97 @@ precisam dividir o botão ou o raio muda de tecla.
 - O piloto automático leva bem mais tempo que um jogador para matar o boss
   (perde capacitores no caminho); o roteiro usa `bosshp` para mostrar o fim.
 
+## Marco 9, parte 1: rochas, raio trator e conserto do planeta (2026-11-13)
+
+Pedido do Victor: "meteoros pra eu abduzir e levar pra consertar o planeta".
+Virou o centro do ciclo de recursos do marco 9: destruição → fragmentos →
+raio trator → conserto. A mineração com moeda e as defesas compráveis ficam
+para a parte 2.
+
+### Consertar = devolver o planeta original
+O planeta guarda uma cópia da grade logo depois de gerada (`original_density`
+e `original_material`, +4 MB no tamanho real). Consertar (`voxel/terraform.c`)
+é o contrário da cratera: dentro de uma esfera, cada voxel volta à densidade e
+ao material originais, com a borda misturada. Nunca passa do original: o
+planeta não cresce, e consertar onde nada foi destruído não muda nada. O
+relevo, a grama, a areia, o gelo e as luzes das cidades voltam como eram.
+Gerar de novo a partir do ruído só onde se conserta seria caro demais (o
+ruído é a parte cara da geração); a cópia custa só memória.
+
+### As rochas
+- **Fragmentos:** crateras com boca a partir de 5 (bomba, Kamikaze, o laser do
+  boss) arrancam um fragmento a cada 1.100 voxels arrancados (somando
+  impactos, no máximo 2 por impacto e 14 em órbita). O fragmento sobe em arco
+  até uma órbita sorteada (18 a 34 de altura): é o cinturão de destroços. Tem
+  o "topo" da cor de onde saiu (grama, areia, água, gelo).
+- **Meteoros:** dois em cada calmaria e um a cada 55 s no meio das hordas,
+  passando em linha reta do lado da nave, com cauda de fogo, e indo embora se
+  ninguém pegar. São maiores e consertam mais.
+- A nave bate nas rochas soltas (é empurrada e, rápida, leva dano).
+
+### Raio trator (F)
+F puxa a rocha que está à frente (até 28° do nariz, 45 de alcance); F de novo
+solta. A rocha fica **pendurada à frente e abaixo da nave**, presa por uma mola,
+com um cone de luz (uma abdução). A primeira versão a punha atrás da nave, no
+lugar exato da câmera: ela nunca aparecia na tela. À frente e abaixo, ela fica
+sobre o chão e dá para mirar a cratera antes de soltar. Solta, cai quase reto;
+arrastada até encostar no chão, também conserta. Rebocar pesa: a nave perde até
+30% da velocidade (pela rocha maior). Esticado demais, o raio arrebenta.
+
+### O conserto acontece à vista
+A esfera do conserto cresce em 8 passos ao longo de 1,2 s, a partir de um ponto
+um pouco abaixo de onde era a superfície: o buraco se enche diante do jogador.
+Ao terminar: "+N milhões de habitantes" sobe do lugar, pontos (2.500 por 1%)
+e XP, e as luzes das cidades dali reacendem.
+
+### Cicatrizes
+Cada impacto marca uma região (impactos próximos se juntam). Uma por passo é
+conferida: se o chão voltou, ela some. Rebocando, o HUD mostra as maiores como
+círculos verdes, com "CRATERA" na melhor (grande e perto) e seta na borda se
+ela estiver fora da tela. O piloto automático as usa como destino.
+
+### O corte do boss passou a medir a superfície original
+Com as calmarias consertando o planeta, a partida inteira revelou um problema
+do marco 8: cada corte novo do Rompe-Mundos começa perto de onde o anterior
+terminou (o boss anda na órbita enquanto descansa), e o "chão" medido ali já
+era o fundo da vala antiga. Cada cruzamento cavava mais 20 e, numa luta longa,
+o núcleo caía para 40% (uma partida terminou em derrota na horda 5). Agora o
+corte é fundo em relação à superfície original: tira sempre uma fatia da mesma
+espessura e não cava mais nada onde já cortou. Há um teste com seis cortes
+seguidos.
+
+### HUD, som e piloto automático
+- Marcadores: meteoros ("METEORO", com seta na borda), fragmentos por perto, e
+  colchetes verdes com "F puxa" na rocha ao alcance do raio. Avisos "METEORO À
+  VISTA" e "REBOCANDO: solte (F) em cima de uma cratera". Na tela de fim, as
+  rochas levadas e os habitantes devolvidos.
+- Sons: meteoro chegando, fragmento arrancado, raio pegando, soltando, errando
+  e arrebentando, rocha batendo no chão e um acorde de "cura".
+- Piloto automático: sem inimigo para caçar (e com alguma cicatriz aberta),
+  busca a rocha mais perto (meteoro primeiro) e leva até a maior cicatriz
+  perto, soltando com a rocha em cima dela. Ele aperta F só em passos pares: F
+  segurado de um passo para o outro não conta como aperto novo (na primeira
+  versão ele pegava a rocha e não conseguia mais soltar, e voava para o
+  espaço com ela).
+
+### Calmarias mais longas
+As calmarias das hordas 2 a 10 subiram de 8–14 s para 14–18 s: é nelas que dá
+tempo de buscar um meteoro e consertar. Enter continua chamando a próxima horda.
+
+### Medições (Vega 8)
+- `conserto.txt` (dois atos, 7 rochas): o planeta volta a 99,97%, nenhuma
+  cicatriz aberta; mediana 3,25 ms, p99 5,75 ms. Mesmo `state_hash` sem shaders.
+- `onda1.txt`: vitória com o planeta em 88,7% e o núcleo intacto; 33 rochas
+  devolveram 7,8% do planeta; boss derrotado aos 5 min; mediana 3,25 ms, p99
+  7,75 ms.
+
+### Limitações conhecidas
+- Os tiros atravessam as rochas (a mineração da parte 2 deve mudar isso).
+- A rocha a reboque pode tapar a mira se a nave apontar direto para o
+  planeta (ela fica entre os dois).
+- O piloto automático só conserta quando não há inimigo; um jogador pode
+  escolher defender ou consertar.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

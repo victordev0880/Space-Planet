@@ -143,6 +143,42 @@ static void boss_cut_carves_the_planet(void)
     CHECK(w.boss.action == BREAKER_REST);
 }
 
+// Muitos cortes seguidos (nenhum capacitor destruído): cada um tira uma fatia
+// de espessura fixa abaixo da superfície original; cruzando valas antigas, não
+// cava mais fundo. O interior abaixo da fatia fica intacto.
+static void repeated_cuts_never_dig_deeper(void)
+{
+    static World w;
+    Tuning t = small();
+    make_world(&w, &t);
+    skip_entrance(&w, &t);
+    int fires = 0;
+    uint32_t seen = w.events.count;
+    for (int i = 0; i < seconds(200.0f) && fires < 6; i++) {
+        run(&w, &t, keys(0u), 1);
+        for (uint32_t id = seen + 1; id <= w.events.count; id++) {
+            const GameEvent *e = events_find(&w.events, id);
+            if (e != NULL && e->type == EV_BOSS_FIRE) fires++;
+        }
+        seen = w.events.count;
+    }
+    run(&w, &t, keys(0u), seconds(t.breaker_fire_time + 0.5f));
+    CHECK(fires >= 6);
+    CHECK(planet_core_hp(&w.planet) == 1.0f);
+    // Abaixo da fatia mais funda possível (o fundo do mar menos o corte, com a
+    // faixa de densidade da borda), tudo continua sólido.
+    float safe = w.planet.params.radius - w.planet.params.ocean_depth - t.breaker_cut_sink - t.breaker_cut_radius - 5.0f;
+    int solid = 0, total = 0;
+    for (int k = 0; k < 400; k++) {
+        float y = 1.0f - 2.0f * ((float)k + 0.5f) / 400.0f;   // pontos espalhados pela esfera
+        float ring = sqrtf(fmaxf(1.0f - y * y, 0.0f)), angle = 2.39996f * (float)k;
+        Vector3 dir = { ring * cosf(angle), y, ring * sinf(angle) };
+        total++;
+        if (planet_sample(&w.planet, Vector3Scale(dir, safe)) >= VOXEL_ISO) solid++;
+    }
+    CHECK(solid == total);
+}
+
 // Fases pela vida; a partir da 2, drones.
 static void boss_phases_and_drones(void)
 {
@@ -275,6 +311,7 @@ void suite_boss(void)
     RUN(boss_enters_then_fights);
     RUN(boss_capacitors_cancel_the_cut);
     RUN(boss_cut_carves_the_planet);
+    RUN(repeated_cuts_never_dig_deeper);
     RUN(boss_phases_and_drones);
     RUN(boss_death_ends_the_wave_and_rewards);
     RUN(bolts_hit_boss_parts);

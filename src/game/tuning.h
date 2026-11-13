@@ -274,6 +274,19 @@ typedef struct {
     float score_planet_bonus;
     float score_planet_bonus_hp;
 
+    // raio trator, rochas e conserto do planeta (marco 9)
+    float tractor_range, tractor_cone, tractor_distance, tractor_drop, tractor_stiffness, tractor_damping;
+    float tractor_break;
+    float tractor_slow;
+    float rock_fall_accel, rock_fall_drag, rock_hit_damage, rock_hit_speed;
+    float fragment_volume, fragment_min_radius, fragment_radius_min, fragment_radius_max, fragment_fill;
+    float fragment_alt_min, fragment_alt_max, fragment_speed, fragment_eject_time;
+    int   fragment_max, fragment_per_impact;
+    float meteor_interval, meteor_speed, meteor_pass_min, meteor_pass_max, meteor_radius_min, meteor_radius_max;
+    float meteor_fill, meteor_distance, meteor_calm_gap, meteor_aim;
+    int   meteor_calm_count;
+    float repair_time, repair_depth, repair_points, repair_xp;
+
     // áudio
     float audio_volume;
     float audio_falloff;

@@ -504,6 +504,10 @@ int main(int argc, char **argv)
         report.boss_downs = boss_downs;
         for (int i = 0; i < boss_downs; i++) report.boss_down_frames[i] = boss_down_frames[i];
         report.ability_owned = world.ability.owned;
+        report.rocks_delivered = world.rocks.delivered;
+        report.rocks_alive = rocks_alive(&world.rocks);
+        report.planet_restored = (float)((double)world.repair.restored_total / (double)world.planet.initial_volume);
+        for (int i = 0; i < REPAIR_SCARS; i++) report.scars_open += world.repair.scars[i].used ? 1 : 0;
         report.warnings = log_warnings;
         report.errors = log_errors;
         report.first_problem = log_first_problem;

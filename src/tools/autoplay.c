@@ -213,6 +213,25 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         if (e.action < 0) return fail(ap, line_no, "boss: tipo desconhecido: \"%s\"", tokens[3]);
         if (Vector3Length(e.pos) < 1e-4f) return fail(ap, line_no, "boss: a direcao nao pode ser (0 0 0)");
         e.cmd = AP_BOSS;
+    } else if (strcmp(cmd, "rock") == 0) {
+        bool ok = (count == 7 || count == 10) && parse_float(tokens[4], &e.pos.x) && parse_float(tokens[5], &e.pos.y)
+               && parse_float(tokens[6], &e.pos.z);
+        if (ok && count == 10) {
+            ok = parse_float(tokens[7], &e.target.x) && parse_float(tokens[8], &e.target.y)
+              && parse_float(tokens[9], &e.target.z);
+        }
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> rock meteor|fragment <x> <y> <z> [<vx> <vy> <vz>]");
+        if (strcmp(tokens[3], "meteor") == 0)        e.action = ROCK_METEOR;
+        else if (strcmp(tokens[3], "fragment") == 0) e.action = ROCK_FRAGMENT;
+        else return fail(ap, line_no, "rock: tipo desconhecido: \"%s\" (meteor ou fragment)", tokens[3]);
+        int same_frame = 0;
+        for (int i = 0; i < ap->event_count; i++) {
+            if (ap->events[i].cmd == AP_ROCK && ap->events[i].frame == e.frame) same_frame++;
+        }
+        if (same_frame >= AUTOPLAY_MAX_ROCKS) {
+            return fail(ap, line_no, "no maximo %d comandos rock no mesmo quadro", AUTOPLAY_MAX_ROCKS);
+        }
+        e.cmd = AP_ROCK;
     } else if (strcmp(cmd, "bosshp") == 0) {
         if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f && e.speed <= 1.0f)) {
             return fail(ap, line_no, "esperado: at <quadro> bosshp <fracao da vida, de 0 a 1>");
@@ -358,6 +377,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->xp = 0.0f;
     out->boss = -1;
     out->boss_hp = -1.0f;
+    out->rock_count = 0;
     out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
@@ -421,6 +441,14 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_BOSS_HP:
             out->boss_hp = e->speed;
             break;
+        case AP_ROCK:
+            if (out->rock_count < AUTOPLAY_MAX_ROCKS) {
+                AutoplayRock *k = &out->rocks[out->rock_count++];
+                k->kind = e->action;
+                k->pos = e->pos;
+                k->vel = e->target;
+            }
+            break;
         case AP_EVOLVE:
             if (out->evolve_count < EVO_COUNT) {
                 out->evolve_id[out->evolve_count] = e->action;
@@ -475,6 +503,9 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     if (frame->xp > 0.0f) world_give_xp(w, t, frame->xp);
     if (frame->boss >= 0) world_spawn_boss(w, t, (BossType)frame->boss, frame->boss_dir);
     if (frame->boss_hp > 0.0f) boss_set_health(&w->boss, t, frame->boss_hp, &w->events, (uint32_t)w->tick);
+    for (int i = 0; i < frame->rock_count; i++) {
+        world_spawn_rock(w, t, (RockKind)frame->rocks[i].kind, frame->rocks[i].pos, frame->rocks[i].vel);
+    }
     for (int i = 0; i < frame->spawn_count; i++) {
         world_spawn_variant(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center,
                             frame->spawns[i].variant);
@@ -633,6 +664,13 @@ bool autoplay_write_report(const char *path, const AutoplayReport *r)
             fprintf(f, "boss_down_frame = %d\n", r->boss_down_frames[i]);
         }
         fprintf(f, "ability = %s\n", r->ability_owned ? "sim" : "nao");
+        fprintf(f, "\n");
+    }
+    if (r->rocks_delivered > 0 || r->rocks_alive > 0) {
+        fprintf(f, "rocks_alive = %d\n", r->rocks_alive);
+        fprintf(f, "rocks_delivered = %d\n", r->rocks_delivered);
+        fprintf(f, "planet_restored = %.4f\n", (double)r->planet_restored);
+        fprintf(f, "scars_open = %d\n", r->scars_open);
         fprintf(f, "\n");
     }
     fprintf(f, "warnings = %d\n", r->warnings);

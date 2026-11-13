@@ -25,6 +25,7 @@ static const char *const ACTION_NAMES[ACT_COUNT] = {
     [ACT_CARD1]        = "card1",
     [ACT_CARD2]        = "card2",
     [ACT_CARD3]        = "card3",
+    [ACT_TRACTOR]      = "tractor",
 };
 
 void input_init(InputTracker *t)

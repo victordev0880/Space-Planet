@@ -31,6 +31,9 @@ void test_fail(const char *file, int line, const char *expr)
 
 int main(void)
 {
+    // Sem buffer: se um teste derrubar o programa (UBSan para na hora), a
+    // última linha mostra o teste anterior a ele, e não se perde no buffer.
+    setvbuf(stdout, NULL, _IONBF, 0);
     suite_rng();
     suite_arena();
     suite_noise();
@@ -50,6 +53,7 @@ int main(void)
     suite_enemies();
     suite_evolution();
     suite_boss();
+    suite_rocks();
     suite_autoplay();
     finish_current();
 

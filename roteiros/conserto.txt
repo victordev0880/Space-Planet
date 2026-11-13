@@ -1,0 +1,70 @@
+# Roteiro do marco 9 (conserto do planeta): três crateras grandes perto da nave
+# arrancam fragmentos, que sobem até a órbita; um meteoro passa na frente; o
+# piloto automático puxa o meteoro com o raio trator, leva até a cratera e
+# solta; depois busca os fragmentos. No segundo ato, mais duas crateras em
+# outro lugar e outro meteoro. Fotos de antes e depois.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/conserto.txt"
+#
+# A nave fica em (45 35 82), no lado do dia, de nariz para -z. As crateras
+# ficam logo à frente e abaixo dela.
+
+frames 4200
+seed 5
+
+at 0    waves off
+at 0    ship 45.06 35.05 82.11  45.06 35.05 -20
+at 1    crater 0.42 0.36 0.83  13 10.5
+at 1    crater 0.30 0.44 0.85  10 8
+at 1    crater 0.55 0.26 0.79  8 6.5
+
+# --- antes: as crateras e os fragmentos subindo ----------------------------------
+at 40   cam 95 75 150  26 22 46
+at 41   shot conserto_01_crateras
+at 42   view ship
+at 70   shot conserto_02_fragmentos
+at 160  shot conserto_03_cinturao
+
+# --- um meteoro passa na frente da nave ------------------------------------------
+at 170  rock meteor 95 48 25  -12 0 0
+at 240  shot conserto_04_meteoro
+at 250  autopilot on
+at 330  shot conserto_05_buscando
+at 400  shot conserto_06_raio
+at 470  shot conserto_07
+at 540  shot conserto_08
+at 610  shot conserto_09
+at 680  shot conserto_10
+at 750  shot conserto_11
+at 820  shot conserto_12
+at 900  shot conserto_13
+at 1000 shot conserto_14
+at 1100 shot conserto_15
+at 1200 cam 95 75 150  26 22 46
+at 1201 shot conserto_16_depois
+at 1202 view ship
+
+# --- segundo ato: outra região, outro meteoro ----------------------------------------
+at 1300 crater 0.62 0.50 0.60  13 10.5
+at 1300 crater 0.70 0.40 0.59  9 7
+at 1310 cam 120 90 95  38 26 35
+at 1311 shot conserto_17_crateras2
+at 1312 view ship
+at 1330 rock meteor 20 95 60  10 -2 -4
+at 1450 shot conserto_18
+at 1600 shot conserto_19
+at 1750 shot conserto_20
+at 1900 shot conserto_21
+at 2050 shot conserto_22
+at 2200 shot conserto_23
+at 2400 shot conserto_24
+at 2600 shot conserto_25
+at 2800 shot conserto_26
+at 3000 shot conserto_27
+at 3300 shot conserto_28
+at 3600 shot conserto_29
+at 3900 shot conserto_30
+
+# --- depois -------------------------------------------------------------------
+at 4190 cam 120 90 95  38 26 35
+at 4191 shot conserto_31_depois2

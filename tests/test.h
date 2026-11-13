@@ -43,6 +43,7 @@ void suite_combat(void);
 void suite_enemies(void);
 void suite_evolution(void);
 void suite_boss(void);
+void suite_rocks(void);
 void suite_config(void);
 void suite_loop(void);
 void suite_input(void);

@@ -35,6 +35,12 @@
 // Folga mínima, em voxels, entre o ponto mais alto do relevo e a borda da grade.
 #define VOXEL_EDGE_MARGIN      2.0f
 
+// A malha de um chunk depende de pontos da grade um pouco além dele: a camada
+// extra de células (1 voxel) mais os vizinhos usados para calcular a normal e
+// a cor de cada vértice (outro voxel). Ao mudar um ponto, todo chunk a esta
+// distância precisa ser refeito.
+#define VOXEL_REMESH_MARGIN    2
+
 typedef enum {
     VMAT_NONE,         // vazio
     VMAT_WATER_SHALLOW,
@@ -85,6 +91,10 @@ typedef struct {
     float    center;           // coordenada de grade do centro do planeta
     uint8_t *density;          // size^3 valores
     uint8_t *material;         // size^3 valores (VoxelMaterial)
+    // Cópia da grade logo após a geração: o conserto (terraform.h) devolve os
+    // voxels a ela. Gerar de novo a partir do ruído seria caro demais.
+    uint8_t *original_density;
+    uint8_t *original_material;
     int64_t  volume;           // soma atual das densidades
     int64_t  initial_volume;   // soma logo após a geração
     int64_t  core_volume;          // parte do volume que é núcleo
@@ -117,6 +127,10 @@ bool planet_params_equal(const PlanetParams *a, const PlanetParams *b);
 
 // Fração do volume inicial que ainda existe: 1.0 = planeta intacto.
 float planet_hp(const Planet *p);
+
+// Marca para remalhar os chunks cujas malhas dependem dos pontos da grade na
+// caixa [min, max] (coordenadas de grade). Devolve quantos chunks marcou.
+int planet_touch(Planet *p, int min_x, int min_y, int min_z, int max_x, int max_y, int max_z);
 
 // O mesmo, só para o núcleo.
 float planet_core_hp(const Planet *p);

@@ -295,6 +295,66 @@ score.combo_max       = 4       # teto do multiplicador
 score.planet_bonus    = 1000    # bônus ao vencer uma horda com o planeta acima de...
 score.planet_bonus_hp = 0.9     # ... esta fração da massa
 
+# --- raio trator (F) --------------------------------------------------------
+# Puxa uma rocha que esteja à frente da nave; ela fica pendurada à frente e
+# abaixo dela (em direção ao planeta), presa por uma mola, como numa abdução.
+# F de novo solta: a rocha cai direto no planeta e o conserta. Arrastada até
+# encostar no chão, também.
+tractor.range     = 45          # alcance, contado da superfície da rocha
+tractor.cone      = 28          # graus em volta do nariz em que ele pega
+tractor.distance  = 4           # a rocha fica este tanto à frente da nave (mais o raio dela)...
+tractor.drop      = 5           # ... e este tanto abaixo, em direção ao planeta
+tractor.stiffness = 14          # força da mola
+tractor.damping   = 7           # amortecimento (sem ele a rocha balança)
+tractor.break     = 45          # longe assim (uma pancada, um dash), o raio arrebenta
+tractor.slow      = 0.3         # a rocha maior tira esta fração da velocidade da nave
+
+# --- rochas -----------------------------------------------------------------
+rock.fall_accel = 32            # solta: aceleração em direção ao planeta
+rock.fall_drag  = 1.6           # ... e o quanto perde da velocidade de lado (cai quase reto)
+rock.hit_damage = 10            # nave que bate numa rocha a mais de...
+rock.hit_speed  = 12            # ... esta velocidade leva este dano
+
+# Fragmentos: explosões grandes (crateras com boca a partir de min_radius)
+# arrancam pedaços do planeta, que sobem e ficam em órbita (o cinturão de
+# destroços). Um fragmento a cada `volume` voxels arrancados.
+fragment.volume      = 1100
+fragment.min_radius  = 5
+fragment.per_impact  = 2        # no máximo este tanto por impacto
+fragment.max         = 14       # no máximo este tanto em órbita
+fragment.radius_min  = 1.5
+fragment.radius_max  = 2.4
+fragment.fill        = 11       # raio do conserto que um fragmento médio faz
+fragment.alt_min     = 18       # altura da órbita
+fragment.alt_max     = 34
+fragment.speed       = 7        # velocidade na órbita
+fragment.eject_time  = 1.8      # segundos subindo até a órbita
+
+# Meteoros: passam perto do planeta em linha reta e vão embora se ninguém
+# pegar. Vêm na calmaria (calm_count, um a cada calm_gap segundos) e, no meio
+# das hordas, um a cada `interval` segundos. Passam do lado da nave (até `aim`
+# graus da direção dela, vista do centro do planeta).
+meteor.calm_count  = 2
+meteor.calm_gap    = 4
+meteor.interval    = 55
+meteor.aim         = 60
+meteor.speed       = 12
+meteor.pass_min    = 22         # altura do ponto mais perto do planeta
+meteor.pass_max    = 45
+meteor.distance    = 2.3        # aparece a esta distância (em raios do planeta) desse ponto
+meteor.radius_min  = 2.8
+meteor.radius_max  = 3.6
+meteor.fill        = 16         # raio do conserto que um meteoro médio faz
+
+# --- conserto do planeta ----------------------------------------------------
+# A rocha que toca o chão devolve o terreno original numa esfera que cresce a
+# partir do impacto (até o raio do conserto dela), centrada um pouco abaixo de
+# onde era a superfície.
+repair.time   = 1.2             # segundos até a esfera chegar ao tamanho final
+repair.depth  = 0.35            # o centro fica esta fração do raio abaixo da superfície original
+repair.points = 2500            # pontos por 1% do planeta consertado
+repair.xp     = 3               # XP por 1% do planeta consertado
+
 # --- áudio ------------------------------------------------------------------
 audio.volume  = 0.7             # volume geral (0 a 1)
 audio.falloff = 140             # distância em que um som cai pela metade

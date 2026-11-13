@@ -251,7 +251,46 @@ static const TuneField FIELDS[] = {
     F("score.planet_bonus",     score_planet_bonus,     0,      1000000),
     F("score.planet_bonus_hp",  score_planet_bonus_hp,  0,      1),
 
-    F("audio.volume",           audio_volume,           0,      1),
+    F("tractor.range",          tractor_range,          1,      500),
+    F("tractor.cone",           tractor_cone,           1,      90),
+    F("tractor.distance",       tractor_distance,       0,      100),
+    F("tractor.drop",           tractor_drop,           0,      100),
+    F("tractor.stiffness",      tractor_stiffness,      0.1,    500),
+    F("tractor.damping",        tractor_damping,        0,      200),
+    F("tractor.break",          tractor_break,          1,      1000),
+    F("tractor.slow",           tractor_slow,           0,      0.9),
+    F("rock.fall_accel",        rock_fall_accel,        0.1,    500),
+    F("rock.fall_drag",         rock_fall_drag,         0,      50),
+    F("rock.hit_damage",        rock_hit_damage,        0,      1000),
+    F("rock.hit_speed",         rock_hit_speed,         0,      500),
+    F("fragment.volume",        fragment_volume,        1,      1000000),
+    F("fragment.min_radius",    fragment_min_radius,    0,      100),
+    F("fragment.radius_min",    fragment_radius_min,    0.2,    20),
+    F("fragment.radius_max",    fragment_radius_max,    0.2,    20),
+    F("fragment.fill",          fragment_fill,          0.5,    60),
+    F("fragment.alt_min",       fragment_alt_min,       1,      500),
+    F("fragment.alt_max",       fragment_alt_max,       1,      500),
+    F("fragment.speed",         fragment_speed,         0,      200),
+    F("fragment.eject_time",    fragment_eject_time,    0.1,    20),
+    I("fragment.max",           fragment_max,           0,      32),   // ROCKS_MAX (game/rocks.h)
+    I("fragment.per_impact",    fragment_per_impact,    0,      16),
+    F("meteor.interval",        meteor_interval,        1,      3600),
+    F("meteor.speed",           meteor_speed,           0.5,    500),
+    F("meteor.pass_min",        meteor_pass_min,        1,      500),
+    F("meteor.pass_max",        meteor_pass_max,        1,      500),
+    F("meteor.radius_min",      meteor_radius_min,      0.2,    20),
+    F("meteor.radius_max",      meteor_radius_max,      0.2,    20),
+    F("meteor.fill",            meteor_fill,            0.5,    60),
+    F("meteor.distance",        meteor_distance,        0.5,    20),
+    F("meteor.calm_gap",        meteor_calm_gap,        0,      120),
+    F("meteor.aim",             meteor_aim,             0,      180),
+    I("meteor.calm_count",      meteor_calm_count,      0,      8),
+    F("repair.time",            repair_time,            0.05,   20),
+    F("repair.depth",           repair_depth,           0,      1),
+    F("repair.points",          repair_points,          0,      1000000),
+    F("repair.xp",              repair_xp,              0,      1000),
+
+    F("audio.volume",          audio_volume,           0,      1),
     F("audio.falloff",          audio_falloff,          1,      10000),
 
     I("autoplay.warmup_frames", autoplay_warmup_frames, 0,      1000),
@@ -606,6 +645,11 @@ bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *ene
     }
     if (t.sniper_lock_time >= t.sniper_charge_time || t.sniper_charge_time >= t.sniper_fire_interval) {
         snprintf(err, err_len, "atirador: lock_time < charge_time < fire_interval");
+        return false;
+    }
+    if (t.fragment_radius_min > t.fragment_radius_max || t.fragment_alt_min > t.fragment_alt_max
+        || t.meteor_radius_min > t.meteor_radius_max || t.meteor_pass_min > t.meteor_pass_max) {
+        snprintf(err, err_len, "fragment.* e meteor.*: cada _min precisa ser <= o _max");
         return false;
     }
 

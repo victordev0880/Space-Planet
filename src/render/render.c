@@ -9,6 +9,7 @@
 #include "render/boss_render.h"
 #include "render/enemies_render.h"
 #include "render/particles_render.h"
+#include "render/rocks_render.h"
 #include "render/ship_render.h"
 
 static const Color SPACE_COLOR = { 2, 3, 8, 255 };   // quase preto, puxando para o azul
@@ -27,6 +28,11 @@ static const Color SPACE_COLOR = { 2, 3, 8, 255 };   // quase preto, puxando par
 // tamanho do inimigo (o Bombardeiro, grande, sacode como uma cratera grande).
 #define KILL_SHAKE      2.4f
 #define KILL_SHAKE_BOMB 1.0f
+
+// Conserto: uma rocha que bate no chão treme um pouco (por unidade do raio
+// do conserto), e as luzes de cidades reacendem até este tanto de raios dele.
+#define DEPOSIT_SHAKE   0.25f
+#define REPAIR_REACH    1.4f
 
 bool render_init(Renderer *r, const World *w, const Tuning *t, bool use_shaders)
 {
@@ -102,6 +108,16 @@ static void react_to_impacts(Renderer *r, const World *w, const Tuning *t, Vecto
     for (uint32_t id = r->events_seen + 1; id <= w->events.count; id++) {
         const GameEvent *e = events_find(&w->events, id);
         if (e == NULL) continue;
+        if (e->type == EV_REPAIR) {
+            // O chão voltou: as cidades que estavam ali acendem de novo.
+            city_lights_restore(&r->cities, &w->planet, e->pos, fmaxf(t->meteor_fill, t->fragment_fill) * REPAIR_REACH);
+            continue;
+        }
+        if (e->type == EV_DEPOSIT) {
+            float distance = Vector3Distance(camera_pos, e->pos);
+            r->shake += t->shake_strength * e->value * DEPOSIT_SHAKE / (1.0f + distance / t->shake_falloff);
+            continue;
+        }
         if (e->type != EV_KILL && e->type != EV_CRASH && e->type != EV_BOMB_DOWN && e->type != EV_DETONATE) continue;
         float size = (e->type == EV_BOMB_DOWN) ? KILL_SHAKE_BOMB
                    : (e->type == EV_DETONATE)  ? KILL_SHAKE_BOMB * 1.5f
@@ -179,12 +195,14 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     float moving = (w->hitstop > 0) ? 1.0f : alpha;
     enemies_draw(w, t, alpha, glow, camera);
     boss_draw(w, t, alpha, glow, camera);
+    rocks_draw(w, t, alpha, glow, camera);
     if (w->ship_active) {
         ship_draw(&w->ship, &w->evo, &w->planet, t, alpha, time, glow, camera);
         if (w->ship.alive) allies_draw(&w->allies, &w->planet, t, alpha, glow, camera);
     }
     projectiles_draw(w, t, alpha, glow, camera);
     boss_effects_draw(w, t, alpha, glow, camera);
+    rocks_effects_draw(w, t, alpha, glow, camera);
     particles_draw(&w->particles, camera, glow, t, moving);
 
     if (debug) {

@@ -141,7 +141,7 @@ static void draw_hint(const DebugOverlay *o, const World *w)
         hint = "WASD mover   mouse olhar   Shift rápido   F2 volta ao jogo   F1 debug";
     } else if (w->cam_mode == CAM_SHIP && first_moments) {
         hint = "clique atira   W acelera   S freia e dá ré   sem teclas a nave paira   A/D lado   Q/E rola\n"
-               "Shift boost   Espaço dash   Ctrl drift   Enter chama a próxima horda";
+               "Shift boost   Espaço dash   Ctrl drift   F raio trator   Enter chama a próxima horda";
     } else if (w->cam_mode == CAM_ORBIT) {
         hint = "F1 debug   F2 câmera livre   F3 wireframe";
     }

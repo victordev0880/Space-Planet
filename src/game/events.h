@@ -60,6 +60,15 @@ typedef enum {
     EV_BOSS_DOWN,      // o boss foi destruído              (value = pontos)
     EV_REWARD,         // a nave ganhou o núcleo do boss
     EV_ABILITY,        // o raio do núcleo saiu             (value = alcance)
+    EV_METEOR,         // um meteoro apareceu               (pos = onde ele está)
+    EV_FRAGMENT,       // um fragmento saiu de uma cratera
+    EV_TRACTOR_GRAB,   // o raio trator pegou uma rocha     (sub = RockKind)
+    EV_TRACTOR_MISS,   // ... tentou, mas não havia rocha ao alcance
+    EV_TRACTOR_RELEASE,// a nave soltou a rocha
+    EV_TRACTOR_BREAK,  // o raio arrebentou                 (value = 1 se esticou demais, 0 se a nave caiu)
+    EV_DEPOSIT,        // uma rocha tocou o chão: o conserto começou (value = raio dele)
+    EV_REPAIR,         // um conserto terminou              (pos = centro; value = fração do planeta devolvida)
+    EV_ROCK_HIT,       // a nave bateu numa rocha           (value = velocidade da batida)
     EV_TYPE_COUNT
 } EventType;
 

@@ -42,6 +42,10 @@ static const Color BOSS_COLOR          = { 255, 84, 60, 255 };
 static const Color ABILITY_COLOR       = { 120, 220, 255, 255 };
 static const Color CAPACITOR_COLOR     = { 255, 210, 80, 255 };
 static const Color CORE_OPEN_COLOR     = { 255, 110, 230, 255 };
+static const Color TRACTOR_COLOR       = { 110, 255, 210, 255 };
+static const Color METEOR_COLOR        = { 255, 150, 70, 255 };
+static const Color FRAGMENT_COLOR      = { 210, 196, 180, 255 };
+static const Color REPAIR_COLOR        = { 120, 255, 170, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -581,6 +585,7 @@ static void draw_wave_info(const World *w, const Tuning *t)
 // Logo abaixo do painel do planeta (que cresce quando o núcleo aparece) vem a
 // barra do boss, se houver um, e depois os avisos.
 #define BOSS_PANEL_HEIGHT 58
+#define METEOR_NOTE_TIME  6.0f   // segundos do aviso de meteoro novo
 
 static bool boss_bar_shown(const World *w)
 {
@@ -653,6 +658,21 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
         const char *msg = locked ? "ATIRADOR TRAVOU: DESVIE!" : "ATIRADOR MIRANDO EM VOCÊ";
         float blink = locked ? (sinf(now * 30.0f) > 0.0f ? 1.0f : 0.4f) : 0.8f;
         text_centered(msg, center_x, y, ALERT_SIZE + (locked ? 4 : 0), with_alpha(ENEMY_COLORS[ENEMY_SNIPER], blink));
+        y += ALERT_SIZE + 10;
+    }
+
+    // Rochas: o que fazer com a que está no raio, e o aviso de meteoro novo.
+    if (rocks_towed(&w->rocks) != NULL) {
+        text_centered("REBOCANDO: solte (F) em cima de uma cratera", center_x, y, ALERT_SIZE, with_alpha(TRACTOR_COLOR, 0.9f));
+    } else if (rocks_count(&w->rocks, ROCK_METEOR) > 0) {
+        for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
+            const GameEvent *ev = events_find(&w->events, id);
+            if (ev == NULL || event_age(w, t, ev) > METEOR_NOTE_TIME) break;
+            if (ev->type != EV_METEOR) continue;
+            text_centered("METEORO À VISTA: puxe com F e leve até uma cratera", center_x, y, ALERT_SIZE,
+                          with_alpha(METEOR_COLOR, 0.75f + 0.25f * sinf(now * 5.0f)));
+            break;
+        }
     }
 }
 
@@ -955,7 +975,7 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
     // Primeiro só o título, sobre uma faixa; depois o resumo.
     float band = Clamp(since / 0.4f, 0.0f, 1.0f);
     Color tint = won ? (Color){ 4, 20, 14, 255 } : (Color){ 24, 2, 2, 255 };
-    DrawRectangle(0, sh / 2 - 215, sw, 460, with_alpha(tint, band * 0.78f));
+    DrawRectangle(0, sh / 2 - 215, sw, 495, with_alpha(tint, band * 0.78f));
     const char *title = won ? "PLANETA DEFENDIDO" : "COLAPSO PLANETÁRIO";
     text_centered(title, sw / 2, sh / 2 - 190, BANNER_SIZE, with_alpha(won ? HEALTHY : DYING, band));
     if (!won) {
@@ -994,6 +1014,13 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
     text_centered(TextFormat("maior combo   %d   bônus de planeta   %s", sc->best_chain, format_points(sc->planet_bonus)),
                   sw / 2, y, LABEL_SIZE, body);
     y += 28;
+    if (w->rocks.delivered > 0) {
+        float restored = (float)((double)w->repair.restored_total / (double)w->planet.initial_volume);
+        text_centered(TextFormat("rochas levadas ao planeta   %d      %s de habitantes devolvidos", w->rocks.delivered,
+                                 format_population(restored * t->planet_population)),
+                      sw / 2, y, LABEL_SIZE, with_alpha(REPAIR_COLOR, panel));
+        y += 28;
+    }
     if (evolution_total_ranks(&w->evo) > 0) {
         text_centered(TextFormat("nível %d   evoluções:", w->evo.level), sw / 2, y, LABEL_SIZE - 4, with_alpha(DIM_COLOR, panel));
         y += 22;
@@ -1078,6 +1105,139 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
     }
 }
 
+// ---------------------------------------------------------------------------
+//  Rochas e conserto
+// ---------------------------------------------------------------------------
+#define FRAGMENT_MARK_RANGE 140.0f   // fragmentos mais perto que isto ganham um marcador
+#define REPAIR_POPUP_TIME   2.8f
+#define TRACTOR_NOTE_TIME   1.0f
+#define SCAR_MARKS          8        // cicatrizes marcadas ao mesmo tempo, as maiores
+#define SCAR_MARK_MAX       90.0f    // raio máximo do círculo de uma cicatriz na tela (pixels)
+#define POPUP_EDGE          160      // o texto dos habitantes não chega mais perto que isto das bordas
+
+// A cicatriz para onde levar a rocha: grande e perto dela.
+static int best_scar(const World *w, Vector3 from)
+{
+    int best = -1;
+    float best_score = 0.0f;
+    for (int i = 0; i < REPAIR_SCARS; i++) {
+        const Scar *s = &w->repair.scars[i];
+        if (!s->used) continue;
+        float score = Vector3Distance(from, repair_scar_point(&w->planet, s)) - s->radius * 3.0f;
+        if (best < 0 || score < best_score) {
+            best = i;
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+// Tamanho na tela (pixels) de algo de tamanho `size` a `distance` da câmera.
+static float screen_size(Camera3D camera, float size, float distance)
+{
+    float half_fov = camera.fovy * 0.5f * DEG2RAD;
+    return size * (float)GetScreenHeight() / (2.0f * tanf(half_fov) * fmaxf(distance, 1.0f));
+}
+
+static void draw_rocks(const World *w, const Tuning *t, Camera3D camera)
+{
+    const Rocks *r = &w->rocks;
+    const Ship *s = &w->ship;
+    float now = seconds(w, t);
+    const Rock *towed = rocks_towed(r);
+    int grab = (towed == NULL && s->alive) ? rocks_find_grab(r, s, t) : -1;
+
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        const Rock *k = &r->items[i];
+        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING) continue;
+        Vector2 p;
+        bool visible = project(camera, k->pos, &p) && on_screen(p);
+        if (i == grab && visible) {
+            // Ao alcance do raio: colchetes e a tecla.
+            float half = fmaxf(screen_size(camera, k->radius * 1.4f, Vector3Distance(camera.position, k->pos)), 12.0f);
+            draw_brackets(p, half, TRACTOR_COLOR);
+            text_centered("F  puxa", (int)p.x, (int)(p.y + half + 6.0f), 18, TRACTOR_COLOR);
+            continue;
+        }
+        if (k->kind == ROCK_METEOR) {
+            if (visible) {
+                diamond((Vector2){ p.x, p.y - 22.0f }, 6.0f, METEOR_COLOR);
+                text_centered("METEORO", (int)p.x, (int)p.y - 46, 16, METEOR_COLOR);
+            } else {
+                edge_arrow(camera, k->pos, ARROW_SIZE * 1.3f, with_alpha(METEOR_COLOR, 0.7f + 0.3f * sinf(now * 5.0f)));
+            }
+        } else if (visible && Vector3Distance(s->pos, k->pos) < FRAGMENT_MARK_RANGE) {
+            DrawCircleLines((int)p.x, (int)p.y, 9.0f, with_alpha(FRAGMENT_COLOR, 0.6f));
+        }
+    }
+
+    // Rebocando: as crateras (as maiores), e a melhor em destaque.
+    if (towed != NULL) {
+        int best = best_scar(w, towed->pos);
+        int order[REPAIR_SCARS], count = 0;
+        for (int i = 0; i < REPAIR_SCARS; i++) if (w->repair.scars[i].used) order[count++] = i;
+        for (int a = 1; a < count; a++) {   // as maiores primeiro (poucas: ordenação simples)
+            int v = order[a], b = a - 1;
+            while (b >= 0 && w->repair.scars[order[b]].radius < w->repair.scars[v].radius) {
+                order[b + 1] = order[b];
+                b--;
+            }
+            order[b + 1] = v;
+        }
+        if (count > SCAR_MARKS) count = SCAR_MARKS;
+        bool best_seen = false;
+        for (int n = 0; n < count; n++) {
+            const Scar *scar = &w->repair.scars[order[n]];
+            Vector3 point = repair_scar_point(&w->planet, scar);
+            Vector3 to_eye = Vector3Subtract(camera.position, point);
+            if (Vector3DotProduct(scar->dir, to_eye) <= 0.0f) continue;   // do outro lado do planeta
+            Vector2 p;
+            if (!project(camera, point, &p) || !on_screen(p)) continue;
+            float radius = Clamp(screen_size(camera, scar->radius, Vector3Length(to_eye)), 10.0f, SCAR_MARK_MAX);
+            bool is_best = (order[n] == best);
+            float pulse = is_best ? 0.75f + 0.25f * sinf(now * 6.0f) : 0.5f;
+            DrawCircleLines((int)p.x, (int)p.y, radius, with_alpha(REPAIR_COLOR, pulse));
+            if (is_best) {
+                DrawCircleLines((int)p.x, (int)p.y, radius * 0.6f, with_alpha(REPAIR_COLOR, pulse * 0.6f));
+                text_centered("CRATERA", (int)p.x, (int)(p.y - radius - 22.0f), 16, REPAIR_COLOR);
+                best_seen = true;
+            }
+        }
+        if (best >= 0 && !best_seen) {
+            edge_arrow(camera, repair_scar_point(&w->planet, &w->repair.scars[best]), ARROW_SIZE * 1.3f, REPAIR_COLOR);
+        }
+    }
+
+    // Avisos curtos perto da mira, e os habitantes que voltaram subindo de
+    // onde o planeta foi consertado.
+    int sw = GetScreenWidth(), sh = GetScreenHeight();
+    int stacked = 0;   // textos de conserto já desenhados: os mais velhos sobem, para não se sobreporem
+    for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
+        const GameEvent *e = events_find(&w->events, id);
+        if (e == NULL) break;
+        float age = event_age(w, t, e);
+        if (age > REPAIR_POPUP_TIME) break;
+        if ((e->type == EV_TRACTOR_MISS || e->type == EV_TRACTOR_BREAK) && age < TRACTOR_NOTE_TIME) {
+            const char *msg = (e->type == EV_TRACTOR_MISS) ? "NENHUMA ROCHA À FRENTE" : "O RAIO ARREBENTOU";
+            text_centered(msg, sw / 2, sh / 2 + 40, 18, with_alpha(TRACTOR_COLOR, 1.0f - age / TRACTOR_NOTE_TIME));
+        } else if (e->type == EV_REPAIR) {
+            Vector2 p;
+            if (!project(camera, e->pos, &p)) continue;
+            float life = age / REPAIR_POPUP_TIME;
+            float y = Clamp(p.y - 30.0f - POPUP_RISE * 1.6f * life, (float)PANELS_BOTTOM, (float)(sh - 120));
+            y -= (float)(stacked++ * 30);
+            int x = (int)Clamp(p.x, (float)POPUP_EDGE, (float)(sw - POPUP_EDGE));
+            Color c = with_alpha(REPAIR_COLOR, 1.0f - life * life);
+            if (e->value <= 0.0f) {
+                text_centered("aqui não havia o que consertar", x, (int)y, 18, with_alpha(DIM_COLOR, 1.0f - life));
+            } else {
+                text_centered(TextFormat("+%s de habitantes", format_population(e->value * t->planet_population)), x,
+                              (int)y, 26, c);
+            }
+        }
+    }
+}
+
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
 {
     int screen_w = GetScreenWidth();
@@ -1087,6 +1247,7 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
     if (playing) {
         draw_damage_vignette(w);
         draw_markers(w, t, ctx->camera);
+        if (!w->evo.choosing) draw_rocks(w, t, ctx->camera);
         draw_popups(w, t, ctx->camera);
     }
     draw_planet(w, t, ctx->center_x);

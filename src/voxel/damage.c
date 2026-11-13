@@ -3,13 +3,7 @@
 #include <math.h>
 #include <string.h>
 
-// A malha de um chunk depende de pontos da grade um pouco além dele: a camada
-// extra de células (1 voxel) mais os vizinhos usados para calcular a normal e
-// a cor de cada vértice (outro voxel). Ao mudar um ponto, todo chunk a esta
-// distância precisa ser refeito.
-#define REMESH_MARGIN 2
-
-#define RAYCAST_STEP       0.4f   // passo do raio, em voxels
+#define RAYCAST_STEP      0.4f   // passo do raio, em voxels
 #define RAYCAST_REFINEMENTS 6     // divisões ao meio para afinar o ponto de impacto
 
 static int clamp_int(int v, int lo, int hi)
@@ -80,24 +74,7 @@ CarveResult planet_carve(Planet *p, Vector3 center, float radius)
 
     p->volume -= result.removed;
     p->core_volume -= result.removed_core;
-
-    const int chunk = p->chunk_size;
-    const int last_chunk = p->chunks_per_axis - 1;
-    int cx0 = clamp_int((min_x - REMESH_MARGIN) / chunk, 0, last_chunk);
-    int cy0 = clamp_int((min_y - REMESH_MARGIN) / chunk, 0, last_chunk);
-    int cz0 = clamp_int((min_z - REMESH_MARGIN) / chunk, 0, last_chunk);
-    int cx1 = clamp_int((max_x + REMESH_MARGIN) / chunk, 0, last_chunk);
-    int cy1 = clamp_int((max_y + REMESH_MARGIN) / chunk, 0, last_chunk);
-    int cz1 = clamp_int((max_z + REMESH_MARGIN) / chunk, 0, last_chunk);
-
-    for (int cz = cz0; cz <= cz1; cz++) {
-        for (int cy = cy0; cy <= cy1; cy++) {
-            for (int cx = cx0; cx <= cx1; cx++) {
-                p->chunk_version[planet_chunk_index(p, cx, cy, cz)]++;
-                result.chunks_touched++;
-            }
-        }
-    }
+    result.chunks_touched = planet_touch(p, min_x, min_y, min_z, max_x, max_y, max_z);
     return result;
 }
 

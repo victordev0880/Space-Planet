@@ -26,6 +26,8 @@
 #include "game/moon.h"
 #include "game/particles.h"
 #include "game/projectiles.h"
+#include "game/repair.h"
+#include "game/rocks.h"
 #include "game/score.h"
 #include "game/ship.h"
 #include "game/tuning.h"
@@ -108,6 +110,15 @@ typedef struct {
     Ability      ability;
     int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
+    // --- rochas e conserto ---
+    Rocks        rocks;
+    Repair       repair;
+    float        debris;          // voxels arrancados por explosões grandes desde o último fragmento
+    float        meteor_wait;     // segundos até o próximo meteoro no meio de uma horda
+    int          meteor_queue;    // meteoros da calmaria ainda por vir...
+    float        meteor_queue_wait;   // ... e os segundos até o próximo deles
+    int          calm_seen;       // a calmaria (número da horda seguinte) que já recebeu meteoros
+
     // --- evolução ---
     Evolution    evo;
     Allies       allies;
@@ -177,8 +188,13 @@ BossContext world_boss_context(World *w, const Tuning *t);
 // O mesmo, com a variação (desenho e cor) escolhida: -1 = sorteada, como no jogo.
 int world_spawn_variant(World *w, const Tuning *t, EnemyType type, int count, Vector3 center, int variant);
 
-// Ferramenta do autoplay: tira de cena todos os inimigos e tiros.
+// Ferramenta do autoplay: tira de cena todos os inimigos, tiros e rochas.
 void world_clear_enemies(World *w);
+
+// Um meteoro passando perto do planeta, do lado da nave (também usado pelas
+// calmarias). Ferramenta do autoplay: com `pos` e `vel`, exatamente ali.
+void world_spawn_meteor(World *w, const Tuning *t);
+Rock *world_spawn_rock(World *w, const Tuning *t, RockKind kind, Vector3 pos, Vector3 vel);
 
 // Nova partida com o mesmo plano: planeta inteiro, sem inimigos, nave no
 // ponto de partida, pontuação zerada.

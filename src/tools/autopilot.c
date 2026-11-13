@@ -25,6 +25,10 @@
 #define PART_CLEAR_COS  0.55f   // ... a peça está à vista dentro deste cone em volta da normal dela
 #define PART_BRAKE      22.0f   // indo ao ponto de tiro: a esta distância dele, freia
 #define PART_CREEP      8.0f    // ... e chega nesta velocidade
+#define ROCK_METEOR_PRIORITY 0.6f   // um meteoro parece estar a esta fração da distância real
+#define SCAR_SIZE_PRIORITY   3.0f   // cada unidade de raio da cicatriz conta como esta distância a menos
+#define DROP_HEIGHT     16.0f   // leva a rocha com a nave a esta altura sobre a superfície original
+#define DROP_MIN_OFFSET 4.0f    // solta com a rocha a até isto (ou meio raio da cicatriz) do centro dela
 
 // Aproximações especiais: indo ao ponto de onde se atira, ou já atirando.
 typedef enum { TUNNEL_NONE, TUNNEL_GOING, TUNNEL_FIRING } TunnelMode;
@@ -177,10 +181,67 @@ static float forward_speed(const Ship *s)
     return Vector3DotProduct(Vector3Add(s->vel, s->fall), ship_forward(s));
 }
 
+// Rocha a buscar (sem inimigo para caçar): a mais perto, com preferência
+// pelos meteoros, que vão embora. -1 se não há nenhuma livre.
+static int pick_rock(const World *w)
+{
+    const Ship *s = &w->ship;
+    int best = -1;
+    float best_score = 0.0f;
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        const Rock *k = &w->rocks.items[i];
+        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING || k->state == ROCK_EJECT) continue;
+        float score = Vector3Distance(s->pos, k->pos) * ((k->kind == ROCK_METEOR) ? ROCK_METEOR_PRIORITY : 1.0f);
+        if (best < 0 || score < best_score) {
+            best = i;
+            best_score = score;
+        }
+    }
+    return best;
+}
+
+// Com uma rocha a reboque: escolhe a cicatriz (grande e perto) e o ponto para
+// onde voar, um pouco antes dela no sentido da chegada, para a rocha (que vai
+// pendurada à frente) ficar em cima. Devolve true quando é hora de soltar.
+static bool plan_delivery(const World *w, const Tuning *t, const Rock *rock, Vector3 *aim, float *distance)
+{
+    const Ship *s = &w->ship;
+    int best = -1;
+    float best_score = 0.0f;
+    Vector3 best_point = s->pos;
+    for (int i = 0; i < REPAIR_SCARS; i++) {
+        const Scar *scar = &w->repair.scars[i];
+        if (!scar->used) continue;
+        Vector3 point = repair_scar_point(&w->planet, scar);
+        float score = Vector3Distance(s->pos, point) - scar->radius * SCAR_SIZE_PRIORITY;
+        if (best < 0 || score < best_score) {
+            best = i;
+            best_score = score;
+            best_point = point;
+        }
+    }
+    if (best < 0) {   // nada a consertar: solta onde está
+        *aim = Vector3Add(s->pos, Vector3Scale(ship_forward(s), 50.0f));
+        *distance = 50.0f;
+        return true;
+    }
+    const Scar *scar = &w->repair.scars[best];
+    Vector3 to = Vector3Subtract(best_point, s->pos);
+    Vector3 flat = Vector3Subtract(to, Vector3Scale(scar->dir, Vector3DotProduct(to, scar->dir)));
+    Vector3 approach = (Vector3Length(flat) > 1.0f) ? Vector3Normalize(flat) : ship_forward(s);
+    *aim = Vector3Add(best_point, Vector3Subtract(Vector3Scale(scar->dir, DROP_HEIGHT),
+                                                  Vector3Scale(approach, t->tractor_distance + rock->radius)));
+    *distance = Vector3Distance(s->pos, *aim);
+
+    // A rocha já está em cima da cicatriz?
+    float over = Vector3Length(best_point) * acosf(Clamp(Vector3DotProduct(Vector3Normalize(rock->pos), scar->dir), -1.0f, 1.0f));
+    return over < fmaxf(scar->radius * 0.5f, DROP_MIN_OFFSET);
+}
+
 void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
 {
     const uint32_t flight = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_BOOST) | ACT_BIT(ACT_FIRE)
-                          | ACT_BIT(ACT_ALT_FIRE);
+                          | ACT_BIT(ACT_ALT_FIRE) | ACT_BIT(ACT_TRACTOR);
     sample->held &= ~flight;
     sample->look_dx = 0.0f;
     sample->look_dy = 0.0f;
@@ -201,13 +262,31 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     Vector3 radial = Vector3Normalize(s->pos);
     Target target = pick_target(w, t);
 
-    Vector3 aim;
+    // Rochas: com uma a reboque, leva até uma cicatriz; sem inimigo para
+    // caçar, busca uma.
+    const Rock *towed = rocks_towed(&w->rocks);
+    bool delivering = (towed != NULL), fetching = false, drop = false;
+    Vector3 aim = s->pos;
     float distance = 0.0f;
+    bool any_scar = false;
+    for (int i = 0; i < REPAIR_SCARS; i++) any_scar = any_scar || w->repair.scars[i].used;
+    if (delivering) {
+        drop = plan_delivery(w, t, towed, &aim, &distance);
+    } else if (!target.found && any_scar) {
+        int rock = pick_rock(w);
+        if (rock >= 0) {
+            const Rock *k = &w->rocks.items[rock];
+            target = (Target){ true, k->pos, k->vel, 0.0f, -1, false, { 0.0f, 1.0f, 0.0f } };
+            fetching = true;
+        }
+    }
+
     bool blocked = false;
-    TunnelMode tunnel = target.found ? tunnel_approach(w, &target, &aim, &distance) : TUNNEL_NONE;
+    TunnelMode tunnel = (target.found && !delivering) ? tunnel_approach(w, &target, &aim, &distance) : TUNNEL_NONE;
     bool in_tunnel = (tunnel != TUNNEL_NONE);
-    bool to_vantage = !in_tunnel && target.found && part_approach(s, &target, &aim, &distance) == TUNNEL_GOING;
-    if (in_tunnel || to_vantage) {
+    bool to_vantage = !delivering && !in_tunnel && target.found
+                   && part_approach(s, &target, &aim, &distance) == TUNNEL_GOING;
+    if (delivering || in_tunnel || to_vantage) {
         // (a mira e a distância já vêm prontas)
     } else if (target.found) {
         distance = Vector3Distance(s->pos, target.pos);
@@ -242,7 +321,28 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     sample->look_dx = turn_yaw / t->ship_mouse_sens;
     sample->look_dy = -turn_pitch / t->ship_mouse_sens;   // mouse para cima levanta o nariz
 
+    // O F só conta quando é apertado de novo: segurá-lo de um passo para o
+    // outro (pegar num, soltar no seguinte) não faria nada. Por isso o piloto
+    // só o aperta nos passos pares.
+    bool tractor_tick = (w->tick % 2u) == 0u;
+    if (delivering) {
+        // Como indo a um ponto de tiro: acelera de longe, chega devagar; com a
+        // rocha em cima da cicatriz, solta (F).
+        float along = forward_speed(s);
+        if (distance > PART_BRAKE || along < PART_CREEP) sample->held |= ACT_BIT(ACT_FORWARD);
+        else if (along > PART_CREEP * 2.0f) sample->held |= ACT_BIT(ACT_BACK);
+        if (drop && tractor_tick) sample->held |= ACT_BIT(ACT_TRACTOR);
+        return;
+    }
     if (!target.found) return;
+    if (fetching) {
+        // Buscando uma rocha: chega perto e, com ela ao alcance do raio, puxa.
+        if (blocked || s->altitude < SAFE_ALTITUDE || distance > CHASE_FAR) sample->held |= ACT_BIT(ACT_FORWARD);
+        if (distance > CHASE_BOOST && s->energy > t->ship_energy_max * 0.5f) sample->held |= ACT_BIT(ACT_BOOST);
+        if (distance < CHASE_NEAR) sample->held |= ACT_BIT(ACT_BACK);
+        if (tractor_tick && rocks_find_grab(&w->rocks, s, t) >= 0) sample->held |= ACT_BIT(ACT_TRACTOR);
+        return;
+    }
     if (to_vantage) {
         // Indo ao ponto de tiro da peça do boss: acelera de longe, chega devagar.
         float along = forward_speed(s);

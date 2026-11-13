@@ -25,6 +25,7 @@ static const KeyBinding KEYS[] = {
     { KEY_C,            ACT_DEBUG_CRATER },
     { KEY_V,            ACT_DEBUG_SIZE },
     { KEY_ENTER,        ACT_READY },
+    { KEY_F,            ACT_TRACTOR },
     { KEY_ONE,          ACT_CARD1 },
     { KEY_TWO,          ACT_CARD2 },
     { KEY_THREE,        ACT_CARD3 },

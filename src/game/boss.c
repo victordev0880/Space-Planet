@@ -10,7 +10,6 @@
 #define STAGGER_SLOW       0.2f     // ... e atordoado, este tanto
 #define TURN_SMOOTH        2.5f     // rapidez com que o casco acompanha a direção do voo
 #define CUT_LEAD           0.10f    // o corte começa este tanto (radianos) à frente dele
-#define CUT_PROBE          40.0f    // o laser procura o solo a partir desta altura
 #define TURRET_GAP         0.16f    // segundos entre os tiros de uma rajada
 #define DYING_TIME         3.6f     // segundos de explosões antes de sumir
 #define DYING_BLAST_GAP    0.22f
@@ -143,16 +142,16 @@ static void face(Boss *b, Vector3 forward, float dt)
     b->rot = QuaternionNormalize(QuaternionSlerp(b->rot, target, 1.0f - expf(-TURN_SMOOTH * dt)));
 }
 
-// Distância do centro ao solo na direção `dir` (procurando de fora para dentro);
-// negativa se o raio atravessa tudo (o planeta já está oco ali).
+// Distância do centro à superfície ORIGINAL (a do começo da partida) na
+// direção `dir`. O corte é fundo em relação a ela, e não ao chão de agora:
+// assim ele tira sempre uma fatia da mesma espessura, e onde uma vala antiga
+// passou ele não cava mais nada. Medindo o chão de agora, cada corte que
+// cruzasse uma vala antiga desceria mais 20 e, alguns cruzamentos depois,
+// chegaria ao núcleo.
 static float ground_radius(const Planet *planet, Vector3 dir)
 {
-    Vector3 from = Vector3Scale(dir, planet->params.radius + CUT_PROBE);
-    Vector3 hit;
-    if (planet_raycast(planet, from, Vector3Negate(dir), CUT_PROBE + planet->params.radius, &hit)) {
-        return Vector3Length(hit);
-    }
-    return -planet->params.radius;
+    Terrain t = planet_terrain(&planet->params, dir);
+    return planet->params.radius + (t.land ? t.elevation : 0.0f);
 }
 
 static void start_charge(Boss *b, const BossContext *ctx)

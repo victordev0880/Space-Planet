@@ -37,6 +37,7 @@ typedef enum {
     ACT_CARD1,         // 1, 2, 3: escolhe uma carta de evolução
     ACT_CARD2,
     ACT_CARD3,
+    ACT_TRACTOR,       // F: raio trator (puxa uma rocha; de novo, solta)
     ACT_COUNT
 } Action;
 

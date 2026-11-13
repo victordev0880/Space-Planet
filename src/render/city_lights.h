@@ -16,6 +16,7 @@ typedef struct {
     Mesh     mesh;
     Material material;
     float   *ground;        // 3 por luz: o ponto do solo em que ela está apoiada
+    unsigned char *alpha;   // brilho original de cada luz (para reacender)
     int      count;
     int      lit;           // quantas ainda estão acesas
     bool     has_mesh;
@@ -28,6 +29,9 @@ void city_lights_build(CityLights *c, const Planet *p, const Tuning *t, Texture2
 
 // Depois de um impacto em `pos`: apaga as luzes cujo chão foi destruído.
 void city_lights_impact(CityLights *c, const Planet *p, Vector3 pos, float radius);
+
+// Depois de um conserto em `pos`: reacende as luzes cujo chão voltou.
+void city_lights_restore(CityLights *c, const Planet *p, Vector3 pos, float radius);
 
 // Chamar dentro de BeginMode3D, depois do planeta.
 void city_lights_draw(const CityLights *c);

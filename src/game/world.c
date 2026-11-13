@@ -253,6 +253,41 @@ static void check_collapse(World *w, const Tuning *t)
     }
 }
 
+// Material de superfície que mais saiu numa cratera (a cor do "topo" dos
+// fragmentos): grama, areia, gelo... Sem nenhum, rocha da crosta.
+static uint8_t surface_material(const CarveResult *carve)
+{
+    int best = VMAT_CRUST;
+    int64_t most = 0;
+    for (int m = VMAT_WATER_SHALLOW; m <= VMAT_SNOW; m++) {
+        if (carve->removed_by_material[m] > most) {
+            most = carve->removed_by_material[m];
+            best = m;
+        }
+    }
+    return (uint8_t)best;
+}
+
+// Explosões grandes arrancam pedaços do planeta, que sobem e ficam em órbita:
+// um fragmento a cada fragment_volume voxels arrancados (somando impactos).
+static void eject_fragments(World *w, const Tuning *t, Vector3 ground, float radius, const CarveResult *carve)
+{
+    if (radius < t->fragment_min_radius || carve->removed <= 0) return;
+    w->debris += (float)carve->removed / 255.0f;
+    int made = 0;
+    while (w->debris >= t->fragment_volume && made < t->fragment_per_impact) {
+        if (rocks_count(&w->rocks, ROCK_FRAGMENT) >= t->fragment_max) {
+            w->debris = fminf(w->debris, t->fragment_volume);   // cinturão cheio: não acumula sem fim
+            return;
+        }
+        Rock *k = rocks_spawn_fragment(&w->rocks, &w->rng, t, w->planet.params.radius, ground, surface_material(carve));
+        if (k == NULL) return;
+        events_push(&w->events, (uint32_t)w->tick, EV_FRAGMENT, 0, ground, k->radius);
+        w->debris -= t->fragment_volume;
+        made++;
+    }
+}
+
 bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float rim_radius, float depth)
 {
     Vector3 ground;
@@ -265,6 +300,8 @@ bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float 
     if (carve.removed == 0) return true;   // acertou, mas não havia mais o que tirar
 
     particles_impact(&w->particles, &w->rng, t, ground, normal, rim_radius, &carve);
+    repair_note_damage(&w->repair, ground, rim_radius);
+    eject_fragments(w, t, ground, rim_radius, &carve);
 
     Impact *impact = &w->impacts[w->impact_count % WORLD_IMPACT_HISTORY];
     w->impact_count++;
@@ -285,6 +322,8 @@ void world_carve(World *w, const Tuning *t, Vector3 center, float radius)
     // Poucos destroços: a escavação é contínua, e cada mordida é pequena.
     Vector3 normal = Vector3Normalize(center);
     particles_impact(&w->particles, &w->rng, t, center, normal, radius * CARVE_DEBRIS, &carve);
+    repair_note_damage(&w->repair, center, radius);
+    eject_fragments(w, t, Vector3Add(center, Vector3Scale(normal, radius * 0.5f)), radius, &carve);
 
     Impact *impact = &w->impacts[w->impact_count % WORLD_IMPACT_HISTORY];
     w->impact_count++;
@@ -319,6 +358,7 @@ void world_reset_planet(World *w, const Tuning *t)
     PlanetParams params = current_planet_params(w, t);
     planet_generate(&w->planet, &params);
     particles_clear(&w->particles);
+    repair_reset(&w->repair);   // cicatrizes e consertos eram do planeta antigo
     w->collapsed = false;
 }
 
@@ -329,6 +369,7 @@ bool world_apply_tuning(World *w, const Tuning *t)
 
     planet_generate(&w->planet, &params);
     particles_clear(&w->particles);
+    repair_reset(&w->repair);
     w->collapsed = false;
     return true;
 }
@@ -461,6 +502,10 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     evolution_reset(&w->evo);
     allies_reset(&w->allies);
     boss_reset(&w->boss);
+    rocks_reset(&w->rocks);
+    repair_reset(&w->repair);
+    w->meteor_wait = t->meteor_interval;
+    w->calm_seen = -1;
     w->eff = *t;
     director_stop(&w->director);
     w->state = GAME_PLAYING;
@@ -513,6 +558,7 @@ void world_clear_enemies(World *w)
     enemies_clear(&w->enemies);
     projectiles_clear(&w->shots);
     boss_reset(&w->boss);
+    rocks_reset(&w->rocks);
 }
 
 BossContext world_boss_context(World *w, const Tuning *t)
@@ -574,6 +620,8 @@ void world_set_plan(World *w, const WavePlan *plan)
 void world_set_waves(World *w, bool on)
 {
     w->waves_enabled = on;
+    w->meteor_queue = 0;
+    w->calm_seen = -1;
     if (on) director_start(&w->director, &w->plan);
     else    director_stop(&w->director);
 }
@@ -588,6 +636,11 @@ void world_restart(World *w, const Tuning *t)
     allies_reset(&w->allies);
     boss_reset(&w->boss);
     memset(&w->ability, 0, sizeof w->ability);
+    rocks_reset(&w->rocks);
+    w->debris = 0.0f;
+    w->meteor_wait = t->meteor_interval;
+    w->meteor_queue = 0;
+    w->calm_seen = -1;
     w->cards_at = 0;
     w->eff = *t;
     ship_spawn(&w->ship, t, &w->planet);
@@ -675,6 +728,203 @@ static void hold_still(World *w)
     }
     w->boss.pos_prev = w->boss.pos;
     w->boss.rot_prev = w->boss.rot;
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        w->rocks.items[i].pos_prev = w->rocks.items[i].pos;
+        w->rocks.items[i].rot_prev = w->rocks.items[i].rot;
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Rochas e conserto
+// ---------------------------------------------------------------------------
+
+#define REPAIR_SPARKS      36       // brilhos verdes quando uma rocha toca o chão
+#define REPAIR_DONE_SPARKS 24       // ... e quando o conserto termina
+#define ROCK_DUST          10
+#define ROCK_HIT_JOLT      0.25f    // tremor por unidade de velocidade da batida numa rocha
+#define ROCK_BOUNCE        0.4f
+
+static const Rgb8 REPAIR_GLOW  = { 120, 255, 170 };
+static const Rgb8 REPAIR_SPARK = { 190, 255, 210 };
+static const Rgb8 ROCK_DUST_COLOR = { 120, 108, 96 };
+static const Rgb8 METEOR_EMBER    = { 255, 150, 60 };
+
+// Uma direção perpendicular a `v` (comprimento 1), sorteada.
+static Vector3 perpendicular(Rng *rng, Vector3 v)
+{
+    Vector3 p = Vector3CrossProduct(v, rng_unit_vec3(rng));
+    if (Vector3LengthSqr(p) < 1e-6f) p = Vector3CrossProduct(v, (Vector3){ 0.0f, 1.0f, 0.0f });
+    if (Vector3LengthSqr(p) < 1e-6f) p = Vector3CrossProduct(v, (Vector3){ 1.0f, 0.0f, 0.0f });
+    return Vector3Normalize(p);
+}
+
+void world_spawn_meteor(World *w, const Tuning *t)
+{
+    float radius = w->planet.params.radius;
+    // Passa do lado da nave: o ponto mais perto do planeta fica a até
+    // meteor_aim graus da direção dela, vista do centro.
+    Vector3 side = (Vector3Length(w->ship.pos) > 1e-3f) ? Vector3Normalize(w->ship.pos) : rng_unit_vec3(&w->rng);
+    float angle = rng_range(&w->rng, 0.0f, t->meteor_aim) * DEG2RAD;
+    Vector3 dir = Vector3Normalize(Vector3RotateByAxisAngle(side, perpendicular(&w->rng, side), angle));
+    Vector3 pass = Vector3Scale(dir, radius + rng_range(&w->rng, t->meteor_pass_min, t->meteor_pass_max));
+    Vector3 travel = perpendicular(&w->rng, dir);
+    Vector3 start = Vector3Subtract(pass, Vector3Scale(travel, t->meteor_distance * radius));
+    Rock *k = rocks_spawn_meteor(&w->rocks, &w->rng, t, start, Vector3Scale(travel, t->meteor_speed));
+    if (k != NULL) events_push(&w->events, (uint32_t)w->tick, EV_METEOR, 0, k->pos, k->radius);
+}
+
+Rock *world_spawn_rock(World *w, const Tuning *t, RockKind kind, Vector3 pos, Vector3 vel)
+{
+    if (kind == ROCK_METEOR) {
+        Rock *k = rocks_spawn_meteor(&w->rocks, &w->rng, t, pos, vel);
+        if (k != NULL) events_push(&w->events, (uint32_t)w->tick, EV_METEOR, 0, k->pos, k->radius);
+        return k;
+    }
+    // Fragmento já em órbita, passando por `pos`.
+    Rock *k = rocks_spawn_fragment(&w->rocks, &w->rng, t, w->planet.params.radius, pos, VMAT_GRASS);
+    if (k == NULL) return NULL;
+    k->state = ROCK_ORBIT;
+    k->orbit = pos;
+    k->orbit_rate = t->fragment_speed / fmaxf(Vector3Length(pos), 1.0f);
+    return k;
+}
+
+// Meteoros: alguns em cada calmaria (um a cada calm_gap segundos) e, no meio
+// das hordas, um a cada meteor_interval segundos.
+static void tick_meteors(World *w, const Tuning *t, float dt)
+{
+    const WaveDirector *d = &w->director;
+    if (d->phase == DIRECTOR_OFF || w->state != GAME_PLAYING) return;
+    if (d->phase == DIRECTOR_PAUSE && d->wave != w->calm_seen) {
+        w->calm_seen = d->wave;
+        w->meteor_queue = t->meteor_calm_count;
+        w->meteor_queue_wait = 1.0f;
+    }
+    if (w->meteor_queue > 0) {
+        w->meteor_queue_wait -= dt;
+        if (w->meteor_queue_wait <= 0.0f) {
+            world_spawn_meteor(w, t);
+            w->meteor_queue--;
+            w->meteor_queue_wait = t->meteor_calm_gap;
+        }
+    }
+    if (d->phase == DIRECTOR_ACTIVE) {
+        w->meteor_wait -= dt;
+        if (w->meteor_wait <= 0.0f) {
+            world_spawn_meteor(w, t);
+            w->meteor_wait = t->meteor_interval;
+        }
+    }
+}
+
+// F: puxa a rocha à frente; com uma a reboque, solta.
+static void tick_tractor(World *w, const InputState *in, const Tuning *t)
+{
+    if (!(in->pressed & ACT_BIT(ACT_TRACTOR)) || !w->ship.alive) return;
+    uint32_t tick = (uint32_t)w->tick;
+    const Rock *towed = rocks_towed(&w->rocks);
+    if (towed != NULL) {
+        events_push(&w->events, tick, EV_TRACTOR_RELEASE, towed->kind, towed->pos, 0.0f);
+        rocks_release(&w->rocks);
+        return;
+    }
+    int index = rocks_find_grab(&w->rocks, &w->ship, t);
+    if (index < 0) {
+        events_push(&w->events, tick, EV_TRACTOR_MISS, 0, w->ship.pos, 0.0f);
+        return;
+    }
+    rocks_grab(&w->rocks, index);
+    events_push(&w->events, tick, EV_TRACTOR_GRAB, w->rocks.items[index].kind, w->rocks.items[index].pos, 0.0f);
+}
+
+// Rochas que tocaram o chão começam um conserto; os que terminaram pagam.
+static void tick_repairs(World *w, const Tuning *t, float dt)
+{
+    uint32_t tick = (uint32_t)w->tick;
+    for (int i = 0; i < w->rocks.deposit_count; i++) {
+        const RockDeposit *d = &w->rocks.deposits[i];
+        repair_start(&w->repair, &w->planet, t, d->pos, d->fill);
+        Vector3 up = Vector3Normalize(d->pos);
+        particles_sparks(&w->particles, &w->rng, d->pos, up, REPAIR_SPARKS, d->fill * 1.2f, REPAIR_SPARK);
+        spawn_glow(w, PARTICLE_RING, d->pos, (Vector3){ 0.0f, 0.0f, 0.0f }, d->fill * 0.5f, 0.7f, REPAIR_GLOW);
+        spawn_glow(w, PARTICLE_FLASH, d->pos, (Vector3){ 0.0f, 0.0f, 0.0f }, d->fill * 0.35f, 0.25f, REPAIR_SPARK);
+        for (int k = 0; k < ROCK_DUST; k++) {
+            Vector3 dir = Vector3Normalize(Vector3Add(up, Vector3Scale(rng_unit_vec3(&w->rng), 0.8f)));
+            spawn_glow(w, PARTICLE_DUST, d->pos, Vector3Scale(dir, rng_range(&w->rng, 2.0f, 6.0f)),
+                       rng_range(&w->rng, 1.0f, 2.2f), rng_range(&w->rng, 0.8f, 1.6f), ROCK_DUST_COLOR);
+        }
+        events_push(&w->events, tick, EV_DEPOSIT, d->kind, d->pos, d->fill);
+    }
+    w->rocks.deposit_count = 0;
+
+    repair_tick(&w->repair, &w->planet, t, dt);
+    for (int i = 0; i < w->repair.finished_count; i++) {
+        const RepairJob *j = &w->repair.finished[i];
+        float fraction = (float)((double)j->restored / (double)w->planet.initial_volume);
+        if (w->state == GAME_PLAYING && fraction > 0.0f) {
+            float percent = fraction * 100.0f;
+            score_bonus(&w->score, (int64_t)(percent * t->repair_points));
+            world_give_xp(w, t, percent * t->repair_xp);
+        }
+        Vector3 up = Vector3Normalize(j->ground);
+        particles_sparks(&w->particles, &w->rng, j->ground, up, REPAIR_DONE_SPARKS, j->radius * 0.8f, REPAIR_GLOW);
+        events_push(&w->events, tick, EV_REPAIR, 0, j->ground, fraction);
+    }
+}
+
+// A nave bate nas rochas soltas (não na que ela mesma reboca ou acabou de
+// soltar): é empurrada para fora e, rápido demais, leva dano.
+static void rock_collisions(World *w, const Tuning *t)
+{
+    Ship *s = &w->ship;
+    if (!s->alive) return;
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        const Rock *k = &w->rocks.items[i];
+        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING) continue;
+        Vector3 away = Vector3Subtract(s->pos, k->pos);
+        float distance = Vector3Length(away);
+        float reach = k->radius + t->ship_radius;
+        if (distance >= reach || distance < 1e-4f) continue;
+        Vector3 n = Vector3Scale(away, 1.0f / distance);
+        s->pos = Vector3Add(k->pos, Vector3Scale(n, reach));
+        float closing = Vector3DotProduct(Vector3Subtract(Vector3Add(s->vel, s->fall), k->vel), n);
+        if (closing >= 0.0f) continue;   // já se afastando
+        s->vel = Vector3Subtract(s->vel, Vector3Scale(n, closing * (1.0f + ROCK_BOUNCE)));
+        float speed = -closing;
+        Vector3 point = Vector3Add(k->pos, Vector3Scale(n, k->radius));
+        if (speed > t->rock_hit_speed) combat_damage_ship(w, t, t->rock_hit_damage, point);
+        particles_sparks(&w->particles, &w->rng, point, n, 12, speed * 0.5f, ROCK_DUST_COLOR);
+        world_jolt(w, speed * ROCK_HIT_JOLT);
+        events_push(&w->events, (uint32_t)w->tick, EV_ROCK_HIT, k->kind, point, speed);
+    }
+}
+
+static void tick_rocks(World *w, const Tuning *t, float dt)
+{
+    RockContext ctx;
+    ctx.planet = &w->planet;
+    ctx.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
+    ctx.events = &w->events;
+    ctx.t = t;
+    ctx.tick = (uint32_t)w->tick;
+    ctx.dt = dt;
+    rocks_tick(&w->rocks, &ctx);
+    tick_repairs(w, t, dt);
+    rock_collisions(w, t);
+
+    // Brasas soltas pelos meteoros em voo.
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        const Rock *k = &w->rocks.items[i];
+        if (!k->alive || k->kind != ROCK_METEOR || k->state != ROCK_FLYBY) continue;
+        float speed = Vector3Length(k->vel);
+        if (speed < 1e-3f) continue;
+        Vector3 back = Vector3Scale(k->vel, -1.0f / speed);
+        Vector3 at = Vector3Add(k->pos, Vector3Add(Vector3Scale(back, k->radius * 0.8f),
+                                                   Vector3Scale(rng_unit_vec3(&w->rng), k->radius * 0.5f)));
+        Vector3 vel = Vector3Add(Vector3Scale(k->vel, 0.5f), Vector3Scale(back, rng_range(&w->rng, 2.0f, 6.0f)));
+        spawn_glow(w, PARTICLE_EMBER, at, vel, rng_range(&w->rng, 0.25f, 0.55f), rng_range(&w->rng, 0.4f, 0.9f),
+                   METEOR_EMBER);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -779,8 +1029,15 @@ static void hold_input(InputState *frozen, const InputState *in)
 
 void world_tick(World *w, const InputState *in, const Tuning *base)
 {
-    // Daqui em diante vale o tuning com as evoluções.
+    // Daqui em diante vale o tuning com as evoluções. Uma rocha a reboque pesa:
+    // a nave acelera menos e chega a uma velocidade menor.
     evolution_tune(&w->evo, base, &w->eff);
+    float load = rocks_tow_load(&w->rocks, &w->eff);
+    if (load > 0.0f) {
+        float keep = 1.0f - w->eff.tractor_slow * load;
+        w->eff.ship_speed_max *= keep;
+        w->eff.ship_thrust *= keep;
+    }
     const Tuning *t = &w->eff;
     float dt = 1.0f / (float)t->sim_hz;
 
@@ -832,10 +1089,12 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         ShipEvents ev = ship_tick(&w->ship, &input, &w->planet, &w->moon, t, dt);
         ship_effects(w, &ev);
         if (ev.dashed) combat_dash_blast(w, t);
+        tick_tractor(w, &input, t);
         combat_fire(w, &input, t, dt);
         combat_ability(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);
+        tick_meteors(w, t, dt);
 
         EnemyContext ctx = world_enemy_context(w, t);
         enemies_tick(&w->enemies, &ctx);
@@ -844,6 +1103,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         }
         w->enemies.carve_count = 0;
         tick_boss(w, t);
+        tick_rocks(w, t, dt);
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
         combat_boss(w, t);
@@ -981,6 +1241,15 @@ uint64_t world_hash(const World *w)
     for (int i = 0; i < ALLIES_MAX; i++) {
         if (w->allies.items[i].alive) h = hash_vec3(h, w->allies.items[i].pos);
     }
+    HASH(h, w->rocks.towed);
+    HASH(h, w->rocks.delivered);
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        if (!w->rocks.items[i].alive) continue;
+        h = hash_vec3(h, w->rocks.items[i].pos);
+        HASH(h, w->rocks.items[i].state);
+    }
+    HASH(h, w->repair.restored_total);
+    HASH(h, w->debris);
 
     HASH(h, w->particles.count);
     // As partículas entram no resumo pela soma das posições: barato, e

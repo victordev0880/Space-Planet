@@ -738,7 +738,7 @@ void suite_waves(void)
 void suite_combat(void)
 {
     tun = test_tuning();
-    CHECK(arena_init(&arena, 8u * 1024u * 1024u));
+    CHECK(arena_init(&arena, 16u * 1024u * 1024u));   // um teste usa o planeta em tamanho real (128³, com a cópia original)
     RUN(bolts_destroy_a_drone_and_score);
     RUN(bolts_do_not_dig_the_planet);
     RUN(fast_bolts_never_pass_through);

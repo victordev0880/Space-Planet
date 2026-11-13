@@ -71,10 +71,10 @@ typedef struct {
     Vector3      cut_from;      // começo do corte (direção do centro do planeta, comprimento 1)
     float        cut_angle;     // comprimento do corte, em radianos (o corte gira em volta de `axis`)
     float        cut_done;      // fração já cavada
-    // Distância do centro ao solo ao longo do traço, medida no começo da carga
-    // (antes de qualquer mordida). As mordidas são fundas em relação a ela: se
-    // cada uma medisse o chão já cavado pela anterior, o corte desceria em
-    // escada até o núcleo. Negativa = ali o planeta já está oco.
+    // Distância do centro à superfície original ao longo do traço, medida no
+    // começo da carga. As mordidas são fundas em relação a ela: se medissem o
+    // chão já cavado (pela mordida anterior, ou por um corte antigo que este
+    // cruza), o corte desceria em escada até o núcleo.
     float        cut_ground[BOSS_CUT_SAMPLES];
     Vector3      beam_point;    // onde o laser toca o solo agora
     float        turret_wait, fire_wait;

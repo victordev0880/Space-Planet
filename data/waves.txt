@@ -25,20 +25,20 @@ wave.1.group.1 = swarm 5 0 30 12
 wave.1.group.2 = swarm 5 3 -10 25
 
 # Horda 2 (16): chegam os Kamikazes.
-wave.2.pause   = 8
+wave.2.pause   = 14
 wave.2.group.1 = swarm 6 0 -40 20
 wave.2.group.2 = kamikaze 4 4 60 0
 wave.2.group.3 = swarm 6 8 100 -15
 
 # Horda 3 (17): o primeiro Bombardeiro, escoltado.
-wave.3.pause   = 8
+wave.3.pause   = 14
 wave.3.group.1 = bomber 1 0 20 30
 wave.3.group.2 = swarm 6 3 -10 35
 wave.3.group.3 = kamikaze 4 8 -70 10
 wave.3.group.4 = swarm 6 14 140 0
 
 # Horda 4 (20): Atiradores, e o primeiro Escudeiro protegendo um bando.
-wave.4.pause   = 9
+wave.4.pause   = 15
 wave.4.group.1 = swarm 8 0 60 10
 wave.4.group.2 = shielder 1 0 60 14
 wave.4.group.3 = sniper 2 4 -50 30
@@ -48,13 +48,13 @@ wave.4.group.5 = swarm 4 14 -100 -20
 # Horda 5: o Rompe-Mundos (boss). Só ele por alguns segundos, para a entrada
 # ser vista; depois uma escolta leve. Na fase 2 ele mesmo lança drones.
 #   tipo "breaker", sempre 1.
-wave.5.pause   = 12
+wave.5.pause   = 16
 wave.5.group.1 = breaker 1 0 25 20
 wave.5.group.2 = swarm 6 14 -40 10
 wave.5.group.3 = kamikaze 4 40 120 -10
 
 # Horda 6 (22): o primeiro Escavador, rumo ao núcleo.
-wave.6.pause   = 12
+wave.6.pause   = 16
 wave.6.group.1 = digger 1 0 10 40
 wave.6.group.2 = swarm 8 2 -60 0
 wave.6.group.3 = bomber 1 6 90 20
@@ -62,7 +62,7 @@ wave.6.group.4 = kamikaze 6 10 -150 15
 wave.6.group.5 = swarm 6 16 30 -30
 
 # Horda 7 (24): Sifões drenando, protegidos.
-wave.7.pause   = 10
+wave.7.pause   = 16
 wave.7.group.1 = siphon 2 0 -30 15
 wave.7.group.2 = shielder 1 0 -30 18
 wave.7.group.3 = swarm 8 4 120 10
@@ -71,7 +71,7 @@ wave.7.group.5 = kamikaze 6 12 -120 30
 wave.7.group.6 = swarm 5 18 0 50
 
 # Horda 8 (26 + os lançados): o Porta-drones.
-wave.8.pause   = 11
+wave.8.pause   = 17
 wave.8.group.1 = carrier 1 0 45 25
 wave.8.group.2 = swarm 8 2 -45 0
 wave.8.group.3 = bomber 1 8 160 10
@@ -81,7 +81,7 @@ wave.8.group.6 = sniper 2 16 0 40
 wave.8.group.7 = swarm 5 22 90 -35
 
 # Horda 9 (28): ataque ao núcleo.
-wave.9.pause   = 11
+wave.9.pause   = 17
 wave.9.group.1 = digger 2 0 -20 30
 wave.9.group.2 = shielder 1 0 -20 34
 wave.9.group.3 = siphon 2 4 100 -10
@@ -91,7 +91,7 @@ wave.9.group.6 = kamikaze 8 16 170 0
 wave.9.group.7 = sniper 2 20 -60 -30
 
 # Horda 10 (40): tudo junto.
-wave.10.pause   = 14
+wave.10.pause   = 18
 wave.10.group.1 = bomber 2 0 30 10
 wave.10.group.2 = carrier 1 0 -60 30
 wave.10.group.3 = swarm 10 2 90 -15

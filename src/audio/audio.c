@@ -593,6 +593,111 @@ static void synth_ability(float *out, int n)
     }
 }
 
+// --- Rochas e conserto --------------------------------------------------------
+
+static void synth_meteor(float *out, int n)
+{
+    // Meteoro chegando: um rugido de vento que cresce e passa, com estalos.
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float u = t / length;
+        float rush = lowpass(&lp, noise(), sweep(300.0f, 1400.0f, t, length * 0.6f));
+        float crackle = (noise() > 0.996f) ? noise() * 0.6f : 0.0f;
+        float shape = sinf(PI * u) * sinf(PI * u);
+        out[i] = (1.6f * rush + crackle) * shape;
+    }
+}
+
+static void synth_fragment(float *out, int n)
+{
+    // Fragmento arrancado: estalo de rocha e um assobio subindo.
+    explosion(out, n, 2600.0f, 8.0f, 110.0f, 0.03f);
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(300.0f, 900.0f, t, 0.5f) / SAMPLE_RATE;
+        out[i] += 0.25f * sine(phase) * envelope(t, 0.05f, 4.0f);
+    }
+}
+
+static void synth_tractor_grab(float *out, int n)
+{
+    // Raio trator pegando: um "vuuum" subindo e um sino de trava no fim.
+    float phase = 0.0f, bell = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(140.0f, 620.0f, t, 0.35f) / SAMPLE_RATE;
+        float wobble = 1.0f + 0.3f * sinf(2.0f * PI * 18.0f * t);
+        float hum = (sine(phase) + 0.4f * sine(phase * 2.0f)) * wobble * envelope(t, 0.01f, 3.0f);
+        float lock = 0.0f;
+        if (t > 0.3f) {
+            bell += 1568.0f / SAMPLE_RATE;
+            lock = 0.5f * sine(bell) * envelope(t - 0.3f, 0.002f, 9.0f);
+        }
+        out[i] = 0.7f * hum + lock;
+    }
+}
+
+static void synth_tractor_miss(float *out, int n)
+{
+    // Nada ao alcance: dois bipes graves.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float on = (fmodf(t, 0.11f) < 0.07f) ? 1.0f : 0.0f;
+        phase += 260.0f / SAMPLE_RATE;
+        out[i] = 0.5f * square(phase) * on * envelope(t, 0.002f, 6.0f);
+    }
+}
+
+static void synth_tractor_release(float *out, int n)
+{
+    // Soltou: o zumbido descendo, com um clique.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(620.0f, 150.0f, t, 0.3f) / SAMPLE_RATE;
+        float click = (t < 0.006f) ? noise() : 0.0f;
+        out[i] = (0.7f * sine(phase) + 0.25f * sine(phase * 2.0f)) * envelope(t, 0.002f, 7.0f) + click;
+    }
+}
+
+static void synth_tractor_break(float *out, int n)
+{
+    // Arrebentou: um estalo seco e o zumbido caindo de vez.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float snap = (noise() - lowpass(&lp, noise(), 1200.0f)) * envelope(t, 0.001f, 30.0f);
+        phase += sweep(800.0f, 80.0f, t, 0.4f) / SAMPLE_RATE;
+        out[i] = 1.2f * snap + 0.5f * saw(phase) * envelope(t, 0.002f, 6.0f);
+    }
+}
+
+static void synth_deposit(float *out, int n)
+{
+    // A rocha batendo no chão: um baque surdo e terra assentando.
+    explosion(out, n, 600.0f, 4.0f, 55.0f, 0.004f);
+}
+
+static void synth_repair(float *out, int n)
+{
+    // Conserto pronto: um acorde maior que cresce, brilhando, como uma cura.
+    static const float NOTES[4] = { 392.0f, 493.9f, 587.3f, 784.0f };
+    arpeggio(out, n, NOTES, 4, 0.07f, 2.4f);
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float pad = sine(196.0f * t) + 0.6f * sine(293.7f * t) + 0.4f * sine(392.0f * t);
+        float shape = fminf(t / 0.25f, 1.0f) * fminf((length - t) / 0.6f, 1.0f);
+        out[i] += 0.4f * lowpass(&lp, pad, 2000.0f) * shape;
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -647,6 +752,14 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_BOSS_DOWN]      = { synth_boss_down,      3.60f, 1.00f, 1 },
     [SND_REWARD]         = { synth_reward,         2.60f, 0.65f, 1 },
     [SND_ABILITY]        = { synth_ability,        1.00f, 0.85f, 2 },
+    [SND_METEOR]          = { synth_meteor,          2.20f, 0.60f, 2 },
+    [SND_FRAGMENT]        = { synth_fragment,        0.60f, 0.45f, 3 },
+    [SND_TRACTOR_GRAB]    = { synth_tractor_grab,    0.70f, 0.60f, 1 },
+    [SND_TRACTOR_MISS]    = { synth_tractor_miss,    0.22f, 0.40f, 1 },
+    [SND_TRACTOR_RELEASE] = { synth_tractor_release, 0.40f, 0.50f, 1 },
+    [SND_TRACTOR_BREAK]   = { synth_tractor_break,   0.50f, 0.60f, 1 },
+    [SND_DEPOSIT]         = { synth_deposit,         0.90f, 0.80f, 3 },
+    [SND_REPAIR]          = { synth_repair,          1.50f, 0.55f, 2 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -795,6 +908,15 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_BOSS_DOWN:      s = SND_BOSS_DOWN; positional = false; break;
         case EV_REWARD:         s = SND_REWARD; positional = false; break;
         case EV_ABILITY:        s = SND_ABILITY; positional = false; break;
+        case EV_METEOR:          s = SND_METEOR; floor = 0.45f; break;   // tem de ser notado
+        case EV_FRAGMENT:        s = SND_FRAGMENT; floor = 0.1f; break;
+        case EV_TRACTOR_GRAB:    s = SND_TRACTOR_GRAB; positional = false; break;
+        case EV_TRACTOR_MISS:    s = SND_TRACTOR_MISS; positional = false; break;
+        case EV_TRACTOR_RELEASE: s = SND_TRACTOR_RELEASE; positional = false; break;
+        case EV_TRACTOR_BREAK:   s = SND_TRACTOR_BREAK; positional = false; break;
+        case EV_DEPOSIT:         s = SND_DEPOSIT; floor = 0.3f; break;
+        case EV_REPAIR:          s = SND_REPAIR; floor = 0.4f; break;
+        case EV_ROCK_HIT:        s = SND_BUMP; positional = false; volume = Clamp(e->value / 20.0f, 0.3f, 1.0f); break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;
