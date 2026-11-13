@@ -698,6 +698,91 @@ static void synth_repair(float *out, int n)
     }
 }
 
+// --- Mineração e defesas -------------------------------------------------------
+
+static void synth_rock_shot(float *out, int n)
+{
+    // Tiro na rocha: um "toc" seco de pedra.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(420.0f, 180.0f, t, 0.08f) / SAMPLE_RATE;
+        float knock = lowpass(&lp, noise(), 1800.0f) * 1.5f;
+        out[i] = (knock + 0.6f * sine(phase)) * envelope(t, 0.001f, 30.0f);
+    }
+}
+
+static void synth_ore(float *out, int n)
+{
+    // Cristal coletado: um "plim" agudo e curto.
+    static const float NOTES[2] = { 1318.5f, 1975.5f };
+    arpeggio(out, n, NOTES, 2, 0.035f, 18.0f);
+}
+
+static void synth_buy(float *out, int n)
+{
+    // Defesa comprada: três notas subindo e um zumbido de máquina ligando.
+    static const float NOTES[3] = { 659.3f, 880.0f, 1174.7f };
+    arpeggio(out, n, NOTES, 3, 0.06f, 6.0f);
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(90.0f, 180.0f, t, 0.4f) / SAMPLE_RATE;
+        out[i] += 0.3f * saw(phase) * envelope(t, 0.05f, 5.0f);
+    }
+}
+
+static void synth_deny(float *out, int n)
+{
+    // Não deu para comprar: um zumbido grave e curto.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += 140.0f / SAMPLE_RATE;
+        out[i] = 0.5f * square(phase) * envelope(t, 0.003f, 9.0f);
+    }
+}
+
+static void synth_intercept(float *out, int n)
+{
+    // Satélite derrubando um tiro: um zap elétrico descendo e um estalo.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(3200.0f, 700.0f, t, 0.12f) / SAMPLE_RATE;
+        float crack = (t > 0.06f && t < 0.075f) ? noise() : 0.0f;
+        out[i] = (0.6f * square(phase) * envelope(t, 0.001f, 20.0f)) + crack;
+    }
+}
+
+static void synth_shield_block(float *out, int n)
+{
+    // Escudo segurando um golpe: um "vuum" grave e abafado, com brilho em cima.
+    LowPass lp = { 0 };
+    float phase = 0.0f, high = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(160.0f, 70.0f, t, 0.3f) / SAMPLE_RATE;
+        high += 1760.0f / SAMPLE_RATE;
+        float body = lowpass(&lp, sine(phase) + 0.4f * noise(), 600.0f);
+        out[i] = (1.2f * body + 0.25f * sine(high) * expf(-t * 18.0f)) * envelope(t, 0.004f, 6.0f);
+    }
+}
+
+static void synth_shield_down(float *out, int n)
+{
+    // Escudo acabando: vidro estilhaçando e o zumbido caindo.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float shatter = (noise() - lowpass(&lp, noise(), 3000.0f)) * envelope(t, 0.001f, 7.0f);
+        phase += sweep(900.0f, 120.0f, t, 0.6f) / SAMPLE_RATE;
+        out[i] = 0.9f * shatter + 0.35f * sine(phase) * envelope(t, 0.01f, 3.0f);
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -760,6 +845,13 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_TRACTOR_BREAK]   = { synth_tractor_break,   0.50f, 0.60f, 1 },
     [SND_DEPOSIT]         = { synth_deposit,         0.90f, 0.80f, 3 },
     [SND_REPAIR]          = { synth_repair,          1.50f, 0.55f, 2 },
+    [SND_ROCK_SHOT]       = { synth_rock_shot,       0.12f, 0.30f, 4 },
+    [SND_ORE]             = { synth_ore,             0.20f, 0.35f, 3 },
+    [SND_BUY]             = { synth_buy,             0.60f, 0.60f, 1 },
+    [SND_DENY]            = { synth_deny,            0.25f, 0.45f, 1 },
+    [SND_INTERCEPT]       = { synth_intercept,       0.20f, 0.45f, 3 },
+    [SND_SHIELD_BLOCK]    = { synth_shield_block,    0.60f, 0.65f, 3 },
+    [SND_SHIELD_DOWN]     = { synth_shield_down,     0.90f, 0.70f, 1 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -917,6 +1009,15 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_DEPOSIT:         s = SND_DEPOSIT; floor = 0.3f; break;
         case EV_REPAIR:          s = SND_REPAIR; floor = 0.4f; break;
         case EV_ROCK_HIT:        s = SND_BUMP; positional = false; volume = Clamp(e->value / 20.0f, 0.3f, 1.0f); break;
+        case EV_ROCK_SHOT:       s = SND_ROCK_SHOT; break;
+        case EV_ROCK_MINED:      s = SND_FRAGMENT; floor = 0.3f; break;
+        case EV_ORE:             s = SND_ORE; positional = false; break;
+        case EV_BUY:             s = SND_BUY; positional = false; break;
+        case EV_BUY_FAIL:        s = SND_DENY; positional = false; break;
+        case EV_TURRET_SHOT:     s = SND_ALLY_SHOT; break;
+        case EV_INTERCEPT:       s = SND_INTERCEPT; floor = 0.15f; break;
+        case EV_SHIELD_BLOCK:    s = SND_SHIELD_BLOCK; floor = 0.25f; break;
+        case EV_SHIELD_DOWN:     s = SND_SHIELD_DOWN; floor = 0.4f; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

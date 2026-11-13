@@ -1,4 +1,5 @@
-// Testes do marco 9: rochas (fragmentos e meteoros), raio trator e conserto.
+// Testes do marco 9: rochas (fragmentos e meteoros), raio trator, conserto,
+// mineração e defesas planetárias.
 #include "test.h"
 #include "test_util.h"
 
@@ -294,6 +295,156 @@ static void meteors_come_in_the_calm(void)
     CHECK(rocks_count(&w.rocks, ROCK_METEOR) == tun.meteor_calm_count);
 }
 
+// --- mineração ---------------------------------------------------------------------
+
+// Tiros da nave quebram a rocha em cristais, que a nave atrai e coleta.
+static void bolts_mine_rocks_into_ore(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    world_spawn_rock(&w, &tun, ROCK_METEOR, Vector3Add(pos, (Vector3){ 30.0f, 0.0f, 0.0f }), (Vector3){ 0.0f, 0.0f, 0.0f });
+    InputState fire = keys(ACT_BIT(ACT_FIRE), 0u);
+    for (int i = 0; i < seconds(6.0f) && rocks_alive(&w.rocks) > 0; i++) world_tick(&w, &fire, &tun);
+    CHECK(rocks_alive(&w.rocks) == 0);
+    CHECK(saw_event(&w, EV_ROCK_SHOT) && saw_event(&w, EV_ROCK_MINED));
+    CHECK(rocks_ore_alive(&w.rocks) + w.ore == tun.ore_meteor);
+    // A nave avança um pouco e os cristais vêm até ela.
+    InputState go = keys(ACT_BIT(ACT_FORWARD), 0u);
+    for (int i = 0; i < seconds(1.0f); i++) world_tick(&w, &go, &tun);
+    run(&w, &tun, seconds(4.0f));
+    CHECK(w.ore == tun.ore_meteor && w.ore_total == tun.ore_meteor);
+    CHECK(saw_event(&w, EV_ORE));
+}
+
+// Os tiros dos aliados (e das torres) não quebram rochas: passam por elas.
+static void ally_bolts_pass_through_rocks(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    world_spawn_rock(&w, &tun, ROCK_FRAGMENT, Vector3Add(pos, (Vector3){ 20.0f, 0.0f, 0.0f }), (Vector3){ 0.0f, 0.0f, 0.0f });
+    float hp = 0.0f;
+    for (int i = 0; i < ROCKS_MAX; i++) if (w.rocks.items[i].alive) hp = w.rocks.items[i].hp;
+    for (int i = 0; i < 10; i++) {
+        Shot *s = projectiles_spawn(&w.shots, SHOT_BOLT, Vector3Add(pos, (Vector3){ 5.0f, 0.0f, 0.0f }),
+                                    (Vector3){ tun.weapon_speed, 0.0f, 0.0f }, 1.0f);
+        if (s != NULL) {
+            s->damage = 1.0f;
+            s->source = BOLT_ALLY;
+        }
+        run(&w, &tun, 6);
+    }
+    for (int i = 0; i < ROCKS_MAX; i++) if (w.rocks.items[i].alive) CHECK(w.rocks.items[i].hp == hp);
+    CHECK(!saw_event(&w, EV_ROCK_SHOT));
+}
+
+// --- defesas -------------------------------------------------------------------------
+
+static InputState press(Action a)
+{
+    return keys(ACT_BIT(a), ACT_BIT(a));
+}
+
+// Comprar custa minério, respeita o limite e recusa sem minério.
+static void buying_costs_ore_and_has_limits(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    InputState buy = press(ACT_BUY1);
+    world_tick(&w, &buy, &tun);   // sem minério
+    CHECK(defenses_count(&w.defenses, DEF_TURRET) == 0 && saw_event(&w, EV_BUY_FAIL));
+
+    w.ore = tun.turret_cost * (tun.turret_max + 1);
+    for (int k = 0; k < tun.turret_max + 1; k++) {
+        world_tick(&w, &buy, &tun);
+        run(&w, &tun, 1);
+    }
+    CHECK(defenses_count(&w.defenses, DEF_TURRET) == tun.turret_max);
+    CHECK(w.ore == tun.turret_cost);   // a última compra foi recusada pelo limite
+    CHECK(saw_event(&w, EV_BUY));
+}
+
+// A torre atira num inimigo ao alcance e o derruba.
+static void turret_shoots_enemies(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    w.ore = tun.turret_cost;
+    InputState buy = press(ACT_BUY1);
+    world_tick(&w, &buy, &tun);
+    const Defense *turret = NULL;
+    for (int i = 0; i < DEFENSES_MAX; i++) if (w.defenses.items[i].alive) turret = &w.defenses.items[i];
+    CHECK(turret != NULL);
+    if (turret == NULL) return;
+    // Um drone parado perto da torre (e longe da nave, que não atira).
+    world_place_ship(&w, &tun, Vector3Scale(pos, -1.0f), Vector3Add(Vector3Scale(pos, -1.0f), (Vector3){ 1.0f, 0.0f, 0.0f }), 0.0f);
+    world_spawn(&w, &tun, ENEMY_SWARM, 1, Vector3Add(turret->pos, Vector3Scale(Vector3Normalize(turret->pos), 25.0f)));
+    for (int i = 0; i < seconds(10.0f) && enemies_alive(&w.enemies) > 0; i++) run(&w, &tun, 1);
+    CHECK(saw_event(&w, EV_TURRET_SHOT));
+    CHECK(enemies_alive(&w.enemies) == 0);
+}
+
+// O escudo segura as crateras dentro dele (até a vida acabar) e não as de fora.
+static void shield_absorbs_craters_inside(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    w.ore = tun.shield_cost;
+    InputState buy = press(ACT_BUY2);
+    world_tick(&w, &buy, &tun);
+    CHECK(defenses_count(&w.defenses, DEF_SHIELD) == 1);
+    Vector3 up = Vector3Normalize(pos);
+    int64_t volume = w.planet.volume;
+    world_impact(&w, &tun, Vector3Scale(up, 100.0f), Vector3Negate(up), 3.0f, 2.0f);
+    CHECK(w.planet.volume == volume && saw_event(&w, EV_SHIELD_BLOCK));
+    // Do outro lado do planeta, a cratera sai.
+    world_impact(&w, &tun, Vector3Scale(up, -100.0f), up, 3.0f, 2.0f);
+    CHECK(w.planet.volume < volume);
+    // Golpes em cima até a vida acabar: o escudo cai e o próximo cava.
+    for (int i = 0; i < 100 && defenses_count(&w.defenses, DEF_SHIELD) > 0; i++) {
+        world_impact(&w, &tun, Vector3Scale(up, 100.0f), Vector3Negate(up), 3.0f, 2.0f);
+    }
+    CHECK(defenses_count(&w.defenses, DEF_SHIELD) == 0 && saw_event(&w, EV_SHIELD_DOWN));
+    int64_t before = w.planet.volume;
+    world_impact(&w, &tun, Vector3Scale(up, 100.0f), Vector3Negate(up), 3.0f, 2.0f);
+    CHECK(w.planet.volume < before);
+}
+
+// O satélite derruba uma bomba que passa perto dele.
+static void satellite_intercepts_bombs(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    Vector3 pos;
+    park_ship(&w, &pos);
+    w.ore = tun.satellite_cost;
+    InputState buy = press(ACT_BUY3);
+    world_tick(&w, &buy, &tun);
+    const Defense *sat = NULL;
+    for (int i = 0; i < DEFENSES_MAX; i++) if (w.defenses.items[i].alive) sat = &w.defenses.items[i];
+    CHECK(sat != NULL);
+    if (sat == NULL) return;
+    Vector3 at = Vector3Add(sat->pos, Vector3Scale(Vector3Normalize(sat->pos), 10.0f));
+    Shot *bomb = projectiles_spawn(&w.shots, SHOT_BOMB, at, Vector3Scale(Vector3Normalize(at), -5.0f), 20.0f);
+    CHECK(bomb != NULL);
+    if (bomb != NULL) {
+        bomb->hp = 5.0f;
+        bomb->target = Vector3Scale(Vector3Normalize(at), w.planet.params.radius);
+    }
+    run(&w, &tun, seconds(1.0f));
+    CHECK(projectiles_count(&w.shots, SHOT_BOMB) == 0);
+    CHECK(saw_event(&w, EV_INTERCEPT));
+}
+
 void suite_rocks(void)
 {
     tun = test_tuning();
@@ -308,5 +459,11 @@ void suite_rocks(void)
     RUN(scars_merge_nearby_impacts);
     RUN(autopilot_fetches_and_repairs);
     RUN(meteors_come_in_the_calm);
+    RUN(bolts_mine_rocks_into_ore);
+    RUN(ally_bolts_pass_through_rocks);
+    RUN(buying_costs_ore_and_has_limits);
+    RUN(turret_shoots_enemies);
+    RUN(shield_absorbs_craters_inside);
+    RUN(satellite_intercepts_bombs);
     arena_free(&arena);
 }

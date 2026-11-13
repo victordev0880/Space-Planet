@@ -163,6 +163,8 @@ void rocks_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Ca
         pose.bounce = 0.2f;
         pose.bounce_color = (Color){ 110, 160, 230, 255 };
         pose.far = Vector3Distance(pos, camera.position) > ROCK_DETAIL_DISTANCE;
+        pose.whiten = k->flash * 4.0f;   // clarão do tiro
+        pose.flash = (Color){ 255, 220, 160, 255 };
         bool meteor = k->kind == ROCK_METEOR;
         if (meteor) {
             pose.rim = 0.55f;

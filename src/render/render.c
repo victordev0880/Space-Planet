@@ -7,6 +7,7 @@
 
 #include "core/vmath.h"
 #include "render/boss_render.h"
+#include "render/defenses_render.h"
 #include "render/enemies_render.h"
 #include "render/particles_render.h"
 #include "render/rocks_render.h"
@@ -196,6 +197,7 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     enemies_draw(w, t, alpha, glow, camera);
     boss_draw(w, t, alpha, glow, camera);
     rocks_draw(w, t, alpha, glow, camera);
+    defenses_draw(w, t, alpha, glow, camera);
     if (w->ship_active) {
         ship_draw(&w->ship, &w->evo, &w->planet, t, alpha, time, glow, camera);
         if (w->ship.alive) allies_draw(&w->allies, &w->planet, t, alpha, glow, camera);
@@ -203,6 +205,7 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     projectiles_draw(w, t, alpha, glow, camera);
     boss_effects_draw(w, t, alpha, glow, camera);
     rocks_effects_draw(w, t, alpha, glow, camera);
+    defenses_effects_draw(w, t, alpha, glow, camera);
     particles_draw(&w->particles, camera, glow, t, moving);
 
     if (debug) {

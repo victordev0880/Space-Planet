@@ -38,6 +38,9 @@ typedef enum {
     ACT_CARD2,
     ACT_CARD3,
     ACT_TRACTOR,       // F: raio trator (puxa uma rocha; de novo, solta)
+    ACT_BUY1,          // 4, 5, 6: compra uma defesa (torre, escudo, satélite)
+    ACT_BUY2,
+    ACT_BUY3,
     ACT_COUNT
 } Action;
 

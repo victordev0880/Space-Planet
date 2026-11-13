@@ -22,6 +22,10 @@ typedef enum {
     SHOT_BOMB,     // bomba de um bombardeiro: cai no alvo marcado e pode ser derrubada
 } ShotKind;
 
+// De quem é um SHOT_BOLT. Só os do jogador quebram rochas: um aliado (ou uma
+// torre) não pode destruir o meteoro que o jogador queria rebocar.
+enum { BOLT_PLAYER = 0, BOLT_ALLY = 1 };
+
 typedef struct {
     Vector3 pos;
     Vector3 pos_prev;
@@ -35,7 +39,7 @@ typedef struct {
     float   crater_radius;   // cratera ao bater no planeta (0 = não cava)
     float   crater_depth;
     uint8_t kind;            // ShotKind
-    uint8_t source;          // tipo do inimigo que disparou (EnemyType); sem uso nos tiros da nave
+    uint8_t source;          // tipo do inimigo que disparou (EnemyType); nos tiros SHOT_BOLT, BOLT_PLAYER ou BOLT_ALLY
     uint8_t pierce;          // tiro da nave: inimigos que ainda pode atravessar (evolução)
     int16_t last_hit;        // ... e o último que atravessou (-1 = nenhum), para não acertá-lo de novo
 } Shot;

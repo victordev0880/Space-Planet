@@ -355,6 +355,48 @@ repair.depth  = 0.35            # o centro fica esta fração do raio abaixo da 
 repair.points = 2500            # pontos por 1% do planeta consertado
 repair.xp     = 3               # XP por 1% do planeta consertado
 
+# --- mineração --------------------------------------------------------------
+# Os tiros da nave quebram rochas (os dos aliados e das torres, não: eles não
+# podem destruir o meteoro que o jogador queria rebocar). Quebrada, a rocha
+# solta cristais de minério, que a nave atrai de perto e coleta. Cada rocha é
+# uma escolha: consertar o planeta (raio trator) ou virar minério (tiros).
+fragment.hp  = 6                # tiros que um fragmento aguenta
+meteor.hp    = 16               # ... e um meteoro
+ore.fragment = 4                # cristais que um fragmento solta
+ore.meteor   = 12               # ... e um meteoro
+ore.magnet   = 24               # a esta distância a nave puxa os cristais
+ore.pull     = 90               # aceleração do puxão
+ore.speed    = 70               # velocidade máxima do cristal puxado
+ore.collect  = 2                # coletado a esta distância da nave (mais o raio dela)
+ore.drag     = 1.2              # o cristal solto freia este tanto por segundo
+ore.life     = 25               # segundos até o cristal sumir sozinho
+
+# --- defesas planetárias (teclas 4, 5 e 6) ------------------------------------
+# Compradas com minério, a qualquer hora, e instaladas onde a nave está.
+# Torre orbital: fica parada no alto, acima do ponto do solo sob a nave, e
+# atira nos inimigos por perto.
+turret.cost     = 25
+turret.max      = 3
+turret.altitude = 26
+turret.range    = 95
+turret.rate     = 2.5            # tiros por segundo
+turret.damage   = 1
+# Escudo atmosférico local: uma cúpula sobre o solo sob a nave. Segura tudo o
+# que cava o planeta ali dentro (tiros, bombas, brocas, o laser do boss), cada
+# golpe gastando a vida dele pelo tamanho da cratera, até acabar o tempo.
+shield.cost     = 15
+shield.max      = 2
+shield.radius   = 22            # raio da área protegida, na superfície
+shield.hp       = 70            # soma dos raios das crateras que ele segura
+shield.life     = 75            # segundos até se desfazer
+# Satélite interceptador: orbita o planeta e derruba bombas e tiros inimigos.
+satellite.cost     = 20
+satellite.max      = 3
+satellite.altitude = 22
+satellite.speed    = 16          # velocidade na órbita
+satellite.range    = 45
+satellite.rate     = 1.6         # interceptações por segundo
+
 # --- áudio ------------------------------------------------------------------
 audio.volume  = 0.7             # volume geral (0 a 1)
 audio.falloff = 140             # distância em que um som cai pela metade

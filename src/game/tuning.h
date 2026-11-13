@@ -287,6 +287,15 @@ typedef struct {
     int   meteor_calm_count;
     float repair_time, repair_depth, repair_points, repair_xp;
 
+    // mineração e defesas planetárias (marco 9, parte 2)
+    float fragment_hp, meteor_hp;
+    int   ore_fragment, ore_meteor;
+    float ore_magnet, ore_pull, ore_speed, ore_life, ore_collect, ore_drag;
+    int   turret_cost, turret_max, shield_cost, shield_max, satellite_cost, satellite_max;
+    float turret_altitude, turret_range, turret_rate, turret_damage;
+    float shield_radius, shield_hp, shield_life;
+    float satellite_altitude, satellite_speed, satellite_range, satellite_rate;
+
     // áudio
     float audio_volume;
     float audio_falloff;

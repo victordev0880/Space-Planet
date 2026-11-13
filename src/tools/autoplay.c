@@ -232,6 +232,13 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
             return fail(ap, line_no, "no maximo %d comandos rock no mesmo quadro", AUTOPLAY_MAX_ROCKS);
         }
         e.cmd = AP_ROCK;
+    } else if (strcmp(cmd, "ore") == 0) {
+        long long amount = 0;
+        if (count != 4 || !parse_int(tokens[3], &amount) || amount < 0 || amount > 100000) {
+            return fail(ap, line_no, "esperado: at <quadro> ore <quantidade>");
+        }
+        e.count = (int)amount;
+        e.cmd = AP_ORE;
     } else if (strcmp(cmd, "bosshp") == 0) {
         if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f && e.speed <= 1.0f)) {
             return fail(ap, line_no, "esperado: at <quadro> bosshp <fracao da vida, de 0 a 1>");
@@ -378,6 +385,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->boss = -1;
     out->boss_hp = -1.0f;
     out->rock_count = 0;
+    out->ore = 0;
     out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
@@ -441,6 +449,9 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_BOSS_HP:
             out->boss_hp = e->speed;
             break;
+        case AP_ORE:
+            out->ore += e->count;
+            break;
         case AP_ROCK:
             if (out->rock_count < AUTOPLAY_MAX_ROCKS) {
                 AutoplayRock *k = &out->rocks[out->rock_count++];
@@ -503,6 +514,7 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     if (frame->xp > 0.0f) world_give_xp(w, t, frame->xp);
     if (frame->boss >= 0) world_spawn_boss(w, t, (BossType)frame->boss, frame->boss_dir);
     if (frame->boss_hp > 0.0f) boss_set_health(&w->boss, t, frame->boss_hp, &w->events, (uint32_t)w->tick);
+    w->ore += frame->ore;
     for (int i = 0; i < frame->rock_count; i++) {
         world_spawn_rock(w, t, (RockKind)frame->rocks[i].kind, frame->rocks[i].pos, frame->rocks[i].vel);
     }
@@ -671,6 +683,12 @@ bool autoplay_write_report(const char *path, const AutoplayReport *r)
         fprintf(f, "rocks_delivered = %d\n", r->rocks_delivered);
         fprintf(f, "planet_restored = %.4f\n", (double)r->planet_restored);
         fprintf(f, "scars_open = %d\n", r->scars_open);
+        fprintf(f, "\n");
+    }
+    if (r->ore_total > 0 || r->ore > 0 || r->defenses[0] + r->defenses[1] + r->defenses[2] > 0) {
+        fprintf(f, "ore = %d\n", r->ore);
+        fprintf(f, "ore_total = %d\n", r->ore_total);
+        fprintf(f, "defenses = %d torres, %d escudos, %d satelites\n", r->defenses[0], r->defenses[1], r->defenses[2]);
         fprintf(f, "\n");
     }
     fprintf(f, "warnings = %d\n", r->warnings);

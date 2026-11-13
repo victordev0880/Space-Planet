@@ -78,7 +78,10 @@ static void fire(Ally *al, const AllyContext *ctx, const Enemy *target, float da
     Vector3 dir = Vector3Normalize(Vector3Subtract(aim, al->pos));
     Shot *s = projectiles_spawn(ctx->shots, SHOT_BOLT, al->pos, Vector3Scale(dir, t->weapon_speed),
                                 t->weapon_range / t->weapon_speed);
-    if (s != NULL) s->damage = t->weapon_damage * damage;
+    if (s != NULL) {
+        s->damage = t->weapon_damage * damage;
+        s->source = BOLT_ALLY;
+    }
     events_push(ctx->events, ctx->tick, EV_ALLY_SHOT, al->kind, al->pos, 0.0f);
     al->fire_wait = (1.0f + rng_range(ctx->rng, -FIRE_JITTER, FIRE_JITTER)) / rate;
 }

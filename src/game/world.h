@@ -20,6 +20,7 @@
 #include "core/vmath.h"
 #include "game/allies.h"
 #include "game/boss.h"
+#include "game/defenses.h"
 #include "game/enemies.h"
 #include "game/events.h"
 #include "game/evolution.h"
@@ -119,6 +120,11 @@ typedef struct {
     float        meteor_queue_wait;   // ... e os segundos até o próximo deles
     int          calm_seen;       // a calmaria (número da horda seguinte) que já recebeu meteoros
 
+    // --- minério e defesas ---
+    int          ore;             // minério da nave (a moeda das defesas)
+    int          ore_total;       // minério coletado na partida (estatística)
+    Defenses     defenses;
+
     // --- evolução ---
     Evolution    evo;
     Allies       allies;
@@ -195,6 +201,10 @@ void world_clear_enemies(World *w);
 // calmarias). Ferramenta do autoplay: com `pos` e `vel`, exatamente ali.
 void world_spawn_meteor(World *w, const Tuning *t);
 Rock *world_spawn_rock(World *w, const Tuning *t, RockKind kind, Vector3 pos, Vector3 vel);
+
+// Um tiro da nave acertou a rocha `index` em `point` (`back` aponta de volta
+// para quem atirou). Quebrada, ela solta cristais de minério.
+void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vector3 point, Vector3 back);
 
 // Nova partida com o mesmo plano: planeta inteiro, sem inimigos, nave no
 // ponto de partida, pontuação zerada.

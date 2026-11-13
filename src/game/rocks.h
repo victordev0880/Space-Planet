@@ -43,6 +43,8 @@ typedef struct {
     Vector3    spin;        // eixo de giro vezes a velocidade angular (rad/s)
     float      radius;      // tamanho
     float      fill;        // raio do conserto que ela faz ao tocar o chão
+    float      hp;          // tiros que ainda aguenta antes de quebrar em minério
+    float      flash;       // clarão do último tiro (só desenho)
     float      age;
     Vector3    eject_from;  // fragmento: o ponto da cratera de onde saiu
     Vector3    orbit;       // fragmento: o ponto dele na órbita (gira em volta de axis)
@@ -57,12 +59,25 @@ typedef struct {
     uint8_t kind;
 } RockDeposit;
 
+// Um cristal de minério: sai de uma rocha quebrada a tiros, flutua freando e,
+// com a nave perto, é puxado até ela e coletado.
+#define ORE_MAX 96
+
+typedef struct {
+    bool    alive;
+    Vector3 pos, pos_prev, vel;
+    float   age;
+    float   spin;     // fase do giro (só desenho)
+} Ore;
+
 typedef struct {
     Rock        items[ROCKS_MAX];
     int         towed;           // índice da rocha no raio trator; -1 = nenhuma
     RockDeposit deposits[ROCK_DEPOSITS];
     int         deposit_count;   // pedidos deste passo (o mundo esvazia)
     int         delivered;       // rochas que já tocaram o chão (estatística)
+    Ore         ore[ORE_MAX];
+    int         collected;       // cristais coletados neste passo (o mundo soma ao minério da nave)
 } Rocks;
 
 typedef struct {
@@ -98,5 +113,12 @@ float rocks_tow_load(const Rocks *r, const Tuning *t);
 
 // A rocha a reboque, ou NULL.
 const Rock *rocks_towed(const Rocks *r);
+
+// Um tiro de `damage` na rocha `index`. Devolve true se ela quebrou (então
+// já soltou os cristais e saiu de cena).
+bool rocks_damage(Rocks *r, Rng *rng, const Tuning *t, int index, float damage);
+
+// Cristais soltos agora.
+int rocks_ore_alive(const Rocks *r);
 
 #endif

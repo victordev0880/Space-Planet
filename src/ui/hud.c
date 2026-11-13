@@ -46,6 +46,7 @@ static const Color TRACTOR_COLOR       = { 110, 255, 210, 255 };
 static const Color METEOR_COLOR        = { 255, 150, 70, 255 };
 static const Color FRAGMENT_COLOR      = { 210, 196, 180, 255 };
 static const Color REPAIR_COLOR        = { 120, 255, 170, 255 };
+static const Color ORE_COLOR           = { 255, 206, 90, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -1238,6 +1239,73 @@ static void draw_rocks(const World *w, const Tuning *t, Camera3D camera)
     }
 }
 
+// ---------------------------------------------------------------------------
+//  Minério e defesas
+// ---------------------------------------------------------------------------
+#define SHOP_WIDTH   300
+#define SHOP_ROW     24
+#define SHOP_BOTTOM  22
+#define SHOP_NOTE_TIME 1.6f
+#define ORE_FLASH_TIME 0.35f
+
+// Canto de baixo à direita: o minério e as três defesas (tecla, preço e
+// quantas já há), apagadas quando não dá para comprar.
+static void draw_shop(const World *w, const Tuning *t)
+{
+    int sw = GetScreenWidth(), sh = GetScreenHeight();
+    int x = sw - SHOP_WIDTH - 14, y = sh - SHOP_BOTTOM - SHOP_ROW * 4 - 8;
+    float now = seconds(w, t);
+
+    // Coletou minério há pouco? O número clareia.
+    float glow = 0.0f;
+    const char *note = NULL;
+    Color note_color = TEXT_COLOR;
+    float note_alpha = 0.0f;
+    for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
+        const GameEvent *e = events_find(&w->events, id);
+        if (e == NULL) break;
+        float age = event_age(w, t, e);
+        if (age > SHOP_NOTE_TIME) break;
+        if (e->type == EV_ORE && age < ORE_FLASH_TIME) glow = fmaxf(glow, 1.0f - age / ORE_FLASH_TIME);
+        if (note == NULL && e->type == EV_BUY) {
+            note = (e->sub == DEF_TURRET) ? "TORRE ORBITAL INSTALADA"
+                 : (e->sub == DEF_SHIELD) ? "ESCUDO LOCAL ERGUIDO"
+                                          : "SATÉLITE EM ÓRBITA";
+            note_color = ORE_COLOR;
+            note_alpha = 1.0f - age / SHOP_NOTE_TIME;
+        } else if (note == NULL && e->type == EV_BUY_FAIL) {
+            note = (e->value > 0.5f) ? "LIMITE DESSA DEFESA" : "MINÉRIO INSUFICIENTE";
+            note_color = DYING;
+            note_alpha = 1.0f - age / SHOP_NOTE_TIME;
+        }
+    }
+
+    DrawRectangle(x - 10, y - 8, SHOP_WIDTH + 20, SHOP_ROW * 4 + 14, FRAME_COLOR);
+    // A confirmação (ou a recusa) da compra aparece no lugar do título, por um instante.
+    if (note != NULL && note_alpha > 0.0f) {
+        DrawText(note, x, y + 2, LABEL_SIZE - 4, with_alpha(note_color, fminf(note_alpha * 2.0f, 1.0f)));
+    } else {
+        DrawText("MINÉRIO", x, y, LABEL_SIZE, with_alpha(ORE_COLOR, 0.85f));
+    }
+    const char *amount = TextFormat("%d", w->ore);
+    int size = LABEL_SIZE + 4 + (int)(glow * 6.0f);
+    DrawText(amount, x + SHOP_WIDTH - MeasureText(amount, size), y - 2 - (int)(glow * 3.0f), size,
+             mix_color(ORE_COLOR, WHITE, glow));
+    for (int k = 0; k < DEF_TYPE_COUNT; k++) {
+        DefenseType type = (DefenseType)k;
+        int ry = y + SHOP_ROW * (k + 1) + 2;
+        int cost = defense_cost(t, type), max = defense_max(t, type), have = defenses_count(&w->defenses, type);
+        bool full = have >= max, cheap = w->ore >= cost;
+        Color c = (full || !cheap) ? DIM_COLOR : TEXT_COLOR;
+        DrawText(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, (full || !cheap) ? DIM_COLOR : PRIZE_COLOR);
+        DrawText(defense_name(type), x + 24, ry, LABEL_SIZE - 2, c);
+        const char *right = full ? TextFormat("%d/%d", have, max) : TextFormat("%d    %d/%d", cost, have, max);
+        DrawText(right, x + SHOP_WIDTH - MeasureText(right, LABEL_SIZE - 2), ry, LABEL_SIZE - 2,
+                 full ? DIM_COLOR : (cheap ? ORE_COLOR : DIM_COLOR));
+    }
+    (void)now;
+}
+
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
 {
     int screen_w = GetScreenWidth();
@@ -1261,6 +1329,7 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
         if (w->state == GAME_PLAYING) {  // no fim, quem fala é o painel do resultado
             draw_boss(w, t, ctx->camera);
             draw_ship(w, t, ctx->camera);
+            draw_shop(w, t);
             draw_banners(w, t);
         }
     } else if (w->cam_mode == CAM_FREE) {

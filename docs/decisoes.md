@@ -994,6 +994,76 @@ tempo de buscar um meteoro e consertar. Enter continua chamando a próxima horda
 - O piloto automático só conserta quando não há inimigo; um jogador pode
   escolher defender ou consertar.
 
+## Marco 9, parte 2: mineração e defesas planetárias (2026-11-13)
+
+### Cada rocha é uma escolha
+Os tiros da nave quebram rochas (fragmento: 6 tiros, 4 cristais; meteoro: 16
+tiros, 12 cristais). Quebrada, a rocha solta cristais de minério que flutuam,
+são puxados pela nave a até 24 de distância e somem em 25 s. Assim cada rocha
+é uma decisão: consertar o planeta (raio trator) ou virar minério para as
+defesas (tiros). A rocha a reboque não leva tiro (fica bem na frente da arma).
+
+### Só o jogador minera
+Os tiros dos aliados e das torres passam pelas rochas (`Shot.source` diz de
+quem é o tiro). Sem isso, um drone de escolta destruiria o meteoro que o
+jogador ia rebocar.
+
+### As defesas (teclas 4, 5 e 6)
+Compradas com minério a qualquer hora e instaladas onde a nave está:
+- **Torre orbital (25):** parada a 26 de altura, atira nos inimigos a até 95
+  (não nos protegidos por um Escudeiro). Nasce 22 à frente da nave: na
+  primeira versão nascia na altura da nave e, na hora da compra, tapava a
+  câmera.
+- **Escudo local (15):** cúpula de raio 22 sobre o solo sob a nave. Segura
+  tudo o que cavaria o planeta ali dentro (tiros do Enxame, bombas, Kamikazes,
+  a broca do Escavador, o feixe do Sifão, o laser do boss), cada golpe gastando
+  o raio da cratera da vida dele (70), e se desfaz em 75 s. Pisca nos últimos
+  segundos. É a resposta a um Escavador ou Sifão que o jogador não consegue
+  alcançar a tempo.
+- **Satélite (20):** orbita a 22 de altura e derruba a bomba (antes de tudo)
+  ou o tiro inimigo mais perto, 1,6 por segundo.
+Limites: 3 torres, 2 escudos, 3 satélites. Números em `data/tuning.txt`.
+
+### O escudo intercepta no mundo, não nos inimigos
+Todo dano ao planeta já passava por `world_impact` e `world_carve`; o escudo
+é conferido ali. Nenhum inimigo precisou mudar, e qualquer coisa nova que
+cavar o planeta já nasce coberta pelo escudo.
+
+### HUD
+Painel no canto de baixo à direita: o minério (que clareia ao coletar) e as
+três defesas com tecla, preço e quantas há, apagadas quando não dá para
+comprar. A confirmação ("TORRE ORBITAL INSTALADA") ou a recusa ("MINÉRIO
+INSUFICIENTE", "LIMITE DESSA DEFESA") aparece no lugar do título por um
+instante. Sons de tiro na rocha, cristal coletado, compra, recusa,
+interceptação e do escudo segurando e quebrando.
+
+### Piloto automático e roteiros
+Sem inimigo à vista, ele compra o que der (satélite, torre, escudo) e, sem
+cratera para consertar, atira nas rochas para minerar. Comando novo `ore n`;
+o relatório traz o minério e as defesas. Roteiro `defesas.txt`: minerar um
+meteoro, comprar as três defesas, a torre atirando, o escudo segurando
+crateras e uma luta com as defesas ajudando.
+
+### Medições (Vega 8)
+A máquina estava mais lenta nesta sessão: o mesmo roteiro de referência
+(`conserto.txt`) foi de 3,25 ms para 5,75 ms de mediana sem mudança no jogo.
+Com isso:
+- `defesas.txt`: mediana 6,25 ms, p99 13 ms; o planeta termina intacto.
+  Mesmo `state_hash` sem shaders.
+- `onda1.txt`: vitória com o planeta em 92%, núcleo intacto; 95 de minério,
+  41 rochas levadas; mediana 6,75 ms, p99 14,75 ms. Os quadros lentos mudam de
+  lugar entre execuções com o mesmo hash (ruído). O conserto remalha mais
+  (7.656 chunks na partida, contra 3.197 antes): a esfera cresce em 8 passos e
+  cada passo refaz os chunks dela. Dá 0,2 chunk por quadro, dentro do orçamento.
+
+### Limitações conhecidas do marco 9
+- O balanceamento (preços, quantas rochas aparecem, quanto o escudo aguenta)
+  é um primeiro chute; o marco 11 é de balanceamento.
+- As defesas não levam dano dos inimigos (a torre e o satélite são eternos).
+  Se ficarem fortes demais, um caminho é deixá-las ser alvo.
+- O piloto automático compra numa ordem fixa; não reflete escolhas de um
+  jogador.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

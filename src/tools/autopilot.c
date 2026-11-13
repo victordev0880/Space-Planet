@@ -241,7 +241,8 @@ static bool plan_delivery(const World *w, const Tuning *t, const Rock *rock, Vec
 void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
 {
     const uint32_t flight = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_BOOST) | ACT_BIT(ACT_FIRE)
-                          | ACT_BIT(ACT_ALT_FIRE) | ACT_BIT(ACT_TRACTOR);
+                          | ACT_BIT(ACT_ALT_FIRE) | ACT_BIT(ACT_TRACTOR) | ACT_BIT(ACT_BUY1) | ACT_BIT(ACT_BUY2)
+                          | ACT_BIT(ACT_BUY3);
     sample->held &= ~flight;
     sample->look_dx = 0.0f;
     sample->look_dy = 0.0f;
@@ -263,9 +264,22 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     Target target = pick_target(w, t);
 
     // Rochas: com uma a reboque, leva até uma cicatriz; sem inimigo para
-    // caçar, busca uma.
+    // caçar, busca uma (havendo cratera aberta) ou a quebra para minerar.
     const Rock *towed = rocks_towed(&w->rocks);
-    bool delivering = (towed != NULL), fetching = false, drop = false;
+    bool delivering = (towed != NULL), fetching = false, drop = false, mining = false;
+
+    // Sem inimigo à vista, compra o que der (nos passos ímpares, para cada
+    // compra ser um aperto novo): satélite, torre, escudo.
+    if (!target.found && towed == NULL && (w->tick % 2u) == 1u) {
+        static const DefenseType ORDER[DEF_TYPE_COUNT] = { DEF_SATELLITE, DEF_TURRET, DEF_SHIELD };
+        for (int k = 0; k < DEF_TYPE_COUNT; k++) {
+            DefenseType type = ORDER[k];
+            if (defenses_count(&w->defenses, type) < defense_max(t, type) && w->ore >= defense_cost(t, type)) {
+                sample->held |= ACT_BIT(ACT_BUY1 + (int)type);
+                break;
+            }
+        }
+    }
     Vector3 aim = s->pos;
     float distance = 0.0f;
     bool any_scar = false;
@@ -278,6 +292,13 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
             const Rock *k = &w->rocks.items[rock];
             target = (Target){ true, k->pos, k->vel, 0.0f, -1, false, { 0.0f, 1.0f, 0.0f } };
             fetching = true;
+        }
+    } else if (!target.found) {
+        int rock = pick_rock(w);
+        if (rock >= 0) {
+            const Rock *k = &w->rocks.items[rock];
+            target = (Target){ true, k->pos, k->vel, 0.0f, -1, false, { 0.0f, 1.0f, 0.0f } };
+            mining = true;
         }
     }
 
@@ -377,8 +398,9 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     if (distance < CHASE_NEAR) sample->held |= ACT_BIT(ACT_BACK);
     if (ahead > cosf(FIRE_ANGLE_DEG * DEG2RAD) && distance < t->weapon_range * 0.9f) {
         sample->held |= ACT_BIT(ACT_FIRE);
-        // Com o núcleo Rompe-Mundos pronto, segura o botão direito também.
-        if (w->ability.owned && w->ability.cooldown <= 0.0f && distance < t->ability_range * 0.8f) {
+        // Com o núcleo Rompe-Mundos pronto, segura o botão direito também (numa
+        // rocha não: o raio não a quebra).
+        if (!mining && w->ability.owned && w->ability.cooldown <= 0.0f && distance < t->ability_range * 0.8f) {
             sample->held |= ACT_BIT(ACT_ALT_FIRE);
         }
     }

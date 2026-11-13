@@ -492,6 +492,23 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
         ground = true;
     }
 
+    // Rochas: só os tiros do jogador as quebram, e nunca a que ele reboca (ou
+    // acabou de soltar), que fica bem na frente da arma.
+    int rock = -1;
+    if (s->source == BOLT_PLAYER) {
+        for (int i = 0; i < ROCKS_MAX; i++) {
+            const Rock *k = &w->rocks.items[i];
+            if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING) continue;
+            float hit = segment_sphere(a, b, k->pos, k->radius + t->weapon_hit_margin * 0.5f);
+            if (hit >= 0.0f && hit < first) {
+                first = hit;
+                rock = i;
+                enemy = bomb = boss_part = -1;
+                ground = false;
+            }
+        }
+    }
+
     if (first > 1.0f) return;   // não acertou nada neste passo
     Vector3 point = Vector3Lerp(a, b, first);
     Vector3 back = Vector3Normalize(Vector3Negate(travel));
@@ -549,6 +566,8 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
         }
     } else if (boss_part >= 0) {
         hit_boss(w, t, s, boss_part, point, back);
+    } else if (rock >= 0) {
+        world_damage_rock(w, t, rock, s->damage, point, back);
     } else if (bomb >= 0) {
         Shot *target = &p->items[bomb];
         target->hp -= s->damage;

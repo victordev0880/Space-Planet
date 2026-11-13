@@ -508,6 +508,9 @@ int main(int argc, char **argv)
         report.rocks_alive = rocks_alive(&world.rocks);
         report.planet_restored = (float)((double)world.repair.restored_total / (double)world.planet.initial_volume);
         for (int i = 0; i < REPAIR_SCARS; i++) report.scars_open += world.repair.scars[i].used ? 1 : 0;
+        report.ore = world.ore;
+        report.ore_total = world.ore_total;
+        for (int k = 0; k < DEF_TYPE_COUNT; k++) report.defenses[k] = defenses_count(&world.defenses, (DefenseType)k);
         report.warnings = log_warnings;
         report.errors = log_errors;
         report.first_problem = log_first_problem;

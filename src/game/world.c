@@ -46,6 +46,7 @@ static const Rgb8 SPARK_COLOR       = { 255, 214, 150 };
 static const Rgb8 BOSS_BLAST_HOT    = { 255, 236, 200 };
 static const Rgb8 BOSS_BLAST_GLOW   = { 255, 90, 60 };
 static const Rgb8 BOSS_BLAST_DEBRIS = { 70, 66, 80 };
+static const Rgb8 SHIELD_SPARK      = { 130, 210, 255 };
 #define BOSS_BLAST_JOLT 6.0f
 
 // ---------------------------------------------------------------------------
@@ -288,10 +289,22 @@ static void eject_fragments(World *w, const Tuning *t, Vector3 ground, float rad
     }
 }
 
+// Um escudo local cobre o lugar? Então ele segura o golpe (e faísca).
+static bool shielded(World *w, const Tuning *t, Vector3 ground, float radius)
+{
+    if (!defenses_absorb(&w->defenses, t, w->planet.params.radius, ground, radius, &w->events, (uint32_t)w->tick)) {
+        return false;
+    }
+    Vector3 up = Vector3Normalize(ground);
+    particles_sparks(&w->particles, &w->rng, Vector3Add(ground, Vector3Scale(up, 2.0f)), up, 10, 10.0f, SHIELD_SPARK);
+    return true;
+}
+
 bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float rim_radius, float depth)
 {
     Vector3 ground;
     if (!planet_raycast(&w->planet, origin, dir, IMPACT_RAY_LENGTH, &ground)) return false;
+    if (shielded(w, t, ground, rim_radius)) return true;
 
     Vector3 normal = planet_normal(&w->planet, ground);
     float sphere_radius = 0.0f;
@@ -316,6 +329,12 @@ bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float 
 
 void world_carve(World *w, const Tuning *t, Vector3 center, float radius)
 {
+    // Coberta por um escudo, a escavação para (só se havia o que cavar ali:
+    // o escudo não gasta vida segurando o vazio).
+    if (planet_sample(&w->planet, center) > 0.0f
+        && shielded(w, t, Vector3Add(center, Vector3Scale(Vector3Normalize(center), radius * 0.5f)), radius)) {
+        return;
+    }
     CarveResult carve = planet_carve(&w->planet, center, radius);
     if (carve.removed == 0) return;
 
@@ -504,6 +523,7 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     boss_reset(&w->boss);
     rocks_reset(&w->rocks);
     repair_reset(&w->repair);
+    defenses_reset(&w->defenses);
     w->meteor_wait = t->meteor_interval;
     w->calm_seen = -1;
     w->eff = *t;
@@ -637,6 +657,9 @@ void world_restart(World *w, const Tuning *t)
     boss_reset(&w->boss);
     memset(&w->ability, 0, sizeof w->ability);
     rocks_reset(&w->rocks);
+    defenses_reset(&w->defenses);
+    w->ore = 0;
+    w->ore_total = 0;
     w->debris = 0.0f;
     w->meteor_wait = t->meteor_interval;
     w->meteor_queue = 0;
@@ -732,6 +755,8 @@ static void hold_still(World *w)
         w->rocks.items[i].pos_prev = w->rocks.items[i].pos;
         w->rocks.items[i].rot_prev = w->rocks.items[i].rot;
     }
+    for (int i = 0; i < ORE_MAX; i++) w->rocks.ore[i].pos_prev = w->rocks.ore[i].pos;
+    for (int i = 0; i < DEFENSES_MAX; i++) w->defenses.items[i].pos_prev = w->defenses.items[i].pos;
 }
 
 // ---------------------------------------------------------------------------
@@ -748,6 +773,9 @@ static const Rgb8 REPAIR_GLOW  = { 120, 255, 170 };
 static const Rgb8 REPAIR_SPARK = { 190, 255, 210 };
 static const Rgb8 ROCK_DUST_COLOR = { 120, 108, 96 };
 static const Rgb8 METEOR_EMBER    = { 255, 150, 60 };
+static const Rgb8 ROCK_SPARK      = { 200, 180, 150 };
+static const Rgb8 ORE_HOT         = { 255, 244, 200 };
+static const Rgb8 ORE_GLOW        = { 255, 206, 90 };
 
 // Uma direção perpendicular a `v` (comprimento 1), sorteada.
 static Vector3 perpendicular(Rng *rng, Vector3 v)
@@ -899,6 +927,62 @@ static void rock_collisions(World *w, const Tuning *t)
     }
 }
 
+void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vector3 point, Vector3 back)
+{
+    if (index < 0 || index >= ROCKS_MAX || !w->rocks.items[index].alive) return;
+    const Rock *k = &w->rocks.items[index];
+    uint8_t kind = k->kind;
+    Vector3 pos = k->pos, vel = k->vel;
+    float radius = k->radius;
+    uint32_t tick = (uint32_t)w->tick;
+    particles_sparks(&w->particles, &w->rng, point, back, 5, 10.0f, ROCK_SPARK);
+    events_push(&w->events, tick, EV_ROCK_SHOT, kind, point, damage);
+    if (!rocks_damage(&w->rocks, &w->rng, t, index, damage)) return;
+    // Quebrou: estilhaços e os cristais (que a nave atrai de perto).
+    particles_explosion(&w->particles, &w->rng, pos, vel, radius * 0.8f, ORE_HOT, ORE_GLOW, ROCK_DUST_COLOR);
+    int count = (kind == ROCK_METEOR) ? t->ore_meteor : t->ore_fragment;
+    events_push(&w->events, tick, EV_ROCK_MINED, kind, pos, (float)count);
+}
+
+// Teclas 4, 5 e 6: compra uma defesa e a instala onde a nave está.
+static void tick_shop(World *w, const InputState *in, const Tuning *t)
+{
+    if (!w->ship.alive) return;
+    uint32_t tick = (uint32_t)w->tick;
+    for (int k = 0; k < DEF_TYPE_COUNT; k++) {
+        if (!(in->pressed & ACT_BIT(ACT_BUY1 + k))) continue;
+        DefenseType type = (DefenseType)k;
+        int cost = defense_cost(t, type);
+        if (defenses_count(&w->defenses, type) >= defense_max(t, type)) {
+            events_push(&w->events, tick, EV_BUY_FAIL, (uint8_t)k, w->ship.pos, 1.0f);
+            continue;
+        }
+        if (w->ore < cost) {
+            events_push(&w->events, tick, EV_BUY_FAIL, (uint8_t)k, w->ship.pos, 0.0f);
+            continue;
+        }
+        Defense *f = defenses_build(&w->defenses, t, type, w->ship.pos, ship_forward(&w->ship), w->planet.params.radius,
+                                    &w->rng);
+        if (f == NULL) continue;
+        w->ore -= cost;
+        spawn_glow(w, PARTICLE_RING, f->pos, (Vector3){ 0.0f, 0.0f, 0.0f }, 3.0f, 0.6f, ORE_GLOW);
+        events_push(&w->events, tick, EV_BUY, (uint8_t)k, f->pos, (float)cost);
+    }
+}
+
+static void tick_defenses(World *w, const Tuning *t, float dt)
+{
+    DefenseContext ctx;
+    ctx.planet_radius = w->planet.params.radius;
+    ctx.enemies = &w->enemies;
+    ctx.shots = &w->shots;
+    ctx.events = &w->events;
+    ctx.t = t;
+    ctx.tick = (uint32_t)w->tick;
+    ctx.dt = dt;
+    defenses_tick(&w->defenses, &ctx);
+}
+
 static void tick_rocks(World *w, const Tuning *t, float dt)
 {
     RockContext ctx;
@@ -909,6 +993,11 @@ static void tick_rocks(World *w, const Tuning *t, float dt)
     ctx.tick = (uint32_t)w->tick;
     ctx.dt = dt;
     rocks_tick(&w->rocks, &ctx);
+    if (w->rocks.collected > 0) {
+        w->ore += w->rocks.collected;
+        w->ore_total += w->rocks.collected;
+        events_push(&w->events, (uint32_t)w->tick, EV_ORE, 0, w->ship.pos, (float)w->rocks.collected);
+    }
     tick_repairs(w, t, dt);
     rock_collisions(w, t);
 
@@ -1090,6 +1179,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         ship_effects(w, &ev);
         if (ev.dashed) combat_dash_blast(w, t);
         tick_tractor(w, &input, t);
+        tick_shop(w, &input, t);
         combat_fire(w, &input, t, dt);
         combat_ability(w, &input, t, dt);
         tick_allies(w, t, dt);
@@ -1104,6 +1194,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         w->enemies.carve_count = 0;
         tick_boss(w, t);
         tick_rocks(w, t, dt);
+        tick_defenses(w, t, dt);
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
         combat_boss(w, t);
@@ -1250,6 +1341,17 @@ uint64_t world_hash(const World *w)
     }
     HASH(h, w->repair.restored_total);
     HASH(h, w->debris);
+    HASH(h, w->ore);
+    for (int i = 0; i < ORE_MAX; i++) {
+        if (w->rocks.ore[i].alive) h = hash_vec3(h, w->rocks.ore[i].pos);
+    }
+    for (int i = 0; i < DEFENSES_MAX; i++) {
+        const Defense *f = &w->defenses.items[i];
+        if (!f->alive) continue;
+        h = hash_vec3(h, f->pos);
+        HASH(h, f->hp);
+        HASH(h, f->wait);
+    }
 
     HASH(h, w->particles.count);
     // As partículas entram no resumo pela soma das posições: barato, e

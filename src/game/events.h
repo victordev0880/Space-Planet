@@ -69,6 +69,15 @@ typedef enum {
     EV_DEPOSIT,        // uma rocha tocou o chão: o conserto começou (value = raio dele)
     EV_REPAIR,         // um conserto terminou              (pos = centro; value = fração do planeta devolvida)
     EV_ROCK_HIT,       // a nave bateu numa rocha           (value = velocidade da batida)
+    EV_ROCK_SHOT,      // tiro da nave numa rocha           (sub = RockKind)
+    EV_ROCK_MINED,     // a rocha quebrou em minério        (sub = RockKind; value = cristais)
+    EV_ORE,            // a nave coletou minério            (value = quantos cristais neste passo)
+    EV_BUY,            // uma defesa foi comprada           (sub = DefenseType)
+    EV_BUY_FAIL,       // ... ou não                        (sub = DefenseType; value = 0 sem minério, 1 no limite)
+    EV_TURRET_SHOT,    // uma torre atirou
+    EV_INTERCEPT,      // um satélite derrubou um tiro ou bomba (pos = onde)
+    EV_SHIELD_BLOCK,   // um escudo segurou uma cratera     (value = raio dela)
+    EV_SHIELD_DOWN,    // um escudo acabou                  (value = 1 se quebrou, 0 se o tempo acabou)
     EV_TYPE_COUNT
 } EventType;
 

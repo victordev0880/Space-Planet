@@ -10,6 +10,9 @@
 #define TOW_DROP        0.5f    // a rocha a reboque desce mais este tanto do raio dela
 #define CONTACT_DEPTH   0.6f    // toca o chão quando este tanto do raio dela entra no solo
 #define EJECT_LIFT      0.35f   // o fragmento sobe em arco: este tanto da altura extra no meio do caminho
+#define ORE_SPIN        3.0f    // giro dos cristais (rad/s, só desenho)
+#define ORE_SCATTER     7.0f    // velocidade máxima com que os cristais se espalham da rocha quebrada
+#define ORE_SIDE_DRAG   4.0f    // cristal puxado pela nave: o quanto perde da velocidade de lado
 
 void rocks_reset(Rocks *r)
 {
@@ -66,6 +69,7 @@ Rock *rocks_spawn_fragment(Rocks *r, Rng *rng, const Tuning *t, float planet_rad
     if (k == NULL) return NULL;
     float mid = 0.5f * (t->fragment_radius_min + t->fragment_radius_max);
     k->fill = t->fragment_fill * radius / fmaxf(mid, 1e-3f);
+    k->hp = t->fragment_hp;
     k->material = material;
     k->state = ROCK_EJECT;
     k->pos = k->pos_prev = k->eject_from = ground;
@@ -87,6 +91,7 @@ Rock *rocks_spawn_meteor(Rocks *r, Rng *rng, const Tuning *t, Vector3 pos, Vecto
     if (k == NULL) return NULL;
     float mid = 0.5f * (t->meteor_radius_min + t->meteor_radius_max);
     k->fill = t->meteor_fill * radius / fmaxf(mid, 1e-3f);
+    k->hp = t->meteor_hp;
     k->state = ROCK_FLYBY;
     k->pos = k->pos_prev = pos;
     k->vel = vel;
@@ -158,12 +163,97 @@ static void tick_falling(Rock *k, const RockContext *ctx)
     k->pos = Vector3Add(k->pos, Vector3Scale(k->vel, ctx->dt));
 }
 
+// Cristais: freiam aos poucos; com a nave perto, são puxados até ela e coletados.
+static void tick_ore(Rocks *r, const RockContext *ctx)
+{
+    const Tuning *t = ctx->t;
+    const Ship *s = ctx->ship;
+    float dt = ctx->dt;
+    r->collected = 0;
+    for (int i = 0; i < ORE_MAX; i++) {
+        Ore *o = &r->ore[i];
+        if (!o->alive) continue;
+        o->pos_prev = o->pos;
+        o->age += dt;
+        o->spin += dt * ORE_SPIN;
+        if (o->age > t->ore_life) {
+            o->alive = false;
+            continue;
+        }
+        bool pulled = false;
+        if (s != NULL && s->alive) {
+            Vector3 to = Vector3Subtract(s->pos, o->pos);
+            float distance = Vector3Length(to);
+            if (distance < t->ship_radius + t->ore_collect) {
+                o->alive = false;
+                r->collected++;
+                continue;
+            }
+            if (distance < t->ore_magnet) {
+                // Puxado pela nave: acelera até ela, com a velocidade de lado
+                // sumindo, para não ficar orbitando em volta.
+                Vector3 dir = Vector3Scale(to, 1.0f / distance);
+                Vector3 side = Vector3Subtract(o->vel, Vector3Scale(dir, Vector3DotProduct(o->vel, dir)));
+                o->vel = Vector3Subtract(o->vel, Vector3Scale(side, Clamp(ORE_SIDE_DRAG * dt, 0.0f, 1.0f)));
+                o->vel = Vector3Add(o->vel, Vector3Scale(dir, t->ore_pull * dt));
+                float speed = Vector3Length(o->vel);
+                if (speed > t->ore_speed) o->vel = Vector3Scale(o->vel, t->ore_speed / speed);
+                pulled = true;
+            }
+        }
+        if (!pulled) o->vel = Vector3Scale(o->vel, 1.0f - Clamp(t->ore_drag * dt, 0.0f, 1.0f));
+        o->pos = Vector3Add(o->pos, Vector3Scale(o->vel, dt));
+        // Não atravessa o chão.
+        if (planet_sample(ctx->planet, o->pos) >= VOXEL_ISO) {
+            o->pos = o->pos_prev;
+            o->vel = Vector3Scale(Vector3Normalize(o->pos), 2.0f);
+        }
+    }
+}
+
+int rocks_ore_alive(const Rocks *r)
+{
+    int n = 0;
+    for (int i = 0; i < ORE_MAX; i++) n += r->ore[i].alive ? 1 : 0;
+    return n;
+}
+
+static void spawn_ore(Rocks *r, Rng *rng, Vector3 pos, Vector3 vel, int count, float spread)
+{
+    for (int i = 0; i < ORE_MAX && count > 0; i++) {
+        Ore *o = &r->ore[i];
+        if (o->alive) continue;
+        memset(o, 0, sizeof *o);
+        o->alive = true;
+        o->pos = o->pos_prev = Vector3Add(pos, Vector3Scale(rng_unit_vec3(rng), spread * 0.5f));
+        o->vel = Vector3Add(vel, Vector3Scale(rng_unit_vec3(rng), rng_range(rng, 2.0f, ORE_SCATTER)));
+        o->spin = rng_range(rng, 0.0f, 2.0f * PI);
+        count--;
+    }
+}
+
+bool rocks_damage(Rocks *r, Rng *rng, const Tuning *t, int index, float damage)
+{
+    if (index < 0 || index >= ROCKS_MAX) return false;
+    Rock *k = &r->items[index];
+    if (!k->alive) return false;
+    k->hp -= damage;
+    k->flash = 0.1f;
+    if (k->hp > 0.0f) return false;
+    int count = (k->kind == ROCK_METEOR) ? t->ore_meteor : t->ore_fragment;
+    spawn_ore(r, rng, k->pos, Vector3Scale(k->vel, 0.5f), count, k->radius);
+    if (r->towed == index) r->towed = -1;
+    k->alive = false;
+    return true;
+}
+
 void rocks_tick(Rocks *r, const RockContext *ctx)
 {
     const Tuning *t = ctx->t;
     float dt = ctx->dt;
     r->deposit_count = 0;
     float despawn = ctx->planet->params.radius * DESPAWN_RADII;
+    tick_ore(r, ctx);
 
     for (int i = 0; i < ROCKS_MAX; i++) {
         Rock *k = &r->items[i];
@@ -171,6 +261,7 @@ void rocks_tick(Rocks *r, const RockContext *ctx)
         k->pos_prev = k->pos;
         k->rot_prev = k->rot;
         k->age += dt;
+        k->flash = fmaxf(k->flash - dt, 0.0f);
         float spin = Vector3Length(k->spin);
         if (spin > 1e-4f) {
             Quaternion step = QuaternionFromAxisAngle(Vector3Scale(k->spin, 1.0f / spin), spin * dt);
