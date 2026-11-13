@@ -1,0 +1,65 @@
+# Roteiro do marco 7 (evolução): a nave sem evoluções, com as peças do Enxame,
+# Kamikaze e Bombardeiro, e com todas; depois a tela de cartas, a escolha, e
+# a nave lutando com os aliados (drones de escolta e caças).
+#
+#   mingw32-make run ARGS="--autoplay roteiros/evolucao.txt"
+#
+# A nave fica em (45 35 82), no lado do dia, de nariz para -z; a câmera
+# livre a fotografa de trás, de cima e do lado.
+
+frames 1300
+seed 4
+
+at 0    waves off
+at 0    ship 45.06 35.05 82.11  45.06 35.05 -20
+
+# --- a nave base ---------------------------------------------------------------
+at 10   cam 50.05 35.12 88.11  45.06 35.05 82.11
+at 11   shot evolucao_01_nave_base
+
+# --- Enxame, Kamikaze e Bombardeiro --------------------------------------------
+at 20   ship 45.06 35.05 82.11  45.06 35.05 -20
+at 20   evolve escort 2
+at 20   evolve spread 2
+at 20   evolve blast_dash 1
+at 20   evolve heavy_hull 2
+at 20   evolve warheads 1
+at 70   cam 50.05 35.12 88.11  45.06 35.05 82.11
+at 71   shot evolucao_02_nave_enxame
+
+# --- todas -------------------------------------------------------------------
+at 80   ship 45.06 35.05 82.11  45.06 35.05 -20
+at 80   evolve chain 1
+at 80   evolve pierce 2
+at 80   evolve armor_break 1
+at 80   evolve lifesteal 1
+at 80   evolve energy_siphon 1
+at 80   evolve crit 2
+at 80   evolve long_range 2
+at 80   evolve big_shield 2
+at 80   evolve reflect 1
+at 80   evolve fighters 2
+at 80   evolve hangar 1
+at 130  cam 50.05 35.12 88.11  45.06 35.05 82.11
+at 131  shot evolucao_03_nave_completa
+at 135  cam 50.91 30.74 82.11  45.06 35.05 82.11
+at 136  shot evolucao_04_nave_de_lado
+at 140  cam 47.0 36.5 76.5  45.06 35.05 82.11
+at 141  shot evolucao_05_nave_de_frente
+
+# --- cartas ------------------------------------------------------------------
+at 150  ship 45.06 35.05 82.11  45.06 35.05 -20
+at 160  xp 8
+at 330  shot evolucao_06_cartas
+at 360  press card2
+at 400  shot evolucao_07_escolheu
+
+# --- combate com os aliados --------------------------------------------------
+at 410  spawn swarm 8  45.0 60.0 40.0
+at 410  spawn bomber 1  10.0 70.0 60.0
+at 420  autopilot on
+at 600  shot evolucao_08_combate
+at 750  shot evolucao_09_combate
+at 900  shot evolucao_10_combate
+at 1050 shot evolucao_11_combate
+at 1299 shot evolucao_12_fim

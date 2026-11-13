@@ -177,7 +177,10 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     Texture2D glow = stars_glow_texture(&r->stars);
     float moving = (w->hitstop > 0) ? 1.0f : alpha;
     enemies_draw(w, t, alpha, glow, camera);
-    if (w->ship_active) ship_draw(&w->ship, &w->planet, t, alpha, time, glow, camera);
+    if (w->ship_active) {
+        ship_draw(&w->ship, &w->evo, &w->planet, t, alpha, time, glow, camera);
+        if (w->ship.alive) allies_draw(&w->allies, &w->planet, t, alpha, glow, camera);
+    }
     projectiles_draw(w, t, alpha, glow, camera);
     particles_draw(&w->particles, camera, glow, t, moving);
 

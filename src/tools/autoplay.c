@@ -197,6 +197,20 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
     } else if (strcmp(cmd, "clear") == 0) {
         if (count != 3) return fail(ap, line_no, "esperado: at <quadro> clear");
         e.cmd = AP_CLEAR;
+    } else if (strcmp(cmd, "xp") == 0) {
+        if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f)) {
+            return fail(ap, line_no, "esperado: at <quadro> xp <quantidade positiva>");
+        }
+        e.cmd = AP_XP;
+    } else if (strcmp(cmd, "evolve") == 0) {
+        long long rank = 0;
+        if (count != 5 || !parse_int(tokens[4], &rank) || rank < 0 || rank > 9) {
+            return fail(ap, line_no, "esperado: at <quadro> evolve <nome> <nivel 0-9>");
+        }
+        e.action = evolution_from_key(tokens[3]);
+        if (e.action < 0) return fail(ap, line_no, "evolve: evolucao desconhecida: \"%s\"", tokens[3]);
+        e.count = (int)rank;
+        e.cmd = AP_EVOLVE;
     } else {
         return fail(ap, line_no, "comando desconhecido: \"%s\"", cmd);
     }
@@ -319,6 +333,8 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->has_ship = false;
     out->has_waves = false;
     out->clear = false;
+    out->xp = 0.0f;
+    out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
     out->barrage_count = 0;
@@ -370,6 +386,16 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
             out->clear = true;
             out->spawn_count = 0;   // o que veio antes no mesmo quadro também sai
             break;
+        case AP_XP:
+            out->xp += e->speed;
+            break;
+        case AP_EVOLVE:
+            if (out->evolve_count < EVO_COUNT) {
+                out->evolve_id[out->evolve_count] = e->action;
+                out->evolve_rank[out->evolve_count] = e->count;
+                out->evolve_count++;
+            }
+            break;
         case AP_SPAWN:
             if (out->spawn_count < AUTOPLAY_MAX_SPAWNS) {
                 AutoplaySpawn *s = &out->spawns[out->spawn_count++];
@@ -396,6 +422,10 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     if (frame->has_cam) world_place_camera(w, frame->cam_pos, frame->cam_target);
     if (frame->has_waves) world_set_waves(w, frame->waves_on);
     if (frame->clear) world_clear_enemies(w);
+    for (int i = 0; i < frame->evolve_count; i++) {
+        world_set_evolution(w, t, (EvolutionId)frame->evolve_id[i], frame->evolve_rank[i]);
+    }
+    if (frame->xp > 0.0f) world_give_xp(w, t, frame->xp);
     for (int i = 0; i < frame->spawn_count; i++) {
         world_spawn_variant(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center,
                             frame->spawns[i].variant);

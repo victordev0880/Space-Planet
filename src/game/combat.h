@@ -34,6 +34,9 @@ typedef struct {
 } AimAssist;
 
 void combat_fire(World *w, const InputState *in, const Tuning *t, float dt);
+
+// Dash explosivo (evolução): explode em volta da nave. Chamado quando o dash começa.
+void combat_dash_blast(World *w, const Tuning *t);
 void combat_resolve(World *w, const Tuning *t);
 void combat_sweep(World *w, const Tuning *t);
 

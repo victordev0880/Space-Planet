@@ -119,6 +119,15 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     sample->look_dx = 0.0f;
     sample->look_dy = 0.0f;
 
+    // Cartas de evolução: fica com a primeira. A tecla é apertada só quando as
+    // cartas já estão prontas (depois de um passo sem nenhuma tecla de carta).
+    const uint32_t cards = ACT_BIT(ACT_CARD1) | ACT_BIT(ACT_CARD2) | ACT_BIT(ACT_CARD3);
+    sample->held &= ~cards;
+    if (w->evo.choosing) {
+        if (w->evo.armed) sample->held |= ACT_BIT(ACT_CARD1);
+        return;
+    }
+
     const Ship *s = &w->ship;
     if (!s->alive || !w->ship_active) return;
 

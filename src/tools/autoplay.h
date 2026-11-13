@@ -42,6 +42,9 @@
 //                                 (off devolve o controle ao roteiro)
 //   at 110 clear                  tira de cena todos os inimigos e tiros (para
 //                                 separar as cenas de um roteiro)
+//   at 120 xp 30                  dá 30 de XP à nave (abre as cartas de nível)
+//   at 130 evolve escort 2        põe uma evolução direto no nível 2 (nomes de
+//                                 data/evolutions.txt: escort, spread, crit...)
 //
 // Em um mesmo quadro a ordem é: view, ship, cam, waves, clear, spawn, crateras. Um
 // "cam" depois de um "ship" fotografa a nave de fora (na câmera livre a
@@ -69,7 +72,7 @@
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE
 } AutoplayCmd;
 
 typedef struct {
@@ -114,6 +117,10 @@ typedef struct {
     bool        has_waves;    // true = ligar ou desligar as hordas
     bool        waves_on;
     bool        clear;        // tirar de cena todos os inimigos e tiros
+    float       xp;           // XP a dar à nave neste quadro
+    int         evolve_count;
+    int         evolve_id[EVO_COUNT];
+    int         evolve_rank[EVO_COUNT];
     bool        autopilot;    // o piloto automático está no comando neste quadro
 
     AutoplaySpawn spawns[AUTOPLAY_MAX_SPAWNS];

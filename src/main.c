@@ -22,6 +22,7 @@
 #include "game/waves.h"
 #include "game/world.h"
 #include "platform/platform_input.h"
+#include "ui/cards.h"
 #include "render/render.h"
 #include "tools/autopilot.h"
 #include "tools/autoplay.h"
@@ -296,10 +297,15 @@ int main(int argc, char **argv)
             sample = step.input;
             shot = step.shot;
             autoplay_apply(&step, &world, &tuning);   // câmera, nave, inimigos e crateras pedidos pelo roteiro
-            if (step.autopilot) autopilot_drive(&world, &tuning, &sample);
+            if (step.autopilot) autopilot_drive(&world, world_tuning(&world), &sample);
         } else {
             sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0);
             if (skip_mouse_frames > 0) skip_mouse_frames--;
+            // Cartas de evolução: um clique numa carta vale como a tecla dela.
+            if (world.evo.choosing && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
+                int card = cards_hit(&world, GetMousePosition());
+                if (card >= 0) sample.held |= ACT_BIT(ACT_CARD1 + card);
+            }
         }
         input_feed(&tracker, &sample);
 
@@ -378,8 +384,9 @@ int main(int argc, char **argv)
                          tuning.crater_depth[crater_size]);
         }
 
-        // O mouse fica preso à janela enquanto pilota a nave ou a câmera livre.
-        bool want_capture = !autoplay && world.cam_mode != CAM_ORBIT;
+        // O mouse fica preso à janela enquanto pilota a nave ou a câmera livre
+        // (e solto enquanto as cartas de evolução estão na tela).
+        bool want_capture = !autoplay && world.cam_mode != CAM_ORBIT && !world.evo.choosing;
         if (want_capture != cursor_captured) {
             if (want_capture) DisableCursor();
             else              EnableCursor();
@@ -402,8 +409,10 @@ int main(int argc, char **argv)
         info.autoplay_frame = frame;
         info.autoplay_frames = script.frames;
 
+        // Daqui em diante, o tuning com as evoluções (barras, alcance da arma).
+        const Tuning *play_tuning = world_tuning(&world);
         BeginDrawing();
-        render_scene(&renderer, &world, &tuning, alpha, overlay.visible);
+        render_scene(&renderer, &world, play_tuning, alpha, overlay.visible);
 
         // Preenchidos depois de render_scene, que é quem remalha os chunks.
         info.remeshed = renderer.planet.remeshed_last_frame;
@@ -419,9 +428,10 @@ int main(int argc, char **argv)
         hud.camera = render_camera(&world, &tuning, alpha);
         hud.best_score = best_score;
         hud.new_best = new_best;
-        hud_draw(&world, &tuning, &hud);
+        hud_draw(&world, play_tuning, &hud);
+        cards_draw(&world, play_tuning, GetTime());
         debug_overlay_draw(&overlay, &world, &info);
-        audio_update(&audio, &world, &tuning, hud.camera);
+        audio_update(&audio, &world, play_tuning, hud.camera);
         rlDrawRenderBatchActive();
         double cpu_ms = (GetTime() - start) * 1000.0;
 

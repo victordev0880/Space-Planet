@@ -18,11 +18,13 @@
 #include "core/config.h"
 #include "core/vmath.h"
 #include "game/enemy_types.h"
+#include "game/evolution_types.h"
 #include "voxel/mesher.h"
 #include "voxel/planet.h"
 
-#define TUNING_FILE  "tuning.txt"
-#define ENEMIES_FILE "enemies.txt"
+#define TUNING_FILE     "tuning.txt"
+#define ENEMIES_FILE    "enemies.txt"
+#define EVOLUTIONS_FILE "evolutions.txt"
 
 typedef struct {
     // janela
@@ -356,6 +358,30 @@ typedef struct {
     float carrier_launch_warning;
     int   carrier_launch_count;
     int   carrier_max_swarm;
+
+    // --- data/evolutions.txt ------------------------------------------------
+    float xp_base;                       // XP para chegar ao nível 2
+    float xp_growth;                     // cada nível pede este tanto a mais
+    float xp_kill[ENEMY_TYPE_COUNT];     // XP (e essência) de cada abate
+    float xp_bomb;                       // bomba derrubada no ar
+    float cards_base_weight;             // peso de cada evolução no sorteio...
+    float cards_essence_weight;          // ... mais este tanto por essência da linha
+    int   evo_max[EVO_COUNT];            // nível máximo de cada evolução
+    float escort_damage, escort_rate, escort_range, escort_orbit;
+    float spread_angle, spread_damage;
+    float blast_dash_damage, blast_dash_radius;
+    float chain_damage, chain_radius;
+    float heavy_hull_hull;
+    float warheads_fraction, warheads_radius;
+    float armor_break_bonus;
+    float lifesteal_hull;
+    float energy_siphon_energy;
+    float crit_chance, crit_mult, crit_far;
+    float long_range_speed, long_range_assist;
+    float big_shield_shield, big_shield_regen;
+    float reflect_chance;
+    float fighters_damage, fighters_rate, fighters_speed, fighters_range;
+    float hangar_rate;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4
@@ -367,8 +393,11 @@ typedef struct {
 bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *enemies_cfg, char *err,
                         size_t err_len);
 
-// Lê data_dir/tuning.txt e data_dir/enemies.txt e preenche `out`. Mesmas
-// garantias de tuning_from_config.
+// Preenche em `out` só os campos de data/evolutions.txt (mesmas garantias).
+bool tuning_evolutions_from_config(Tuning *out, const Config *evolutions_cfg, char *err, size_t err_len);
+
+// Lê data_dir/tuning.txt, enemies.txt e evolutions.txt e preenche `out`.
+// Mesmas garantias de tuning_from_config.
 bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len);
 
 // Traduções do tuning para as estruturas que os sistemas usam.

@@ -130,6 +130,7 @@ static void draw_notice(const DebugOverlay *o, const World *w)
 static void draw_hint(const DebugOverlay *o, const World *w)
 {
     const char *hint = NULL;
+    if (w->evo.choosing) return;   // as cartas de evolução têm as próprias instruções
     bool first_moments = w->director.phase == DIRECTOR_OFF
                       || (w->director.phase == DIRECTOR_PAUSE && w->director.wave == 0);
     if (o->visible) {
@@ -162,7 +163,7 @@ static void draw_hint(const DebugOverlay *o, const World *w)
     for (int i = 0; i < count; i++) {
         int width = MeasureText(lines[i], FONT_SIZE);
         int x = (GetScreenWidth() - width) / 2;
-        int y = (count == 1) ? GetScreenHeight() - 36 : GetScreenHeight() - 170 + i * (FONT_SIZE + 8);
+        int y = (count == 1) ? GetScreenHeight() - 36 : GetScreenHeight() - 196 + i * (FONT_SIZE + 8);
         // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
         DrawText(lines[i], x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
         DrawText(lines[i], x, y, FONT_SIZE, HINT_COLOR);

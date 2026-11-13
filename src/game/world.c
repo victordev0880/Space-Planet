@@ -354,6 +354,25 @@ void world_jolt(World *w, float strength)
     w->jolt_strength = strength;
 }
 
+// O rastro puxa para a cor da linha de evolução dominante (a nave "vira"
+// aquilo que mais derrotou). As cores são as mesmas do HUD.
+static const Rgb8 LINE_TRAIL[ENEMY_TYPE_COUNT] = {
+    [ENEMY_SWARM]    = { 196, 130, 255 }, [ENEMY_BOMBER]   = { 255, 150, 70 },
+    [ENEMY_KAMIKAZE] = { 255, 96, 72 },   [ENEMY_DIGGER]   = { 255, 186, 80 },
+    [ENEMY_SIPHON]   = { 120, 255, 190 }, [ENEMY_SNIPER]   = { 255, 110, 140 },
+    [ENEMY_SHIELDER] = { 110, 230, 255 }, [ENEMY_CARRIER]  = { 214, 150, 255 },
+};
+
+static Rgb8 trail_color(const Evolution *evo)
+{
+    int line = evolution_dominant_line(evo);
+    if (line < 0) return TRAIL_COLOR;
+    float pull = Clamp(0.35f + 0.08f * (float)evolution_total_ranks(evo), 0.0f, 0.8f);
+    Rgb8 lc = LINE_TRAIL[line];
+    return (Rgb8){ (uint8_t)Lerp((float)TRAIL_COLOR.r, (float)lc.r, pull), (uint8_t)Lerp((float)TRAIL_COLOR.g, (float)lc.g, pull),
+                   (uint8_t)Lerp((float)TRAIL_COLOR.b, (float)lc.b, pull) };
+}
+
 static void ship_effects(World *w, const ShipEvents *ev)
 {
     const Ship *s = &w->ship;
@@ -364,7 +383,7 @@ static void ship_effects(World *w, const ShipEvents *ev)
     // solta vários pontos ao longo do trecho que o motor percorreu.
     if (s->alive && s->thrust_blend > 0.15f) {
         Vector3 back = Vector3Negate(ship_forward(s));
-        Rgb8 color = s->boosting ? TRAIL_BOOST_COLOR : (s->sling > 0.0f) ? TRAIL_SLING_COLOR : TRAIL_COLOR;
+        Rgb8 color = s->boosting ? TRAIL_BOOST_COLOR : (s->sling > 0.0f) ? TRAIL_SLING_COLOR : trail_color(&w->evo);
         float size = Lerp(TRAIL_SIZE, TRAIL_BOOST_SIZE, fmaxf(s->boost_blend, s->sling_blend)) * s->thrust_blend;
         Vector3 carried = Vector3Scale(Vector3Add(s->vel, s->fall), TRAIL_INHERIT);
 
@@ -435,6 +454,9 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     moon_init(&w->moon, t, w->planet.params.radius);
     ship_spawn(&w->ship, t, &w->planet);
     score_reset(&w->score);
+    evolution_reset(&w->evo);
+    allies_reset(&w->allies);
+    w->eff = *t;
     director_stop(&w->director);
     w->state = GAME_PLAYING;
     w->view.rot = QuaternionIdentity();
@@ -507,6 +529,10 @@ void world_restart(World *w, const Tuning *t)
     enemies_clear(&w->enemies);
     projectiles_clear(&w->shots);
     score_reset(&w->score);
+    evolution_reset(&w->evo);
+    allies_reset(&w->allies);
+    w->cards_at = 0;
+    w->eff = *t;
     ship_spawn(&w->ship, t, &w->planet);
     w->state = GAME_PLAYING;
     w->state_tick = 0;
@@ -581,6 +607,99 @@ static void hold_still(World *w)
     for (int i = 0; i < p->pool.capacity; i++) {
         if (pool_alive(&p->pool, i)) p->items[i].pos_prev = p->items[i].pos;
     }
+    for (int i = 0; i < ALLIES_MAX; i++) {
+        w->allies.items[i].pos_prev = w->allies.items[i].pos;
+        w->allies.items[i].rot_prev = w->allies.items[i].rot;
+    }
+}
+
+// ---------------------------------------------------------------------------
+//  Evolução
+// ---------------------------------------------------------------------------
+
+#define CARDS_DELAY 0.45f   // segundos entre subir de nível e as cartas abrirem (dá para ver a explosão)
+
+const Tuning *world_tuning(const World *w)
+{
+    return &w->eff;
+}
+
+// O que muda na hora em que a evolução é escolhida (o resto vale pelo tuning
+// efetivo, a partir do próximo passo).
+static void evolve_now(World *w, const Tuning *t, int id)
+{
+    Ship *s = &w->ship;
+    if (id == EVO_HEAVY_HULL) s->hull += t->heavy_hull_hull;          // o casco novo já vem consertado
+    if (id == EVO_BIG_SHIELD) s->shield += t->big_shield_shield;      // e o escudo novo, carregado
+    events_push(&w->events, (uint32_t)w->tick, EV_EVOLVE, (uint8_t)id, s->pos, (float)w->evo.rank[id]);
+}
+
+// Cartas na tela: espera as teclas 1, 2 ou 3. Uma tecla já apertada quando
+// as cartas abrem não conta: é preciso soltar e apertar de novo (sem isso,
+// segurar uma tecla escolheria cartas sem querer).
+static void choose_card(World *w, const InputState *in, const Tuning *t)
+{
+    const uint32_t keys = ACT_BIT(ACT_CARD1) | ACT_BIT(ACT_CARD2) | ACT_BIT(ACT_CARD3);
+    if ((in->held & keys) == 0u) {
+        w->evo.armed = true;
+        return;
+    }
+    if (!w->evo.armed) return;
+    for (int i = 0; i < EVO_CHOICES; i++) {
+        if ((in->held & ACT_BIT(ACT_CARD1 + i)) == 0u) continue;
+        int id = evolution_pick(&w->evo, t, &w->rng, i);
+        if (id >= 0) evolve_now(w, t, id);
+        return;
+    }
+}
+
+// Quantos aliados a evolução dá, e a cadência deles.
+static void tick_allies(World *w, const Tuning *t, float dt)
+{
+    const uint8_t *rank = w->evo.rank;
+    allies_set_count(&w->allies, &w->ship, rank[EVO_ESCORT] + rank[EVO_HANGAR], rank[EVO_FIGHTERS]);
+    if (allies_alive(&w->allies) == 0) return;
+    AllyContext ctx;
+    ctx.ship = &w->ship;
+    ctx.planet = &w->planet;
+    ctx.enemies = &w->enemies;
+    ctx.shots = &w->shots;
+    ctx.events = &w->events;
+    ctx.rng = &w->rng;
+    ctx.t = t;
+    ctx.tick = (uint32_t)w->tick;
+    ctx.dt = dt;
+    ctx.rate_mult = 1.0f + t->hangar_rate * (float)rank[EVO_HANGAR];
+    allies_tick(&w->allies, &ctx);
+}
+
+// Nível ganho: as cartas abrem um instante depois (e só com a partida andando).
+static void open_cards(World *w, const Tuning *t)
+{
+    if (w->evo.pending <= 0 || w->evo.choosing || w->state != GAME_PLAYING) return;
+    if (w->cards_at == 0) {
+        w->cards_at = w->tick + (uint64_t)(CARDS_DELAY * (float)t->sim_hz);
+    } else if (w->tick >= w->cards_at) {
+        evolution_offer(&w->evo, t, &w->rng);
+        w->cards_at = 0;
+    }
+}
+
+void world_give_xp(World *w, const Tuning *t, float xp)
+{
+    int gained = evolution_gain(&w->evo, t, ENEMY_TYPE_COUNT, xp);   // sem tipo: só XP, nenhuma essência
+    if (gained > 0) events_push(&w->events, (uint32_t)w->tick, EV_LEVEL_UP, 0, w->ship.pos, (float)w->evo.level);
+}
+
+void world_set_evolution(World *w, const Tuning *t, EvolutionId id, int rank)
+{
+    if ((int)id < 0 || id >= EVO_COUNT) return;
+    if (rank < 0) rank = 0;
+    if (rank > t->evo_max[id]) rank = t->evo_max[id];
+    int before = w->evo.rank[id];
+    w->evo.rank[id] = (uint8_t)rank;
+    if (id == EVO_HEAVY_HULL) w->ship.hull += t->heavy_hull_hull * (float)(rank - before);
+    if (id == EVO_BIG_SHIELD) w->ship.shield += t->big_shield_shield * (float)(rank - before);
 }
 
 // Guarda o que o jogador fez durante o congelamento, para valer depois dele:
@@ -594,9 +713,22 @@ static void hold_input(InputState *frozen, const InputState *in)
     frozen->look_dy += in->look_dy;
 }
 
-void world_tick(World *w, const InputState *in, const Tuning *t)
+void world_tick(World *w, const InputState *in, const Tuning *base)
 {
+    // Daqui em diante vale o tuning com as evoluções.
+    evolution_tune(&w->evo, base, &w->eff);
+    const Tuning *t = &w->eff;
     float dt = 1.0f / (float)t->sim_hz;
+
+    // Cartas de evolução na tela: a partida congela até a escolha.
+    if (w->evo.choosing) {
+        choose_card(w, in, t);
+        w->view_prev = w->view;
+        hold_still(w);
+        w->moon.pos_prev = w->moon.pos;
+        w->tick++;
+        return;
+    }
 
     // Hit-stop: nos golpes mais fortes o jogo congela por alguns passos. O
     // tempo de jogo continua (as animações e o tremor de câmera seguem).
@@ -635,7 +767,9 @@ void world_tick(World *w, const InputState *in, const Tuning *t)
     if (world_in_play(w)) {
         ShipEvents ev = ship_tick(&w->ship, &input, &w->planet, &w->moon, t, dt);
         ship_effects(w, &ev);
+        if (ev.dashed) combat_dash_blast(w, t);
         combat_fire(w, &input, t, dt);
+        tick_allies(w, t, dt);
         run_director(w, &input, t, dt);
 
         EnemyContext ctx = world_enemy_context(w, t);
@@ -647,6 +781,7 @@ void world_tick(World *w, const InputState *in, const Tuning *t)
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
         combat_sweep(w, t);
+        open_cards(w, t);
 
         score_tick(&w->score, dt);
         w->hit_marker = fmaxf(w->hit_marker - dt, 0.0f);
@@ -762,6 +897,14 @@ uint64_t world_hash(const World *w)
     HASH(h, w->shots.pool.live);
     for (int i = 0; i < w->shots.pool.capacity; i++) {
         if (pool_alive(&w->shots.pool, i)) h = hash_vec3(h, w->shots.items[i].pos);
+    }
+
+    HASH(h, w->evo.level);
+    HASH(h, w->evo.xp);
+    HASH(h, w->evo.rank);
+    HASH(h, w->evo.choosing);
+    for (int i = 0; i < ALLIES_MAX; i++) {
+        if (w->allies.items[i].alive) h = hash_vec3(h, w->allies.items[i].pos);
     }
 
     HASH(h, w->particles.count);

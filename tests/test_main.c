@@ -48,6 +48,7 @@ int main(void)
     suite_waves();
     suite_combat();
     suite_enemies();
+    suite_evolution();
     suite_autoplay();
     finish_current();
 

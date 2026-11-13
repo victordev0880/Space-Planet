@@ -717,6 +717,79 @@ O piloto automático agora vence as 10 hordas em 10 minutos, com o planeta em
 do tempo encarando a nave em vez de atacar o solo. Mediana de 5 ms, p99 de
 11,75 ms.
 
+## Marco 7: Evolução (2026-11-13)
+
+### XP, essência e cartas
+- Cada abate dá XP e a mesma quantidade de Essência do tipo derrotado
+  (`data/evolutions.txt`: 1 por drone, 8 por Bombardeiro, 10 por Porta-drones).
+  O nível n pede `xp.base x xp.growth^(n-1)`: uns 12 níveis numa partida.
+- A cada nível, 3 cartas sorteadas sem repetição. Peso de cada evolução:
+  `base_weight + essence_weight x essência da linha` (0 se já está no máximo).
+  Quem mais derrota Enxame vê mais cartas do Enxame. Um teste confere a
+  frequência contra a conta.
+- As cartas abrem 0,45 s depois do abate (dá para ver a explosão) e congelam
+  a partida. Escolha com 1, 2, 3 ou clique (o cursor é solto). Uma tecla que
+  já estava apertada quando as cartas abriram não vale: é preciso soltar e
+  apertar (sem isso, segurar uma tecla escolheria às cegas).
+
+### Tuning efetivo
+As evoluções que só mudam números (casco, escudo, cadência, alcance, ajuda de
+mira) não estão espalhadas em `if`s: a cada passo o mundo monta
+`w->eff = base + evoluções` (`evolution_tune`) e usa esse tuning em tudo, e o
+HUD também (as barras crescem com o Casco pesado). Copiar o tuning por passo
+custa microssegundos. As que têm comportamento próprio (perfurar, explodir,
+refletir, aliados) leem os níveis direto de `w->evo.rank`.
+
+### As 16 evoluções (2 por linha)
+| Linha | Evolução | O que faz |
+|---|---|---|
+| Enxame | Drones de escolta | drones em órbita da nave atiram em quem chega perto |
+| Enxame | Tiro em leque | pares de tiros mais fracos, abertos para os lados |
+| Kamikaze | Dash explosivo | o dash explode em volta da nave |
+| Kamikaze | Reação em cadeia | quem você derruba explode nos vizinhos |
+| Bombardeiro | Casco pesado | mais casco, já consertado |
+| Bombardeiro | Ogivas | cada acerto fere quem está em volta |
+| Escavador | Tiro perfurante | o tiro atravessa inimigos |
+| Escavador | Quebra-blindagem | ignora a blindagem do Bombardeiro, mais dano nos pesados |
+| Sifão | Roubo de vida | abates consertam o casco |
+| Sifão | Sifão de energia | acertos devolvem energia (mais boost e dash) |
+| Atirador | Acerto crítico | chance de dano triplo, em dobro de longe |
+| Atirador | Mira longa | tiro mais rápido, de mais alcance, ajuda de mira maior |
+| Escudeiro | Escudo maior | mais escudo e recarga mais rápida |
+| Escudeiro | Reflexão | com escudo, tiros inimigos podem voltar |
+| Porta-drones | Esquadrilha | caças aliados que caçam inimigos longe |
+| Porta-drones | Hangar rápido | um drone de escolta a mais e aliados mais rápidos |
+
+Sinergias (duas linhas combinadas) ficam para o marco 11, como no roadmap.
+
+### Aliados
+Drones de escolta orbitam a nave e atiram em quem chega a `escort.range`;
+caças voam atrás de inimigos até `fighters.range`, passam atirando e voltam.
+Não levam dano (são parte da nave) e somem enquanto ela está destruída. Os
+tiros deles são tiros da nave (pontos e abates contam).
+
+### A nave muda
+Cada evolução acrescenta uma peça à nave (lâminas nas asas, canhões extras,
+espinhos no nariz, blindagem lateral, casulos de mísseis, broca, cano de
+atirador, emissores de escudo, hangares, antena), com um detalhe aceso na cor
+da linha. O brilho dos motores e o rastro puxam para a cor da linha dominante,
+mais quanto mais evoluções. HUD: barra de nível com um quadradinho colorido
+por nível de evolução; a tela de fim lista as evoluções escolhidas.
+
+### Roteiro e medições
+- `evolucao.txt`: a nave base, com algumas e com todas as peças, as cartas,
+  a escolha e o combate com aliados. Comandos novos de roteiro: `xp n` e
+  `evolve <nome> <nível>`.
+- Partida inteira do piloto automático (fica com a primeira carta): nível 12,
+  11 níveis de evolução, vitória com o planeta em 93,5%. Mediana de 4 ms,
+  p99 de 11,5 ms.
+
+### Limitações conhecidas do marco 7
+- As hordas não crescem com o nível da nave: com evoluções, a partida fica
+  mais fácil no fim. O balanceamento é o marco 11.
+- O piloto automático escolhe sempre a primeira carta; não reflete escolhas
+  de um jogador.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

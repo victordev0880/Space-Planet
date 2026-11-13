@@ -358,6 +358,68 @@ static const TuneField ENEMY_FIELDS[] = {
 #undef STATS
 };
 
+// data/evolutions.txt
+static const TuneField EVO_FIELDS[] = {
+    F("xp.base",                 xp_base,                 1,    10000),
+    F("xp.growth",               xp_growth,               1,    10),
+    F("xp.swarm",                xp_kill[ENEMY_SWARM],    0,    1000),
+    F("xp.bomber",               xp_kill[ENEMY_BOMBER],   0,    1000),
+    F("xp.kamikaze",             xp_kill[ENEMY_KAMIKAZE], 0,    1000),
+    F("xp.digger",               xp_kill[ENEMY_DIGGER],   0,    1000),
+    F("xp.siphon",               xp_kill[ENEMY_SIPHON],   0,    1000),
+    F("xp.sniper",               xp_kill[ENEMY_SNIPER],   0,    1000),
+    F("xp.shielder",             xp_kill[ENEMY_SHIELDER], 0,    1000),
+    F("xp.carrier",              xp_kill[ENEMY_CARRIER],  0,    1000),
+    F("xp.bomb",                 xp_bomb,                 0,    1000),
+    F("cards.base_weight",       cards_base_weight,       0.01, 1000),
+    F("cards.essence_weight",    cards_essence_weight,    0,    1000),
+    I("escort.max",              evo_max[EVO_ESCORT],         1, 9),
+    I("spread.max",              evo_max[EVO_SPREAD],         1, 9),
+    I("blast_dash.max",          evo_max[EVO_BLAST_DASH],     1, 9),
+    I("chain.max",               evo_max[EVO_CHAIN],          1, 9),
+    I("heavy_hull.max",          evo_max[EVO_HEAVY_HULL],     1, 9),
+    I("warheads.max",            evo_max[EVO_WARHEADS],       1, 9),
+    I("pierce.max",              evo_max[EVO_PIERCE],         1, 9),
+    I("armor_break.max",         evo_max[EVO_ARMOR_BREAK],    1, 9),
+    I("lifesteal.max",           evo_max[EVO_LIFESTEAL],      1, 9),
+    I("energy_siphon.max",       evo_max[EVO_ENERGY_SIPHON],  1, 9),
+    I("crit.max",                evo_max[EVO_CRIT],           1, 9),
+    I("long_range.max",          evo_max[EVO_LONG_RANGE],     1, 9),
+    I("big_shield.max",          evo_max[EVO_BIG_SHIELD],     1, 9),
+    I("reflect.max",             evo_max[EVO_REFLECT],        1, 9),
+    I("fighters.max",            evo_max[EVO_FIGHTERS],       1, 9),
+    I("hangar.max",              evo_max[EVO_HANGAR],         1, 9),
+    F("escort.damage",           escort_damage,           0,    1000),
+    F("escort.rate",             escort_rate,             0.1,  60),
+    F("escort.range",            escort_range,            1,    2000),
+    F("escort.orbit",            escort_orbit,            1,    100),
+    F("spread.angle",            spread_angle,            0.5,  45),
+    F("spread.damage",           spread_damage,           0,    10),
+    F("blast_dash.damage",       blast_dash_damage,       0,    1000),
+    F("blast_dash.radius",       blast_dash_radius,       0.5,  200),
+    F("chain.damage",            chain_damage,            0,    1000),
+    F("chain.radius",            chain_radius,            0.5,  200),
+    F("heavy_hull.hull",         heavy_hull_hull,         0,    10000),
+    F("warheads.fraction",       warheads_fraction,       0,    10),
+    F("warheads.radius",         warheads_radius,         0.1,  100),
+    F("armor_break.bonus",       armor_break_bonus,       0,    10),
+    F("lifesteal.hull",          lifesteal_hull,          0,    1000),
+    F("energy_siphon.energy",    energy_siphon_energy,    0,    1000),
+    F("crit.chance",             crit_chance,             0,    1),
+    F("crit.mult",               crit_mult,               1,    100),
+    F("crit.far",                crit_far,                0,    5000),
+    F("long_range.speed",        long_range_speed,        0,    10),
+    F("long_range.assist",       long_range_assist,       0,    45),
+    F("big_shield.shield",       big_shield_shield,       0,    10000),
+    F("big_shield.regen",        big_shield_regen,        0,    10),
+    F("reflect.chance",          reflect_chance,          0,    1),
+    F("fighters.damage",         fighters_damage,         0,    1000),
+    F("fighters.rate",           fighters_rate,           0.1,  60),
+    F("fighters.speed",          fighters_speed,          1,    1000),
+    F("fighters.range",          fighters_range,          1,    5000),
+    F("hangar.rate",             hangar_rate,             0,    10),
+};
+
 #undef I
 #undef F
 #undef C
@@ -368,9 +430,10 @@ typedef struct {
     int              count;
 } TuneTable;
 
-static const TuneTable TABLES[2] = {
-    { TUNING_FILE,  FIELDS,       (int)(sizeof FIELDS / sizeof FIELDS[0]) },
-    { ENEMIES_FILE, ENEMY_FIELDS, (int)(sizeof ENEMY_FIELDS / sizeof ENEMY_FIELDS[0]) },
+static const TuneTable TABLES[3] = {
+    { TUNING_FILE,     FIELDS,       (int)(sizeof FIELDS / sizeof FIELDS[0]) },
+    { ENEMIES_FILE,    ENEMY_FIELDS, (int)(sizeof ENEMY_FIELDS / sizeof ENEMY_FIELDS[0]) },
+    { EVOLUTIONS_FILE, EVO_FIELDS,   (int)(sizeof EVO_FIELDS / sizeof EVO_FIELDS[0]) },
 };
 
 static bool is_known_key(const TuneTable *table, const char *key)
@@ -494,10 +557,19 @@ bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *ene
     return true;
 }
 
+bool tuning_evolutions_from_config(Tuning *out, const Config *evolutions_cfg, char *err, size_t err_len)
+{
+    Tuning t = *out;
+    if (!apply_table(&t, &TABLES[2], evolutions_cfg, err, err_len)) return false;
+    *out = t;
+    if (err_len > 0) err[0] = '\0';
+    return true;
+}
+
 bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len)
 {
     // static: a struct Config é grande (dezenas de KB) e não precisa ficar na pilha.
-    static Config tuning_cfg, enemies_cfg;
+    static Config tuning_cfg, enemies_cfg, evolutions_cfg;
     char path[256];
 
     snprintf(path, sizeof path, "%s/%s", data_dir, TUNING_FILE);
@@ -510,7 +582,17 @@ bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len)
         snprintf(err, err_len, "%s: %s", ENEMIES_FILE, enemies_cfg.error);
         return false;
     }
-    return tuning_from_config(out, &tuning_cfg, &enemies_cfg, err, err_len);
+    snprintf(path, sizeof path, "%s/%s", data_dir, EVOLUTIONS_FILE);
+    if (!config_load_file(&evolutions_cfg, path)) {
+        snprintf(err, err_len, "%s: %s", EVOLUTIONS_FILE, evolutions_cfg.error);
+        return false;
+    }
+    // Tudo ou nada: `out` só muda se os três arquivos estiverem certos.
+    Tuning t = *out;
+    if (!tuning_from_config(&t, &tuning_cfg, &enemies_cfg, err, err_len)) return false;
+    if (!tuning_evolutions_from_config(&t, &evolutions_cfg, err, err_len)) return false;
+    *out = t;
+    return true;
 }
 
 PlanetParams tuning_planet_params(const Tuning *t)

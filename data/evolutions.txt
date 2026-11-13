@@ -1,0 +1,97 @@
+# ============================================================================
+#  TERRA FRATURADA - evolução da nave
+#
+#  Mesmo formato de data/tuning.txt, e também relido pela tecla F5.
+#  Cada abate dá XP e Essência do tipo derrotado (a mesma quantidade). Ao
+#  subir de nível, a partida congela e o jogador escolhe 1 entre 3 cartas,
+#  sorteadas com peso pelas essências: quem mais você derrota, mais você vira.
+#  Duas evoluções por linha (tipo de inimigo); cada uma tem níveis.
+#  Referência: uma partida inteira dá uns 400 de XP (uns 12 níveis).
+# ============================================================================
+
+# --- níveis ------------------------------------------------------------------
+xp.base     = 6        # XP para o primeiro nível (uns seis drones)
+xp.growth   = 1.28     # cada nível pede este tanto a mais que o anterior
+
+xp.swarm    = 1        # XP (e essência) por abate
+xp.kamikaze = 1
+xp.sniper   = 3
+xp.shielder = 3
+xp.siphon   = 4
+xp.digger   = 5
+xp.bomber   = 8
+xp.carrier  = 10
+xp.bomb     = 0.5      # bomba derrubada no ar (essência de Bombardeiro)
+
+# --- sorteio das cartas ------------------------------------------------------
+cards.base_weight    = 1       # toda evolução disponível começa com este peso...
+cards.essence_weight = 0.08    # ... e ganha este tanto por essência da sua linha
+
+# --- Enxame ------------------------------------------------------------------
+escort.max    = 3      # Drones de escolta: um drone por nível, em órbita da nave
+escort.damage = 0.6    # dano de cada tiro do drone (o da nave é 1)
+escort.rate   = 3      # tiros por segundo de cada drone
+escort.range  = 70     # atira em inimigos até esta distância da nave
+escort.orbit  = 5      # raio da órbita em volta da nave
+
+spread.max    = 2      # Tiro em leque: mais dois tiros por nível, abertos para os lados
+spread.angle  = 6      # graus entre um tiro e o seguinte
+spread.damage = 0.5    # dano dos tiros laterais, em frações do tiro normal
+
+# --- Kamikaze ----------------------------------------------------------------
+blast_dash.max    = 3  # Dash explosivo: o dash explode em volta da nave
+blast_dash.damage = 8  # por nível
+blast_dash.radius = 12
+
+chain.max    = 3       # Reação em cadeia: inimigos que você derruba explodem
+chain.damage = 3       # por nível, nos vizinhos
+chain.radius = 9
+
+# --- Bombardeiro --------------------------------------------------------------
+heavy_hull.max  = 3    # Casco pesado: mais casco (e o ganho já vem consertado)
+heavy_hull.hull = 35   # por nível
+
+warheads.max      = 2  # Ogivas: cada acerto também fere quem está em volta
+warheads.fraction = 0.4  # fração do dano, por nível
+warheads.radius   = 4
+
+# --- Escavador ----------------------------------------------------------------
+pierce.max = 2         # Tiro perfurante: cada tiro atravessa um inimigo a mais por nível
+
+armor_break.max   = 2  # Quebra-blindagem: ignora a blindagem do Bombardeiro
+armor_break.bonus = 0.35  # e dano extra nos pesados (Bombardeiro, Porta-drones, Escavador, Sifão), por nível
+
+# --- Sifão ---------------------------------------------------------------------
+lifesteal.max  = 3     # Roubo de vida: cada abate conserta o casco
+lifesteal.hull = 3     # por nível
+
+energy_siphon.max    = 2   # Sifão de energia: cada acerto devolve energia (mais boost e dash)
+energy_siphon.energy = 2   # por nível
+
+# --- Atirador ------------------------------------------------------------------
+crit.max    = 3        # Acerto crítico
+crit.chance = 0.12     # chance por nível...
+crit.mult   = 3        # ... de o tiro valer por este tanto
+crit.far    = 90       # contra inimigos mais longe que isto, a chance dobra
+
+long_range.max    = 2  # Mira longa: tiro mais rápido e de mais alcance
+long_range.speed  = 0.3  # +30% de velocidade e de alcance por nível
+long_range.assist = 2  # e a ajuda de mira abre este tanto (graus) por nível
+
+# --- Escudeiro -----------------------------------------------------------------
+big_shield.max    = 3  # Escudo maior
+big_shield.shield = 30 # por nível
+big_shield.regen  = 0.3  # recarga +30% por nível
+
+reflect.max    = 2     # Reflexão: com escudo, tiros inimigos podem voltar
+reflect.chance = 0.25  # por nível
+
+# --- Porta-drones ---------------------------------------------------------------
+fighters.max    = 2    # Esquadrilha: caças aliados que caçam inimigos longe da nave
+fighters.damage = 0.8
+fighters.rate   = 2.5
+fighters.speed  = 60
+fighters.range  = 150  # vão atrás de inimigos até esta distância da nave
+
+hangar.max  = 2        # Hangar rápido: um drone de escolta a mais, e os aliados
+hangar.rate = 0.4      # atiram este tanto mais rápido, por nível

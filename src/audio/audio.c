@@ -395,6 +395,61 @@ static void synth_ready(float *out, int n)
     arpeggio(out, n, NOTES, 2, 0.07f, 9.0f);
 }
 
+static void synth_level_up(float *out, int n)
+{
+    // Subiu de nível: escala rápida subindo, brilhante.
+    static const float NOTES[5] = { 523.3f, 659.3f, 784.0f, 1046.5f, 1568.0f };
+    arpeggio(out, n, NOTES, 5, 0.06f, 5.0f);
+}
+
+static void synth_evolve(float *out, int n)
+{
+    // Evolução escolhida: um acorde cheio que cresce, com um brilho por cima.
+    float length = (float)n / SAMPLE_RATE;
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float chord = saw(261.6f * t) + 0.8f * saw(329.6f * t) + 0.7f * saw(392.0f * t) + 0.5f * sine(1046.5f * t);
+        float shape = fminf(t / 0.08f, 1.0f) * fminf((length - t) / 0.4f, 1.0f);
+        out[i] = lowpass(&lp, chord, sweep(600.0f, 4000.0f, t, length * 0.6f)) * shape * 0.5f;
+    }
+}
+
+static void synth_reflect(float *out, int n)
+{
+    // Tiro devolvido: "ping" metálico subindo.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(900.0f, 2800.0f, t, 0.12f) / SAMPLE_RATE;
+        out[i] = (0.7f * sine(phase) + 0.3f * sine(phase * 2.01f)) * envelope(t, 0.001f, 14.0f);
+    }
+}
+
+static void synth_blast(float *out, int n) { explosion(out, n, 3800.0f, 5.0f, 90.0f, 0.02f); }
+
+static void synth_crit(float *out, int n)
+{
+    // Crítico: estalo agudo e curto, por cima do acerto comum.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += 3200.0f / SAMPLE_RATE;
+        float click = (t < 0.004f) ? noise() : 0.0f;
+        out[i] = (0.6f * square(phase) + click) * envelope(t, 0.001f, 40.0f);
+    }
+}
+
+static void synth_ally_shot(float *out, int n)
+{
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(2200.0f, 900.0f, t, 0.06f) / SAMPLE_RATE;
+        out[i] = sine(phase) * envelope(t, 0.001f, 45.0f);
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -434,6 +489,12 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_DEFLECT]      = { synth_deflect,      0.22f, 0.35f, 4 },
     [SND_LAUNCH]       = { synth_launch,       0.60f, 0.55f, 2 },
     [SND_READY]        = { synth_ready,        0.40f, 0.50f, 1 },
+    [SND_LEVEL_UP]     = { synth_level_up,     0.80f, 0.60f, 1 },
+    [SND_EVOLVE]       = { synth_evolve,       1.00f, 0.60f, 1 },
+    [SND_REFLECT]      = { synth_reflect,      0.30f, 0.50f, 3 },
+    [SND_BLAST]        = { synth_blast,        0.70f, 0.80f, 3 },
+    [SND_CRIT]         = { synth_crit,         0.12f, 0.40f, 3 },
+    [SND_ALLY_SHOT]    = { synth_ally_shot,    0.10f, 0.12f, 6 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -553,6 +614,12 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_SHIELDED:      s = SND_DEFLECT; break;
         case EV_LAUNCH:        s = SND_LAUNCH; floor = 0.3f; break;
         case EV_CALM_SKIP:     s = SND_READY; positional = false; break;
+        case EV_LEVEL_UP:      s = SND_LEVEL_UP; positional = false; break;
+        case EV_EVOLVE:        s = SND_EVOLVE; positional = false; break;
+        case EV_REFLECT:       s = SND_REFLECT; positional = false; break;
+        case EV_BLAST:         s = SND_BLAST; floor = 0.3f; break;
+        case EV_CRIT:          s = SND_CRIT; break;
+        case EV_ALLY_SHOT:     s = SND_ALLY_SHOT; break;
         case EV_BOMB_ARMING: s = SND_BOMB_ARM; floor = 0.45f; break;
         case EV_BOMB_DROP:   s = SND_BOMB_DROP; floor = 0.3f; break;
         case EV_BOMB_DOWN:   s = SND_BOMB_DOWN; break;

@@ -25,6 +25,12 @@ static const KeyBinding KEYS[] = {
     { KEY_C,            ACT_DEBUG_CRATER },
     { KEY_V,            ACT_DEBUG_SIZE },
     { KEY_ENTER,        ACT_READY },
+    { KEY_ONE,          ACT_CARD1 },
+    { KEY_TWO,          ACT_CARD2 },
+    { KEY_THREE,        ACT_CARD3 },
+    { KEY_KP_1,         ACT_CARD1 },
+    { KEY_KP_2,         ACT_CARD2 },
+    { KEY_KP_3,         ACT_CARD3 },
 };
 
 InputSample platform_poll_input(bool use_mouse_look)

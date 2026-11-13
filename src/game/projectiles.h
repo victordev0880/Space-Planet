@@ -36,6 +36,8 @@ typedef struct {
     float   crater_depth;
     uint8_t kind;            // ShotKind
     uint8_t source;          // tipo do inimigo que disparou (EnemyType); sem uso nos tiros da nave
+    uint8_t pierce;          // tiro da nave: inimigos que ainda pode atravessar (evolução)
+    int16_t last_hit;        // ... e o último que atravessou (-1 = nenhum), para não acertá-lo de novo
 } Shot;
 
 typedef struct {

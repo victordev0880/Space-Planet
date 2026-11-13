@@ -44,6 +44,12 @@ typedef enum {
     EV_SHIELDED,       // tiro da nave parado por um escudo
     EV_LAUNCH,         // o Porta-drones soltou um bando    (value = quantos)
     EV_CALM_SKIP,      // o jogador chamou a próxima horda antes da hora
+    EV_ALLY_SHOT,      // tiro de um aliado                 (sub = AllyKind)
+    EV_LEVEL_UP,       // a nave subiu de nível             (value = nível novo)
+    EV_EVOLVE,         // uma evolução foi escolhida        (sub = EvolutionId, value = nível dela)
+    EV_REFLECT,        // o escudo devolveu um tiro inimigo
+    EV_BLAST,          // explosão da nave (dash explosivo, reação em cadeia; value = raio)
+    EV_CRIT,           // acerto crítico
     EV_TYPE_COUNT
 } EventType;
 

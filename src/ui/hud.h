@@ -31,4 +31,12 @@ typedef struct {
 
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx);
 
+// Cor e nome de cada tipo de inimigo (também a cor da linha de evolução).
+Color       hud_enemy_color(EnemyType type);
+const char *hud_enemy_name(EnemyType type);
+
+// Uma linha centralizada em `cx` com "Nome xN" (ou "N Nome", com
+// `count_first`) para cada tipo com contagem, cada um na sua cor.
+void hud_type_list(const int counts[ENEMY_TYPE_COUNT], bool count_first, int cx, int y, int size, float alpha);
+
 #endif

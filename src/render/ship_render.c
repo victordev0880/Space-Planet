@@ -236,11 +236,212 @@ static Color faded(Color c, float alpha)
     return (Color){ c.r, c.g, c.b, (unsigned char)(Clamp(alpha, 0.0f, 1.0f) * (float)c.a) };
 }
 
-void ship_draw(const Ship *s, const Planet *planet, const Tuning *t, float alpha, float time, Texture2D glow,
-               Camera3D camera)
+// --- peças da evolução --------------------------------------------------------
+// Cada evolução acrescenta uma peça à nave, com as cores da nave e um detalhe
+// aceso na cor da linha (o tipo de inimigo de onde ela vem). Assim a nave
+// "vira" aquilo que mais derrotou.
+
+static LowPoly kits[EVO_COUNT];
+
+// Cores das linhas (as mesmas do HUD).
+static const Color LINE_COLORS[ENEMY_TYPE_COUNT] = {
+    [ENEMY_SWARM]    = { 196, 130, 255, 255 },
+    [ENEMY_BOMBER]   = { 255, 150, 70, 255 },
+    [ENEMY_KAMIKAZE] = { 255, 96, 72, 255 },
+    [ENEMY_DIGGER]   = { 255, 186, 80, 255 },
+    [ENEMY_SIPHON]   = { 120, 255, 190, 255 },
+    [ENEMY_SNIPER]   = { 255, 110, 140, 255 },
+    [ENEMY_SHIELDER] = { 110, 230, 255, 255 },
+    [ENEMY_CARRIER]  = { 214, 150, 255, 255 },
+};
+
+static Vector3 kv(float x, float y, float z) { return (Vector3){ x, y, z }; }
+
+static void kit_palette(LowPoly *m)
+{
+    lowpoly_part(m, PART_HULL,   (Color){ 230, 234, 242, 255 }, false);
+    lowpoly_part(m, PART_SIDE,   (Color){ 170, 178, 194, 255 }, false);
+    lowpoly_part(m, PART_PANEL,  (Color){ 62, 68, 82, 255 }, false);
+    lowpoly_part(m, PART_GLASS,  (Color){ 50, 130, 210, 255 }, false);
+    lowpoly_part(m, PART_ACCENT, (Color){ 232, 82, 48, 255 }, false);
+    lowpoly_part(m, PART_STRIPE, (Color){ 44, 104, 200, 255 }, false);
+    lowpoly_part(m, PART_POD,    (Color){ 140, 148, 166, 255 }, false);
+    lowpoly_part(m, PART_NOZZLE, (Color){ 24, 26, 32, 255 }, false);
+    lowpoly_part_glow(m, PART_RING, (Color){ 255, 255, 255, 255 });   // assume a cor da linha
+}
+
+static void build_kits(void)
+{
+    const Vector3 Y = { 0.0f, 1.0f, 0.0f }, X = { 1.0f, 0.0f, 0.0f }, Z = { 0.0f, 0.0f, 1.0f };
+    for (int i = 0; i < EVO_COUNT; i++) {
+        lowpoly_clear(&kits[i]);
+        kit_palette(&kits[i]);
+    }
+    LowPoly *m;
+
+    // Enxame: lâminas no bordo de ataque das asas; canhões extras nas asas.
+    m = &kits[EVO_ESCORT];
+    lp_plate(m, kv(0.55f, 0.06f, -0.05f), kv(1.65f, 0.20f, 0.62f), kv(1.62f, 0.20f, 0.70f), kv(0.55f, 0.06f, 0.08f), Y, 0.04f,
+             0.02f, PART_PANEL, PART_PANEL, PART_RING, true);
+    m = &kits[EVO_SPREAD];
+    lp_tube(m, kv(0.95f, 0.02f, 0.10f), kv(0.95f, 0.02f, -0.75f), 0.05f, 0.04f, 6, PART_POD, PART_NOZZLE, true);
+    lp_ring(m, kv(0.95f, 0.02f, -0.55f), Z, 0.05f, 0.08f, 0.05f, 6, PART_RING, PART_PANEL, true);
+
+    // Kamikaze: espinhos no nariz; respiros acesos nas costas.
+    m = &kits[EVO_BLAST_DASH];
+    for (int k = 0; k < 3; k++) {
+        float z = -1.35f + 0.3f * (float)k;
+        lp_spike(m, kv(0.2f - 0.02f * (float)k, 0.0f, z), kv(0.48f, -0.02f, z + 0.12f), 0.05f, 4, PART_ACCENT, true);
+    }
+    lp_box(m, kv(0.0f, -0.12f, -1.7f), kv(0.05f, 0.03f, 0.06f), PART_RING, false);
+    m = &kits[EVO_CHAIN];
+    lp_box(m, kv(0.18f, 0.29f, 0.55f), kv(0.05f, 0.02f, 0.22f), PART_RING, true);
+    lp_box(m, kv(0.18f, 0.27f, 0.55f), kv(0.08f, 0.02f, 0.26f), PART_PANEL, true);
+
+    // Bombardeiro: placas de blindagem nas laterais; casulos de mísseis sob as asas.
+    m = &kits[EVO_HEAVY_HULL];
+    lp_plate(m, kv(0.40f, 0.10f, -0.70f), kv(0.48f, 0.08f, 0.10f), kv(0.46f, -0.12f, 0.10f), kv(0.36f, -0.10f, -0.70f), X,
+             0.06f, 0.06f, PART_ACCENT, PART_ACCENT, PART_PANEL, true);
+    lp_box(m, kv(0.0f, 0.36f, 0.45f), kv(0.16f, 0.03f, 0.25f), PART_POD, false);
+    m = &kits[EVO_WARHEADS];
+    {
+        const LpRing pod[] = { { -0.55f, 0.0f, 0.0f, -0.16f }, { -0.35f, 0.08f, 0.08f, -0.16f }, { 0.35f, 0.09f, 0.09f, -0.16f },
+                               { 0.45f, 0.06f, 0.06f, -0.16f } };
+        lp_loft(m, pod, 4, 6, 1.15f, PART_SIDE, PART_PANEL, PART_NOZZLE, 0.0f, true);
+        lp_box(m, kv(1.15f, -0.16f, -0.50f), kv(0.04f, 0.04f, 0.03f), PART_RING, true);
+    }
+
+    // Escavador: broca no nariz; lâminas de aríete dos lados do nariz.
+    m = &kits[EVO_PIERCE];
+    {
+        const LpRing drill[] = { { -2.75f, 0.0f, 0.0f, -0.01f }, { -2.40f, 0.07f, 0.07f, -0.01f }, { -2.05f, 0.12f, 0.12f, -0.01f } };
+        lp_loft(m, drill, 3, 5, 0.0f, PART_POD, PART_SIDE, -1, 0.7f, false);
+        lp_ring(m, kv(0.0f, -0.01f, -2.0f), Z, 0.08f, 0.15f, 0.05f, 6, PART_RING, PART_PANEL, false);
+    }
+    m = &kits[EVO_ARMOR_BREAK];
+    lp_plate(m, kv(0.14f, 0.0f, -1.55f), kv(0.40f, -0.02f, -1.95f), kv(0.44f, -0.02f, -1.75f), kv(0.26f, 0.0f, -1.10f), Y, 0.05f,
+             0.02f, PART_ACCENT, PART_PANEL, PART_RING, true);
+
+    // Sifão: tubos verdes nas costas; emissor em cima.
+    m = &kits[EVO_LIFESTEAL];
+    lp_tube(m, kv(0.12f, 0.31f, -0.1f), kv(0.12f, 0.24f, 1.1f), 0.04f, 0.04f, 5, PART_RING, -1, true);
+    m = &kits[EVO_ENERGY_SIPHON];
+    lp_tube(m, kv(0.0f, 0.30f, 0.15f), kv(0.0f, 0.46f, 0.15f), 0.08f, 0.05f, 6, PART_POD, PART_RING, false);
+
+    // Atirador: cano longo sob a fuselagem; canos dos canhões mais compridos.
+    m = &kits[EVO_CRIT];
+    lp_tube(m, kv(0.0f, -0.24f, -0.3f), kv(0.0f, -0.24f, -2.55f), 0.05f, 0.04f, 6, PART_PANEL, PART_NOZZLE, false);
+    lp_box(m, kv(0.0f, -0.24f, -2.4f), kv(0.06f, 0.06f, 0.05f), PART_RING, false);
+    m = &kits[EVO_LONG_RANGE];
+    lp_tube(m, kv(0.55f, -0.05f, -0.45f), kv(0.55f, -0.05f, -1.35f), 0.035f, 0.03f, 5, PART_PANEL, PART_RING, true);
+
+    // Escudeiro: emissores de escudo nas pontas das asas; defletor no nariz.
+    m = &kits[EVO_BIG_SHIELD];
+    lp_ring(m, kv(1.70f, 0.20f, 0.85f), X, 0.10f, 0.20f, 0.05f, 8, PART_RING, PART_POD, true);
+    m = &kits[EVO_REFLECT];
+    lp_plate(m, kv(0.0f, 0.12f, -1.25f), kv(0.22f, 0.06f, -1.05f), kv(0.22f, 0.10f, -0.85f), kv(0.0f, 0.18f, -0.80f), Y, 0.03f,
+             0.03f, PART_RING, PART_RING, PART_PANEL, true);
+
+    // Porta-drones: casulos de hangar atrás; mastro com antena.
+    m = &kits[EVO_FIGHTERS];
+    lp_box(m, kv(0.62f, 0.12f, 1.15f), kv(0.12f, 0.08f, 0.22f), PART_POD, true);
+    lp_box(m, kv(0.62f, 0.12f, 1.38f), kv(0.08f, 0.04f, 0.01f), PART_RING, true);
+    m = &kits[EVO_HANGAR];
+    lp_tube(m, kv(0.0f, 0.25f, 0.95f), kv(0.0f, 0.75f, 1.15f), 0.03f, 0.02f, 4, PART_PANEL, -1, false);
+    lp_ring(m, kv(0.0f, 0.78f, 1.17f), Y, 0.0f, 0.12f, 0.02f, 8, PART_RING, PART_RING, false);
+}
+
+// --- aliados ------------------------------------------------------------------
+
+static LowPoly escort_model, fighter_model;
+static bool    allies_built;
+
+static void build_allies(void)
+{
+    const Vector3 Y = { 0.0f, 1.0f, 0.0f };
+    LowPoly *m = &escort_model;
+    lowpoly_clear(m);
+    kit_palette(m);
+    const LpRing dart[] = { { -0.55f, 0.0f, 0.0f, 0.0f }, { -0.2f, 0.12f, 0.08f, 0.0f }, { 0.3f, 0.10f, 0.07f, 0.0f },
+                            { 0.45f, 0.06f, 0.05f, 0.0f } };
+    lp_loft(m, dart, 4, 5, 0.0f, PART_HULL, PART_PANEL, PART_RING, 0.0f, false);
+    lp_plate(m, kv(0.08f, 0.0f, -0.05f), kv(0.5f, 0.02f, 0.3f), kv(0.45f, 0.02f, 0.42f), kv(0.08f, 0.0f, 0.3f), Y, 0.03f, 0.01f,
+             PART_STRIPE, PART_PANEL, PART_RING, true);
+
+    m = &fighter_model;
+    lowpoly_clear(m);
+    kit_palette(m);
+    const LpRing body[] = { { -0.9f, 0.0f, 0.0f, 0.0f }, { -0.5f, 0.13f, 0.10f, 0.02f }, { 0.2f, 0.17f, 0.12f, 0.02f },
+                            { 0.6f, 0.12f, 0.09f, 0.0f } };
+    lp_loft(m, body, 4, 6, 0.0f, PART_HULL, PART_PANEL, PART_NOZZLE, 0.0f, false);
+    lp_plate(m, kv(0.12f, 0.0f, -0.2f), kv(0.85f, -0.02f, 0.35f), kv(0.8f, -0.02f, 0.5f), kv(0.12f, 0.0f, 0.4f), Y, 0.04f,
+             0.015f, PART_HULL, PART_PANEL, PART_ACCENT, true);
+    lp_box(m, kv(0.0f, 0.12f, -0.3f), kv(0.06f, 0.04f, 0.15f), PART_GLASS, false);
+    lp_ring(m, kv(0.0f, 0.0f, 0.62f), (Vector3){ 0.0f, 0.0f, 1.0f }, 0.0f, 0.1f, 0.02f, 6, PART_RING, PART_RING, false);
+    allies_built = true;
+}
+
+// Cor do brilho da nave: a do motor, puxada para a cor da linha dominante.
+static Color ship_glow(const Evolution *evo, float boost)
+{
+    Color base = ENGINE_COLOR;
+    int line = (evo != NULL) ? evolution_dominant_line(evo) : -1;
+    if (line >= 0) {
+        float pull = Clamp(0.35f + 0.08f * (float)evolution_total_ranks(evo), 0.0f, 0.8f);
+        Color lc = LINE_COLORS[line];
+        base = (Color){ (unsigned char)Lerp((float)base.r, (float)lc.r, pull),
+                        (unsigned char)Lerp((float)base.g, (float)lc.g, pull),
+                        (unsigned char)Lerp((float)base.b, (float)lc.b, pull), 255 };
+    }
+    return (Color){ (unsigned char)Lerp((float)base.r, (float)BOOST_COLOR.r, boost),
+                    (unsigned char)Lerp((float)base.g, (float)BOOST_COLOR.g, boost),
+                    (unsigned char)Lerp((float)base.b, (float)BOOST_COLOR.b, boost), 255 };
+}
+
+void allies_draw(const Allies *a, const Planet *planet, const Tuning *t, float alpha, Texture2D glow, Camera3D camera)
+{
+    if (!allies_built) build_allies();
+    Vector3 sun = tuning_sun_direction(t);
+    for (int i = 0; i < ALLIES_MAX; i++) {
+        const Ally *al = &a->items[i];
+        if (!al->alive) continue;
+        Vector3 pos = Vector3Lerp(al->pos_prev, al->pos, alpha);
+        Quaternion rot = QuaternionSlerp(al->rot_prev, al->rot, alpha);
+        Color lc = LINE_COLORS[al->kind == ALLY_ESCORT ? ENEMY_SWARM : ENEMY_CARRIER];
+        LowPolyPose pose = lowpoly_pose(pos, rot, 1.0f, sun, camera.position);
+        pose.sunlight = lowpoly_sunlight(pos, sun, planet->params.radius, SHIP_SHADOW);
+        pose.ambient = SHIP_AMBIENT;
+        pose.wrap = SHIP_WRAP;
+        pose.specular = SHIP_SPECULAR;
+        pose.shininess = SHIP_SHININESS;
+        pose.rim = SHIP_RIM;
+        pose.rim_color = lc;
+        pose.glow = lc;
+        lowpoly_draw(al->kind == ALLY_ESCORT ? &escort_model : &fighter_model, &pose);
+    }
+    rlDisableDepthMask();
+    BeginBlendMode(BLEND_ADDITIVE);
+    for (int i = 0; i < ALLIES_MAX; i++) {
+        const Ally *al = &a->items[i];
+        if (!al->alive) continue;
+        Vector3 pos = Vector3Lerp(al->pos_prev, al->pos, alpha);
+        Quaternion rot = QuaternionSlerp(al->rot_prev, al->rot, alpha);
+        Color lc = LINE_COLORS[al->kind == ALLY_ESCORT ? ENEMY_SWARM : ENEMY_CARRIER];
+        Vector3 tail = { 0.0f, 0.0f, al->kind == ALLY_ESCORT ? 0.5f : 0.66f };
+        DrawBillboard(camera, glow, Vector3Add(pos, Vector3RotateByQuaternion(tail, rot)), 0.5f, faded(lc, 0.6f));
+    }
+    EndBlendMode();
+    rlEnableDepthMask();
+}
+
+void ship_draw(const Ship *s, const Evolution *evo, const Planet *planet, const Tuning *t, float alpha, float time,
+               Texture2D glow, Camera3D camera)
 {
     if (!s->alive) return;
-    if (!model_built) build_model();
+    if (!model_built) {
+        build_model();
+        build_kits();
+    }
 
     // Pose interpolada entre o passo anterior e o atual.
     Vector3 pos = Vector3Lerp(s->pos_prev, s->pos, alpha);
@@ -262,13 +463,18 @@ void ship_draw(const Ship *s, const Planet *planet, const Tuning *t, float alpha
     pose.bounce_color = BOUNCE_COLOR;
     pose.whiten = ship_invulnerable(s) ? DASH_WHITEN : hurt * 0.5f;
     pose.flash = ship_invulnerable(s) ? WHITE : HURT_COLOR;
-    pose.glow = (Color){
-        (unsigned char)Lerp((float)ENGINE_COLOR.r, (float)BOOST_COLOR.r, s->boost_blend),
-        (unsigned char)Lerp((float)ENGINE_COLOR.g, (float)BOOST_COLOR.g, s->boost_blend),
-        (unsigned char)Lerp((float)ENGINE_COLOR.b, (float)BOOST_COLOR.b, s->boost_blend),
-        255,
-    };
+    pose.glow = ship_glow(evo, s->boost_blend);
     lowpoly_draw(&model, &pose);
+
+    // Peças das evoluções, com o detalhe aceso na cor de cada linha.
+    if (evo != NULL) {
+        for (int i = 0; i < EVO_COUNT; i++) {
+            if (evo->rank[i] == 0) continue;
+            LowPolyPose kit = pose;
+            kit.glow = LINE_COLORS[evolution_info((EvolutionId)i)->line];
+            lowpoly_draw(&kits[i], &kit);
+        }
+    }
 
     // Brilhos: somam luz à imagem.
     rlDisableDepthMask();

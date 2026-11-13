@@ -66,9 +66,17 @@ static const Color BOMB_COLOR = { 255, 70, 50, 255 };
 static void text(const char *s, int x, int y, int size, Color color);
 static Color with_alpha(Color c, float alpha);
 
-// Uma linha centralizada em `cx` com "Nome xN" (ou "N Nome", com
-// `count_first`) para cada tipo com contagem, cada um na sua cor.
-static void type_list(const int counts[ENEMY_TYPE_COUNT], bool count_first, int cx, int y, int size, float alpha)
+Color hud_enemy_color(EnemyType type)
+{
+    return ((int)type >= 0 && type < ENEMY_TYPE_COUNT) ? ENEMY_COLORS[type] : WHITE;
+}
+
+const char *hud_enemy_name(EnemyType type)
+{
+    return ((int)type >= 0 && type < ENEMY_TYPE_COUNT) ? ENEMY_NAMES[type] : "";
+}
+
+void hud_type_list(const int counts[ENEMY_TYPE_COUNT], bool count_first, int cx, int y, int size, float alpha)
 {
     char items[ENEMY_TYPE_COUNT][32];
     int types[ENEMY_TYPE_COUNT], n = 0, width = 0;
@@ -244,11 +252,44 @@ static const Color ENERGY_COLOR = { 250, 205, 90, 255 };
 static const Color GRAZE_COLOR  = { 120, 220, 255, 255 };
 static const Color SLING_COLOR  = { 200, 165, 255, 255 };
 static const Color LOCK_COLOR   = { 255, 120, 90, 255 };
+static const Color XP_COLOR     = { 255, 214, 110, 255 };
+#define LEVEL_FLASH 0.8f   // segundos de brilho na barra de nível depois de subir
 
 static void ship_bar(int x, int y, const char *label, float value, float max, Color color)
 {
     DrawText(label, x, y - 5, LABEL_SIZE, color);
     draw_bar(x + 96, y, SHIP_BAR_WIDTH, SHIP_BAR_HEIGHT, (max > 0.0f) ? value / max : 0.0f, color);
+}
+
+// Nível e XP (com um brilho logo depois de subir), e ao lado um quadradinho
+// por nível de evolução, na cor da linha de cada uma.
+static void draw_level(const World *w, const Tuning *t, int x, int y, int pips_x)
+{
+    const Evolution *e = &w->evo;
+    float need = evolution_xp_needed(t, e->level);
+    float since_up = 99.0f;
+    for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
+        const GameEvent *ev = events_find(&w->events, id);
+        if (ev == NULL) break;
+        float age = event_age(w, t, ev);
+        if (age > LEVEL_FLASH) break;
+        if (ev->type == EV_LEVEL_UP) {
+            since_up = age;
+            break;
+        }
+    }
+    Color c = (since_up < LEVEL_FLASH) ? mix_color(XP_COLOR, WHITE, 1.0f - since_up / LEVEL_FLASH) : XP_COLOR;
+    ship_bar(x, y, TextFormat("NÍVEL %d", e->level), e->xp, need, c);
+
+    int px = pips_x;
+    const int pip = 9, gap = 3;
+    for (int i = 0; i < EVO_COUNT; i++) {
+        Color line = ENEMY_COLORS[evolution_info((EvolutionId)i)->line];
+        for (int r = 0; r < e->rank[i] && px + pip <= pips_x + SHIP_INFO_WIDTH - 10; r++) {
+            DrawRectangle(px, y, pip, pip, line);
+            px += pip + gap;
+        }
+    }
 }
 
 static void draw_reticle(int cx, int cy, Color color)
@@ -303,16 +344,17 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         return;
     }
 
-    // Barras: casco, escudo e energia, no canto de baixo à esquerda.
+    // Barras: casco, escudo, energia e nível, no canto de baixo à esquerda.
     int x = SHIP_LEFT;
-    int y = screen_h - SHIP_BOTTOM - SHIP_ROW * 2;
-    DrawRectangle(x - 10, y - 12, 96 + SHIP_BAR_WIDTH + SHIP_INFO_WIDTH + 20, SHIP_ROW * 3 + 12, FRAME_COLOR);
+    int y = screen_h - SHIP_BOTTOM - SHIP_ROW * 3;
+    DrawRectangle(x - 10, y - 12, 96 + SHIP_BAR_WIDTH + SHIP_INFO_WIDTH + 20, SHIP_ROW * 4 + 12, FRAME_COLOR);
 
     Color hull = HULL_COLOR;
     if (s->hull < t->ship_hull_max * HULL_LOW && sinf(seconds(w, t) * BLINK_SPEED * 2.0f) > 0.0f) hull = DYING;
     ship_bar(x, y, "CASCO", s->hull, t->ship_hull_max, hull);
     ship_bar(x, y + SHIP_ROW, "ESCUDO", s->shield, t->ship_shield_max, SHIELD_COLOR);
     ship_bar(x, y + SHIP_ROW * 2, "ENERGIA", s->energy, t->ship_energy_max, s->boost_spent ? DIM_COLOR : ENERGY_COLOR);
+    draw_level(w, t, x, y + SHIP_ROW * 3, x + 96 + SHIP_BAR_WIDTH + 28);
 
     // Velocidade e altitude, ao lado das barras.
     int info_x = x + 96 + SHIP_BAR_WIDTH + 28;
@@ -556,7 +598,7 @@ static void draw_banners(const World *w, const Tuning *t)
                 for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
                     counts[type] = wave_enemy_count(&w->plan.waves[number - 1], (EnemyType)type);
                 }
-                type_list(counts, false, sw / 2, y + BANNER_SIZE + 8, LABEL_SIZE, fade);
+                hud_type_list(counts, false, sw / 2, y + BANNER_SIZE + 8, LABEL_SIZE, fade);
             }
         } else {
             text_centered("HORDA VENCIDA", sw / 2, y, BANNER_SIZE - 10, with_alpha(HEALTHY, fade));
@@ -731,6 +773,41 @@ static void draw_markers(const World *w, const Tuning *t, Camera3D camera)
 // ---------------------------------------------------------------------------
 //  Fim da partida
 // ---------------------------------------------------------------------------
+
+// As evoluções escolhidas, "Nome N" na cor da linha, centralizadas em até
+// duas linhas. Devolve a altura usada.
+static int evolution_list(const World *w, int cx, int y, int size, float alpha)
+{
+    char items[EVO_COUNT][40];
+    int ids[EVO_COUNT], n = 0;
+    for (int i = 0; i < EVO_COUNT; i++) {
+        if (w->evo.rank[i] == 0) continue;
+        snprintf(items[n], sizeof items[n], "%s %d", evolution_info((EvolutionId)i)->name, w->evo.rank[i]);
+        ids[n++] = i;
+    }
+    const int gap = size + 4;
+    int max_width = GetScreenWidth() - 120;
+    int start = 0, height = 0;
+    while (start < n) {
+        // Quantos cabem nesta linha.
+        int width = 0, end = start;
+        while (end < n) {
+            int item = MeasureText(items[end], size) + (end > start ? gap : 0);
+            if (end > start && width + item > max_width) break;
+            width += item;
+            end++;
+        }
+        int x = cx - width / 2;
+        for (int k = start; k < end; k++) {
+            Color c = ENEMY_COLORS[evolution_info((EvolutionId)ids[k])->line];
+            text(items[k], x, y + height, size, with_alpha(c, alpha));
+            x += MeasureText(items[k], size) + gap;
+        }
+        height += size + 6;
+        start = end;
+    }
+    return height;
+}
 #define END_DELAY 1.2f   // segundos entre o fim e o painel (para ver a explosão final)
 
 static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
@@ -743,7 +820,7 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
     // Primeiro só o título, sobre uma faixa; depois o resumo.
     float band = Clamp(since / 0.4f, 0.0f, 1.0f);
     Color tint = won ? (Color){ 4, 20, 14, 255 } : (Color){ 24, 2, 2, 255 };
-    DrawRectangle(0, sh / 2 - 210, sw, 420, with_alpha(tint, band * 0.78f));
+    DrawRectangle(0, sh / 2 - 215, sw, 460, with_alpha(tint, band * 0.78f));
     const char *title = won ? "PLANETA DEFENDIDO" : "COLAPSO PLANETÁRIO";
     text_centered(title, sw / 2, sh / 2 - 190, BANNER_SIZE, with_alpha(won ? HEALTHY : DYING, band));
     if (!won) {
@@ -777,11 +854,16 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
                   LABEL_SIZE, body);
     y += 26;
 
-    type_list(sc->kills_by_type, true, sw / 2, y, LABEL_SIZE - 4, panel);   // abates por tipo
+    hud_type_list(sc->kills_by_type, true, sw / 2, y, LABEL_SIZE - 4, panel);   // abates por tipo
     y += 30;
     text_centered(TextFormat("maior combo   %d   bônus de planeta   %s", sc->best_chain, format_points(sc->planet_bonus)),
                   sw / 2, y, LABEL_SIZE, body);
     y += 28;
+    if (evolution_total_ranks(&w->evo) > 0) {
+        text_centered(TextFormat("nível %d   evoluções:", w->evo.level), sw / 2, y, LABEL_SIZE - 4, with_alpha(DIM_COLOR, panel));
+        y += 22;
+        y += evolution_list(w, sw / 2, y, LABEL_SIZE - 4, panel);
+    }
     float blink = 0.6f + 0.4f * sinf(since * 4.0f);
     text_centered("R para jogar de novo", sw / 2, y + 16, LABEL_SIZE + 2, with_alpha(PRIZE_COLOR, panel * blink));
 }
@@ -806,9 +888,11 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
         draw_wave_info(w, t);
     }
 
-    if (playing) {
-        draw_ship(w, t, ctx->camera);
-        if (w->state == GAME_PLAYING) draw_banners(w, t);   // no fim, quem fala é o painel
+    if (playing && !w->evo.choosing) {   // com as cartas na tela, o painel da nave sai do caminho
+        if (w->state == GAME_PLAYING) {  // no fim, quem fala é o painel do resultado
+            draw_ship(w, t, ctx->camera);
+            draw_banners(w, t);
+        }
     } else if (w->cam_mode == CAM_FREE) {
         int cx = screen_w / 2, cy = screen_h / 2;
         DrawLine(cx - 10, cy, cx - 3, cy, MARKER_COLOR);

@@ -18,8 +18,10 @@
 #include "core/input.h"
 #include "core/rng.h"
 #include "core/vmath.h"
+#include "game/allies.h"
 #include "game/enemies.h"
 #include "game/events.h"
+#include "game/evolution.h"
 #include "game/moon.h"
 #include "game/particles.h"
 #include "game/projectiles.h"
@@ -90,6 +92,12 @@ typedef struct {
     float        hit_marker;    // segundos restantes do marcador de acerto na mira (HUD)
     float        kill_marker;   // ... e do de abate
 
+    // --- evolução ---
+    Evolution    evo;
+    Allies       allies;
+    uint64_t     cards_at;      // passo em que as cartas do nível ganho abrem (0 = nenhum)
+    Tuning       eff;           // o tuning com os efeitos das evoluções (ver world_tuning)
+
     CamMode   cam_mode;
     CamMode   cam_return;   // câmera para a qual o F2 volta ao sair da livre
     float     orbit_angle;  // radianos
@@ -103,7 +111,18 @@ typedef struct {
 // Cria o mundo e gera o planeta, reservando a grade na arena. Retorna false
 // se a arena não tiver espaço. Começa na câmera de jogo, com a nave pronta.
 bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena);
+
+// Um passo de lógica. `t` é o tuning base (o dos arquivos); a partir dele o
+// mundo monta o efetivo, com as evoluções, e usa esse.
 void world_tick(World *w, const InputState *in, const Tuning *t);
+
+// O tuning efetivo (base + evoluções) do último passo: é o que vale para a
+// nave e para quem a desenha (barras de casco e escudo, alcance da arma).
+const Tuning *world_tuning(const World *w);
+
+// Ferramentas de roteiro: dar XP à nave e pôr uma evolução direto em um nível.
+void world_give_xp(World *w, const Tuning *t, float xp);
+void world_set_evolution(World *w, const Tuning *t, EvolutionId id, int rank);
 
 // Depois de recarregar o tuning: se a receita do planeta mudou, gera o
 // planeta de novo. Retorna true quando isso aconteceu.

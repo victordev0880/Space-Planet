@@ -20,6 +20,9 @@
 #define DETONATE_SIZE    2.0f     // a explosão do Kamikaze junto da nave é maior que a de um abate
 #define DETONATE_MIN     0.35f    // mesmo na borda da explosão, o dano não cai abaixo desta fração
 #define BIG_KILL_SCALE   2.5f     // inimigos deste tamanho para cima congelam o jogo ao morrer
+#define BLAST_MIN        0.4f     // explosões da nave: na borda, o dano não cai abaixo desta fração
+#define BLAST_VISUAL     6.0f     // tamanho do efeito de uma explosão da nave, em raios por unidade
+#define REFLECT_DAMAGE   2.0f     // um tiro refletido vale este tanto de tiros da nave
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -47,6 +50,8 @@ static const Blast BLASTS[ENEMY_TYPE_COUNT] = {
     [ENEMY_CARRIER]  = { { 255, 236, 190 }, { 200, 120, 255 }, { 80, 70, 96 } },
 };
 static const Rgb8 SHIELD_BLOCK = { 120, 240, 255 };
+static const Rgb8 CRIT_SPARK   = { 255, 250, 170 };
+static const Blast SHIP_BLAST  = { { 230, 250, 255 }, { 90, 180, 255 }, { 60, 90, 130 } };
 
 // Pesados empurram a nave quando ela tromba neles; os leves se despedaçam.
 static bool is_heavy(EnemyType type)
@@ -78,6 +83,14 @@ float segment_sphere(Vector3 a, Vector3 b, Vector3 center, float radius)
 static bool playing(const World *w)
 {
     return w->state == GAME_PLAYING;
+}
+
+// XP e essência de um abate; avisa quando a nave sobe de nível.
+static void gain_xp(World *w, const Tuning *t, EnemyType type, float xp, Vector3 where)
+{
+    if (evolution_gain(&w->evo, t, type, xp) > 0) {
+        events_push(&w->events, (uint32_t)w->tick, EV_LEVEL_UP, (uint8_t)type, where, (float)w->evo.level);
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -190,14 +203,34 @@ void combat_fire(World *w, const InputState *in, const Tuning *t, float dt)
     Vector3 forward = ship_forward(s);
     Vector3 converge = Vector3Add(s->pos, Vector3Scale(forward, COMBAT_AIM_DISTANCE));
 
+    Vector3 carried = Vector3Add(s->vel, s->fall);
+    float life = t->weapon_range / t->weapon_speed;
+    int fan = w->evo.rank[EVO_SPREAD];
+    uint8_t pierce = w->evo.rank[EVO_PIERCE];
+
     while (s->fire_wait <= 0.0f) {
         Vector3 muzzle = Vector3Add(s->pos, Vector3RotateByQuaternion(GUNS[s->gun], s->rot));
         Vector3 aim = assisted ? assist.point : converge;
         Vector3 dir = Vector3Normalize(Vector3Subtract(aim, muzzle));
-        Vector3 vel = Vector3Add(Vector3Scale(dir, t->weapon_speed), Vector3Add(s->vel, s->fall));
+        Vector3 vel = Vector3Add(Vector3Scale(dir, t->weapon_speed), carried);
 
-        Shot *bolt = projectiles_spawn(&w->shots, SHOT_BOLT, muzzle, vel, t->weapon_range / t->weapon_speed);
-        if (bolt != NULL) bolt->damage = t->weapon_damage;
+        Shot *bolt = projectiles_spawn(&w->shots, SHOT_BOLT, muzzle, vel, life);
+        if (bolt != NULL) {
+            bolt->damage = t->weapon_damage;
+            bolt->pierce = pierce;
+        }
+        // Tiro em leque: pares de tiros mais fracos, abertos para os lados.
+        for (int k = 1; k <= fan; k++) {
+            for (int side = -1; side <= 1; side += 2) {
+                Quaternion turn = QuaternionFromAxisAngle(ship_up(s), (float)(side * k) * t->spread_angle * DEG2RAD);
+                Vector3 spread = Vector3RotateByQuaternion(dir, turn);
+                Shot *extra = projectiles_spawn(&w->shots, SHOT_BOLT, muzzle,
+                                                Vector3Add(Vector3Scale(spread, t->weapon_speed), carried), life);
+                if (extra == NULL) continue;
+                extra->damage = t->weapon_damage * t->spread_damage;
+                extra->pierce = pierce;
+            }
+        }
         events_push(&w->events, (uint32_t)w->tick, EV_SHOT, (uint8_t)s->gun, muzzle, 0.0f);
 
         s->gun ^= 1;
@@ -277,8 +310,67 @@ static void blow_up_bomb(World *w, const Tuning *t, int index, bool by_player)
         w->score.bombs_down++;
         w->kill_marker = KILL_MARKER_TIME;
         events_push(&w->events, (uint32_t)w->tick, EV_BOMB_DOWN, ENEMY_BOMBER, b->pos, (float)gained);
+        gain_xp(w, t, ENEMY_BOMBER, t->xp_bomb, b->pos);
     }
     projectiles_remove(&w->shots, index);
+}
+
+// Explosão da nave (dash explosivo, reação em cadeia, ogivas): fere os
+// inimigos em volta (menos `skip`), com o dano caindo para a borda, e
+// derruba bombas. Protegidos por um Escudeiro não sofrem nada.
+static void ship_blast(World *w, const Tuning *t, Vector3 center, float radius, float damage, int skip, bool show)
+{
+    if (damage <= 0.0f) return;
+    Enemies *e = &w->enemies;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        if (i == skip || !pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
+        const Enemy *en = &e->items[i];
+        float reach = radius + t->enemy[en->type].radius;
+        float d = Vector3Distance(en->pos, center);
+        if (d > reach || enemies_shielded_by(e, t, i) >= 0) continue;
+        enemies_damage(e, i, damage * Clamp(1.0f - d / reach, BLAST_MIN, 1.0f), DEATH_PLAYER);
+    }
+    Projectiles *p = &w->shots;
+    for (int i = 0; i < p->pool.capacity; i++) {
+        if (!pool_alive(&p->pool, i) || p->items[i].kind != SHOT_BOMB) continue;
+        if (Vector3Distance(p->items[i].pos, center) > radius + t->bomber_bomb_radius) continue;
+        p->items[i].hp -= damage;
+        if (p->items[i].hp <= 0.0f) blow_up_bomb(w, t, i, true);
+    }
+    if (show) {
+        particles_explosion(&w->particles, &w->rng, center, (Vector3){ 0.0f, 0.0f, 0.0f }, radius / BLAST_VISUAL,
+                            SHIP_BLAST.hot, SHIP_BLAST.glow, SHIP_BLAST.debris);
+        events_push(&w->events, (uint32_t)w->tick, EV_BLAST, 0, center, radius);
+    }
+}
+
+void combat_dash_blast(World *w, const Tuning *t)
+{
+    int rank = w->evo.rank[EVO_BLAST_DASH];
+    if (rank <= 0 || !w->ship.alive) return;
+    ship_blast(w, t, w->ship.pos, t->blast_dash_radius, t->blast_dash_damage * (float)rank, -1, true);
+}
+
+// Reflexão: com escudo, um tiro inimigo pode voltar como tiro da nave.
+static bool reflect(World *w, const Tuning *t, Shot *s, Vector3 point)
+{
+    int rank = w->evo.rank[EVO_REFLECT];
+    if (rank <= 0 || w->ship.shield <= 0.0f) return false;
+    if (rng_float(&w->rng) >= t->reflect_chance * (float)rank) return false;
+    Vector3 back = Vector3Normalize(Vector3Negate(s->vel));
+    s->kind = SHOT_BOLT;
+    s->vel = Vector3Scale(back, t->weapon_speed);
+    s->pos = point;
+    s->pos_prev = point;
+    s->age = 0.0f;
+    s->life = t->weapon_range / t->weapon_speed;
+    s->damage = t->weapon_damage * REFLECT_DAMAGE;
+    s->crater_radius = 0.0f;
+    s->pierce = 0;
+    s->last_hit = -1;
+    particles_sparks(&w->particles, &w->rng, point, back, 12, 16.0f, SHIELD_SPARK);
+    events_push(&w->events, (uint32_t)w->tick, EV_REFLECT, 0, point, 0.0f);
+    return true;
 }
 
 // Tiro da nave: acha o primeiro obstáculo no trecho que ele percorreu.
@@ -292,7 +384,7 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
 
     Enemies *e = &w->enemies;
     for (int i = 0; i < e->pool.capacity; i++) {
-        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
+        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f || i == s->last_hit) continue;
         const Enemy *en = &e->items[i];
         float hit = segment_sphere(a, b, en->pos, t->enemy[en->type].radius + t->weapon_hit_margin);
         bool on_weak = false;
@@ -351,18 +443,51 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
         events_push(&w->events, (uint32_t)w->tick, EV_SHIELDED, e->items[enemy].type, point, 0.0f);
     } else if (enemy >= 0) {
         Enemy *en = &e->items[enemy];
+        const uint8_t *rank = w->evo.rank;
         float damage = s->damage;
         EventType kind = EV_HIT;
         Rgb8 spark = BOLT_SPARK;
         if (en->type == ENEMY_BOMBER) {
+            // Com Quebra-blindagem, a frente blindada não segura mais o tiro.
+            float armor = (rank[EVO_ARMOR_BREAK] > 0) ? 1.0f : t->bomber_armor;
             kind = weak ? EV_WEAK_HIT : EV_ARMOR_HIT;
-            damage *= weak ? t->bomber_weak_mult : t->bomber_armor;
+            damage *= weak ? t->bomber_weak_mult : armor;
             spark = weak ? WEAK_SPARK : ARMOR_SPARK;
         }
+        if (is_heavy((EnemyType)en->type)) damage *= 1.0f + t->armor_break_bonus * (float)rank[EVO_ARMOR_BREAK];
+
+        // Acerto crítico: chance maior contra quem está longe.
+        if (rank[EVO_CRIT] > 0) {
+            float chance = t->crit_chance * (float)rank[EVO_CRIT];
+            if (Vector3Distance(point, w->ship.pos) > t->crit_far) chance *= 2.0f;
+            if (rng_float(&w->rng) < chance) {
+                damage *= t->crit_mult;
+                spark = CRIT_SPARK;
+                events_push(&w->events, (uint32_t)w->tick, EV_CRIT, en->type, point, damage);
+            }
+        }
+
         enemies_damage(e, enemy, damage, DEATH_PLAYER);
         particles_sparks(&w->particles, &w->rng, point, back, weak ? 8 : 5, 14.0f, spark);
         events_push(&w->events, (uint32_t)w->tick, kind, en->type, point, damage);
         w->hit_marker = HIT_MARKER_TIME;
+
+        // Ogivas: quem está em volta também leva uma parte.
+        if (rank[EVO_WARHEADS] > 0) {
+            float splash = damage * t->warheads_fraction * (float)rank[EVO_WARHEADS];
+            ship_blast(w, t, point, t->warheads_radius, splash, enemy, false);
+        }
+        // Sifão de energia: cada acerto devolve energia.
+        if (rank[EVO_ENERGY_SIPHON] > 0 && w->ship.alive) {
+            w->ship.energy = fminf(w->ship.energy + t->energy_siphon_energy * (float)rank[EVO_ENERGY_SIPHON],
+                                   t->ship_energy_max);
+        }
+        // Tiro perfurante: atravessa e segue.
+        if (s->pierce > 0) {
+            s->pierce--;
+            s->last_hit = (int16_t)enemy;
+            return;
+        }
     } else if (bomb >= 0) {
         Shot *target = &p->items[bomb];
         target->hp -= s->damage;
@@ -389,6 +514,7 @@ static void resolve_enemy_shot(World *w, const Tuning *t, int index)
         float reach = bomb ? t->ship_radius + t->bomber_bomb_radius : t->ship_radius * SHIP_HIT_SCALE;
         float hit = segment_sphere(a, b, ship->pos, reach);
         if (hit >= 0.0f && !ship_invulnerable(ship)) {
+            if (!bomb && reflect(w, t, s, Vector3Lerp(a, b, hit))) return;
             combat_damage_ship(w, t, s->damage, Vector3Lerp(a, b, hit));
             if (bomb) blow_up_bomb(w, t, index, false);
             else      projectiles_remove(&w->shots, index);
@@ -502,6 +628,17 @@ void combat_sweep(World *w, const Tuning *t)
             if (t->enemy[type].scale >= BIG_KILL_SCALE) {
                 int ticks = seconds_to_ticks(t, t->combat_hitstop_big);
                 if (ticks > w->hitstop) w->hitstop = ticks;
+            }
+            gain_xp(w, t, type, t->xp_kill[type], en->pos);
+
+            // Roubo de vida: cada abate conserta um pouco o casco.
+            const uint8_t *rank = w->evo.rank;
+            if (rank[EVO_LIFESTEAL] > 0 && w->ship.alive) {
+                w->ship.hull = fminf(w->ship.hull + t->lifesteal_hull * (float)rank[EVO_LIFESTEAL], t->ship_hull_max);
+            }
+            // Reação em cadeia: o inimigo abatido explode em quem está perto.
+            if (rank[EVO_CHAIN] > 0) {
+                ship_blast(w, t, en->pos, t->chain_radius, t->chain_damage * (float)rank[EVO_CHAIN], i, true);
             }
         } else {
             events_push(&w->events, (uint32_t)w->tick, EV_CRASH, (uint8_t)type, en->pos, 0.0f);

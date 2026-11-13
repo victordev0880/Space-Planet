@@ -34,6 +34,9 @@ typedef enum {
     ACT_DEBUG_CRATER,  // C (com o F1 aberto): abre uma cratera onde a nave mira
     ACT_DEBUG_SIZE,    // V (com o F1 aberto): troca o tamanho dessa cratera
     ACT_READY,         // Enter: na calmaria, chama a próxima horda
+    ACT_CARD1,         // 1, 2, 3: escolhe uma carta de evolução
+    ACT_CARD2,
+    ACT_CARD3,
     ACT_COUNT
 } Action;
 
