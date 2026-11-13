@@ -23,13 +23,15 @@ Steer sniper_think(Enemies *e, int index, const EnemyContext *ctx)
 
     if (!ai_ship_targetable(ctx)) {
         en->arming = 0.0f;
+        en->look = (Vector3){ 0.0f, 0.0f, 0.0f };
         float error;
         Vector3 tangent = ai_orbit(en, ctx, SNIPER_IDLE, speed * 0.5f, &error);
         return ai_steer(Vector3Add(tangent, Vector3Scale(radial, error * SNIPER_SPRING)), speed);
     }
 
-    // Posição: na distância certa da nave, circulando em volta dela.
+    // Posição: na distância certa da nave, circulando em volta dela, sempre de frente para ela.
     const Ship *ship = ctx->ship;
+    en->look = Vector3Subtract(ship->pos, en->pos);
     Vector3 from_ship = Vector3Subtract(en->pos, ship->pos);
     float d = Vector3Length(from_ship);
     Vector3 away = (d > 1e-3f) ? Vector3Scale(from_ship, 1.0f / d) : radial;

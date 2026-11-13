@@ -28,17 +28,20 @@
 
 #include "core/vmath.h"
 
-#define LOWPOLY_MAX_TRIS  320
+#define LOWPOLY_MAX_TRIS  900
 #define LOWPOLY_MAX_PARTS 12
 
 typedef struct {
     Vector3 a, b, c;
     uint8_t part;
+    uint8_t detail;   // 1 = detalhe pequeno: só desenhado de perto (pose.far = false)
 } LowPolyTri;
 
 typedef struct {
     LowPolyTri tris[LOWPOLY_MAX_TRIS];
     int        count;
+    bool       overflow;                       // algum triângulo não coube (erro de quem monta)
+    uint8_t    detail_mode;                    // os próximos triângulos são detalhe?
     Color      colors[LOWPOLY_MAX_PARTS];
     bool       emissive[LOWPOLY_MAX_PARTS];
     bool       glow_slot[LOWPOLY_MAX_PARTS];   // emissiva que assume a cor `glow` da pose
@@ -46,6 +49,10 @@ typedef struct {
 
 void lowpoly_clear(LowPoly *m);
 void lowpoly_part(LowPoly *m, int part, Color color, bool emissive);
+
+// Entre lowpoly_detail(m, true) e lowpoly_detail(m, false), os triângulos
+// montados são detalhes (rebites, placas, antenas): somem de longe.
+void lowpoly_detail(LowPoly *m, bool on);
 
 // Peça que brilha na cor `glow` da pose (a cor da variação do inimigo, a do
 // motor da nave); `color` vale quando a pose não traz cor de brilho.
@@ -75,6 +82,7 @@ typedef struct {
     Color      bounce_color;
     Color      tint;       // multiplica as cores das peças comuns (branco = sem efeito)
     Color      glow;       // se alpha > 0, cor das peças marcadas com lowpoly_part_glow
+    bool       far;        // longe da câmera: pula os triângulos de detalhe
 } LowPolyPose;
 
 // Pose com os valores neutros (sem reflexo, sem borda, sem tinta).
@@ -85,5 +93,45 @@ void lowpoly_draw(const LowPoly *m, const LowPolyPose *pose);
 // Luz do Sol em um ponto: 1, ou `shadow` se ele está na sombra do planeta
 // (o "cilindro" do lado oposto ao Sol).
 float lowpoly_sunlight(Vector3 pos, Vector3 sun, float planet_radius, float shadow);
+
+// ---------------------------------------------------------------------------
+//  Formas prontas, para montar modelos mais ricos com pouco código. Todas em
+//  eixos do modelo; com `mirror`, ganham o espelho em x (como lowpoly_tri).
+// ---------------------------------------------------------------------------
+
+// Seção transversal de um casco: elipse (polígono) com centro (x, y, z),
+// meia-largura w e meia-altura h. w = h = 0 vira uma ponta.
+typedef struct { float z, w, h, y; } LpRing;
+
+// Casco ao longo de z, ligando as seções em ordem. As faces de cima ganham
+// `top`, as de baixo `bottom`; `cap` (>= 0) fecha a primeira e a última seção.
+// `x` desloca o casco para o lado; `twist` gira cada seção um pouco mais que
+// a anterior (radianos por seção), para brocas em espiral.
+void lp_loft(LowPoly *m, const LpRing *rings, int count, int sides, float x, int top, int bottom, int cap,
+             float twist, bool mirror);
+
+// Placa com espessura (asa, aleta, lâmina): contorno a (raiz, frente), b
+// (ponta, frente), c (ponta, trás), d (raiz, trás). A espessura vai na
+// direção `normal`, `thick_root` na raiz e `thick_tip` na ponta.
+void lp_plate(LowPoly *m, Vector3 a, Vector3 b, Vector3 c, Vector3 d, Vector3 normal, float thick_root,
+              float thick_tip, int top, int bottom, int edge, bool mirror);
+
+// Tubo (ou cone) de `a` até `b`, raios `ra` e `rb`. `cap` >= 0 fecha as pontas.
+void lp_tube(LowPoly *m, Vector3 a, Vector3 b, float ra, float rb, int sides, int part, int cap, bool mirror);
+
+// Caixa alinhada aos eixos.
+void lp_box(LowPoly *m, Vector3 center, Vector3 half, int part, bool mirror);
+
+// Espinho: cone de base `radius` em `base`, até `tip`.
+void lp_spike(LowPoly *m, Vector3 base, Vector3 tip, float radius, int sides, int part, bool mirror);
+
+// Anel com espessura em volta de `axis`: faces de frente e de trás em
+// `face`, bordas em `edge`.
+void lp_ring(LowPoly *m, Vector3 center, Vector3 axis, float r_in, float r_out, float depth, int sides, int face,
+             int edge, bool mirror);
+
+// Gira (e desloca) os triângulos montados desde `first`: para montar uma peça
+// em eixos cômodos e depois pô-la no lugar.
+void lp_transform(LowPoly *m, int first, Quaternion rot, Vector3 offset);
 
 #endif

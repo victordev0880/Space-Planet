@@ -174,11 +174,13 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         else return fail(ap, line_no, "esperado: at <quadro> %s on|off", cmd);
         e.cmd = (cmd[0] == 'w') ? AP_WAVES : AP_AUTOPILOT;
     } else if (strcmp(cmd, "spawn") == 0) {
-        long long n = 0;
-        bool ok = (count == 8) && parse_int(tokens[4], &n)
+        long long n = 0, variant = -1;
+        bool ok = (count == 8 || count == 9) && parse_int(tokens[4], &n)
                && parse_float(tokens[5], &e.pos.x) && parse_float(tokens[6], &e.pos.y)
                && parse_float(tokens[7], &e.pos.z);
-        if (!ok) return fail(ap, line_no, "esperado: at <quadro> spawn <tipo> <quantidade> <x> <y> <z>");
+        if (ok && count == 9) ok = parse_int(tokens[8], &variant) && variant >= 0 && variant < ENEMY_VARIANTS;
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> spawn <tipo> <quantidade> <x> <y> <z> [<variacao 0-2>]");
+        e.variant = (int)variant;
         e.action = enemy_type_from_name(tokens[3]);
         if (e.action < 0) return fail(ap, line_no, "spawn: tipo de inimigo desconhecido: \"%s\"", tokens[3]);
         if (n < 1 || n > WAVE_GROUP_MAX_COUNT) return fail(ap, line_no, "spawn: quantidade de 1 a %d", WAVE_GROUP_MAX_COUNT);
@@ -373,6 +375,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
                 AutoplaySpawn *s = &out->spawns[out->spawn_count++];
                 s->type = (EnemyType)e->action;
                 s->count = e->count;
+                s->variant = e->variant;
                 s->center = e->pos;
             }
             break;
@@ -394,7 +397,8 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     if (frame->has_waves) world_set_waves(w, frame->waves_on);
     if (frame->clear) world_clear_enemies(w);
     for (int i = 0; i < frame->spawn_count; i++) {
-        world_spawn(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center);
+        world_spawn_variant(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center,
+                            frame->spawns[i].variant);
     }
 
     // Os impactos vêm de longe, apontados para o centro do planeta.

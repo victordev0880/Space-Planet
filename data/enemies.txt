@@ -13,14 +13,16 @@ enemies.spawn_spread   = 12      # espalhamento de um grupo ao aparecer
 enemies.shot_life      = 3.5     # segundos de vida dos tiros inimigos
 
 # --- Enxame -----------------------------------------------------------------
-# Drones do tamanho da nave, que chegam em bando. Fazem passadas de ataque:
-# mergulham em direção ao solo atirando, sobem e voltam alguns graus adiante.
-# Frágeis, mas atiram na nave quando ela fica na frente deles.
+# Drones do tamanho da nave, que chegam em bando. O bando para no ar acima do
+# alvo, em formação, espera um pouco e faz uma passada de ataque: desce
+# atirando no solo, passa por cima e sobe já rumo ao próximo ponto, alguns
+# graus adiante. Se a nave chega perto, parte do bando sai para encará-la:
+# fica a uma distância fixa, circulando devagar e atirando.
 swarm.hp              = 3
 swarm.radius          = 1.6      # raio de colisão (um pouco maior que o modelo: ajuda a acertar)
 swarm.scale           = 1.3      # tamanho do modelo (1 = uns 2.6 de envergadura)
-swarm.speed           = 26
-swarm.accel           = 36
+swarm.speed           = 22
+swarm.accel           = 26
 swarm.points          = 100
 swarm.ram_damage      = 14       # dano na nave ao trombar com ela
 swarm.cruise_altitude = 24       # altura em que o bando viaja
@@ -30,8 +32,12 @@ swarm.shot_speed      = 55
 swarm.shot_damage     = 6        # dano de um tiro na nave
 swarm.crater_radius   = 3.4
 swarm.crater_depth    = 2.6
-swarm.aggro_range     = 45       # com a nave até esta distância e na frente, atira nela
-swarm.aggro_rate      = 0.7      # tiros por segundo na nave
+swarm.aggro_range     = 65       # com a nave até esta distância, parte do bando sai para encará-la
+swarm.aggro_rate      = 0.9      # tiros por segundo na nave (pela metade enquanto espera no bando)
+swarm.hold_time       = 2.5      # segundos parado no ponto de espera antes de cada passada
+swarm.engage_distance = 26       # distância em que fica da nave quando a encara
+swarm.engage_time     = 7        # segundos encarando a nave antes de voltar ao bando
+swarm.engage_share    = 0.5      # fração do bando que pode encarar a nave ao mesmo tempo
 swarm.spacing         = 5        # distância que cada drone mantém dos vizinhos
 swarm.dive_stagger    = 0.35     # segundos entre a passada de um drone e a do seguinte (o bando ataca em fila)
 swarm.drift           = 28       # graus que o alvo do bando anda a cada passada

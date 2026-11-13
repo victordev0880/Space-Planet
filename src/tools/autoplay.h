@@ -36,6 +36,7 @@
 //   at 80  ship 0 70 0 0 0 0 30   ... já voando a 30 unidades por segundo
 //   at 0   waves off              desliga as hordas (on recomeça a sequência)
 //   at 90  spawn swarm 6 0 90 40  põe um grupo de inimigos em (x y z)
+//   at 90  spawn swarm 6 0 90 40 2   ... com a variação (desenho e cor) 0, 1 ou 2
 //   at 100 autopilot on           um piloto automático simples assume a nave:
 //                                 persegue o inimigo mais urgente e atira
 //                                 (off devolve o controle ao roteiro)
@@ -76,6 +77,7 @@ typedef struct {
     AutoplayCmd cmd;
     int         action;                    // HOLD, RELEASE, PRESS; em SPAWN, o tipo de inimigo
     int         count;                     // BARRAGE, SPAWN; em VIEW, o modo de câmera; em WAVES e AUTOPILOT, 1 = on
+    int         variant;                   // SPAWN: variação escolhida (-1 = sorteada)
     float       dx, dy;                    // LOOK
     float       rim_radius, depth;         // CRATER, BARRAGE
     float       speed;                     // SHIP
@@ -92,6 +94,7 @@ typedef struct {
 typedef struct {
     EnemyType type;
     int       count;
+    int       variant;   // -1 = sorteada
     Vector3   center;
 } AutoplaySpawn;
 

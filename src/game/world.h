@@ -133,6 +133,9 @@ void world_set_waves(World *w, bool on);
 // Ferramenta de debug e do autoplay: põe um grupo de inimigos em `center`.
 int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 center);
 
+// O mesmo, com a variação (desenho e cor) escolhida: -1 = sorteada, como no jogo.
+int world_spawn_variant(World *w, const Tuning *t, EnemyType type, int count, Vector3 center, int variant);
+
 // Ferramenta do autoplay: tira de cena todos os inimigos e tiros.
 void world_clear_enemies(World *w);
 

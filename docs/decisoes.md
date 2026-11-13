@@ -655,6 +655,68 @@ para baixo. Sem isso, a horda com Escavador nunca terminava. Há um teste.
 - O hash do estado passou a incluir a orientação dos inimigos (o cano do
   Atirador decide de onde sai o tiro).
 
+## Ajustes depois do marco 6 (2026-11-13)
+
+Pedido do Victor jogando: movimentos dos inimigos bruscos e estranhos,
+dificuldade para acertar, ré fraca, Enxame frenético demais (queria ele "um
+pouco mais parado, e indo para cima do jogador"), modelos repetidos.
+
+### Movimento mais calmo
+- O que dava o tranco: a inclinação nas curvas chegava a 57° e trocava de
+  lado na hora em que a curva mudava; e, quase parados, os inimigos giravam o
+  modelo atrás de uma velocidade minúscula, que muda de direção à toa.
+- Agora a inclinação tem teto de ~32° e é filtrada à parte (leva ~1/3 s para
+  acompanhar a curva); o modelo gira mais devagar; e, abaixo de 3 u/s, o
+  modelo olha para um alvo dado pela IA (`look`: a nave, o solo) em vez da
+  direção do voo. A separação entre drones cresce suave com a proximidade.
+- O Atirador olha sempre para a nave (e, carregando, o cano segue a mira).
+
+### Enxame: esperar, atacar, encarar
+O Enxame dava laços: depois de cada passada o próximo ponto de entrada ficava
+atrás dele e ele dava meia-volta. Agora:
+- chega ao seu lugar numa formação em "V", no ponto de espera do bando, e
+  fica ali parado, balançando de leve, virado para a nave;
+- sai para a passada um de cada vez; ao terminar, o alvo do bando anda para
+  a frente e o novo ponto de espera fica adiante: sem meia-volta;
+- com a nave a menos de `aggro_range`, até metade do bando (`engage_share`)
+  sai para encará-la: fica a `engage_distance` dela, circulando devagar e
+  atirando, e volta ao bando depois de `engage_time`.
+- Um pouco mais lento (22) e com aceleração menor (26).
+
+### Acertar ficou mais fácil
+- Folga de acerto: o tiro acerta quem passar a até `weapon.hit_margin` (0,8)
+  do inimigo, das bombas e do ponto fraco.
+- Ajuda de mira de 4° para 6,5°.
+- Marcador de antecipação no HUD: no inimigo mais perto do nariz (até 25°),
+  um círculo mostra onde ele vai estar quando o tiro chegar, com uma linha
+  até ele. Mira em cima do círculo, acerta.
+
+### Ré
+S agora empurra a nave para trás o tempo todo: indo para a frente, isso
+freia junto com o freio; abaixo de 6 u/s vira ré. Força 42 (era 26),
+velocidade 30 (era 18; a da frente é 46). A câmera não deixa a nave chegar
+mais perto que 80% da distância normal (de ré, ela vinha na direção da câmera).
+
+### Modelos: três desenhos por tipo
+- Kit de formas no `lowpoly` (casco por seções, placa com espessura, tubo,
+  caixa, espinho, anel, cópias em volta de um eixo) e 24 modelos em
+  `render/enemy_models.c`, cada um com 150 a 450 triângulos. Cada tipo tem uma
+  paleta base; a variação do grupo escolhe o desenho e a tinta.
+- Os pontos que a lógica usa ficam iguais nos três desenhos (ponto fraco do
+  Bombardeiro atrás no centro, cano do Atirador em z = -1,7, hangar embaixo).
+- Detalhes pequenos (antenas, rebites, faixas) só aparecem de perto.
+- O desenho dos modelos ficou mais rápido: a rotação vira uma matriz uma vez
+  por modelo, e a direção da câmera é calculada uma vez por modelo, não por
+  face. Com tudo isso, a CPU gasta ~0,5 ms a mais por quadro na partida inteira.
+- Roteiro `modelos.txt` (vitrine dos 24 desenhos e o Enxame em ação) e o
+  `spawn` do autoplay aceita a variação: `spawn swarm 6 x y z 2`.
+
+### Resultado medido (`onda1.txt`)
+O piloto automático agora vence as 10 hordas em 10 minutos, com o planeta em
+91,6% (antes chegava à horda 10 com 79%): acerta mais e o Enxame passa parte
+do tempo encarando a nave em vez de atacar o solo. Mediana de 5 ms, p99 de
+11,75 ms.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

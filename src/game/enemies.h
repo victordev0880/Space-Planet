@@ -7,8 +7,9 @@
 //
 // O comportamento de cada tipo mora no seu arquivo (game/ai_*.c); aqui fica
 // o que é comum a todos. Resumo:
-//   Enxame        chega em bando e faz passadas rasantes, em fila, atirando no
-//                 solo; atira na nave se ela fica na frente.
+//   Enxame        chega em bando, espera parado sobre o alvo e faz passadas
+//                 rasantes atirando no solo; parte do bando sai para encarar
+//                 a nave quando ela chega perto.
 //   Bombardeiro   orbita soltando bombas; antes de cada uma, o alvo é marcado
 //                 no solo; blindado na frente, ponto fraco no motor.
 //   Kamikaze      trava na nave se ela passa perto e a persegue para explodir;
@@ -48,9 +49,11 @@
 #define ENEMY_VARIANTS   3     // variações de cor dentro de cada tipo
 
 typedef enum {
-    SWARM_APPROACH,     // voa até o ponto de entrada da passada
+    SWARM_APPROACH,     // voa até o ponto de espera do bando
+    SWARM_HOLD,         // espera ali, quase parado, de olho na nave
     SWARM_DIVE,         // passada: desce atirando no alvo
-    SWARM_CLIMB,        // sobe para a próxima passada
+    SWARM_CLIMB,        // sobe, já rumo ao próximo ponto de espera
+    SWARM_ENGAGE,       // saiu do bando para encarar a nave
     HEAVY_APPROACH,     // Bombardeiro e Porta-drones: descem até a órbita
     HEAVY_ORBIT,        // ... e dão voltas no planeta
     KAMIKAZE_DIVE,      // mergulha no planeta
@@ -79,6 +82,8 @@ typedef struct {
     Vector3    target;        // ponto ou direção que está atacando (depende do tipo)
     Vector3    axis;          // eixo de órbita, ou de deriva do alvo
     Vector3    aux;           // Sifão: onde o feixe toca o solo; Atirador: onde a mira está
+    Vector3    look;          // para onde o modelo olha quando está quase parado (zero = para onde voa)
+    float      bank;          // inclinação atual nas curvas, em radianos (suavizada)
     float      hp;
     float      age;           // segundos em cena
     float      flash;         // segundos restantes do clarão de dano (só desenho)
@@ -86,6 +91,7 @@ typedef struct {
     float      arming;        // segundos de aviso restantes (bomba, lançamento, tiro carregando); 0 = nada
     float      fire_wait;     // até o próximo tiro
     float      turret_wait;   // até a próxima rajada (ou tiro na nave, no Enxame)
+    float      cooldown;      // Enxame: até poder sair do bando de novo para encarar a nave
     float      size;          // variação de tamanho do modelo (só desenho)
     int        burst;         // tiros restantes da rajada
     uint8_t    type;          // EnemyType
@@ -101,6 +107,7 @@ typedef struct {
     Vector3 target;       // direção (comprimento 1) do ponto do planeta que o bando ataca
     Vector3 drift_axis;   // o alvo gira em torno deste eixo a cada passada
     int     members;      // drones vivos; 0 = bando livre
+    int     engaged;      // drones encarando a nave agora (recontado a cada passo)
     uint8_t pass;         // passadas já feitas
 } Flock;
 
@@ -118,6 +125,7 @@ typedef struct {
     int          alive_by_type[ENEMY_TYPE_COUNT];
     CarveRequest carves[CARVES_CAPACITY];   // pedidos do passo atual
     int          carve_count;
+    int          forced_variant;            // ferramenta de roteiro: -1 = sorteia a variação de cada grupo
 } Enemies;
 
 // Tudo de que os inimigos precisam para pensar em um passo.

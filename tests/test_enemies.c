@@ -150,6 +150,52 @@ static void digger_tunnels_toward_the_core(void)
     CHECK(en->hp < hp);
 }
 
+// O Enxame espera quase parado no ponto de espera; com a nave por perto, parte
+// do bando (no máximo `engage_share`) sai para encará-la e atira nela.
+static void swarm_holds_then_engages_the_ship(void)
+{
+    static World w;
+    Vector3 dir = { 0.2f, 1.0f, 0.3f };
+    make_world_far(&w, Vector3Negate(dir));
+    world_spawn(&w, &tun, ENEMY_SWARM, 4, Vector3Scale(Vector3Normalize(dir), w.planet.params.radius * 3.0f));
+
+    float slowest_hold = 1e9f;
+    int held = -1;
+    for (int i = 0; i < seconds(12.0f); i++) {
+        run(&w, &tun, idle(), 1);
+        for (int k = 0; k < w.enemies.pool.capacity; k++) {
+            if (!pool_alive(&w.enemies.pool, k) || w.enemies.items[k].state != SWARM_HOLD) continue;
+            slowest_hold = fminf(slowest_hold, Vector3Length(w.enemies.items[k].vel));
+            held = k;
+        }
+    }
+    CHECK(held >= 0);
+    CHECK(slowest_hold < 3.0f);   // espera parado, não dando voltas
+
+    // A nave chega perto do bando.
+    Vector3 drone = w.enemies.items[held].pos;
+    Vector3 near = Vector3Add(drone, Vector3Scale(Vector3Normalize(drone), 25.0f));
+    world_place_ship(&w, &tun, near, drone, 0.0f);
+    int shots = count_events(&w, EV_ENEMY_SHOT);
+    int most_engaged = 0;
+    for (int i = 0; i < seconds(4.0f); i++) {
+        run(&w, &tun, idle(), 1);
+        int engaged = 0;
+        for (int k = 0; k < w.enemies.pool.capacity; k++) {
+            if (pool_alive(&w.enemies.pool, k) && w.enemies.items[k].state == SWARM_ENGAGE) engaged++;
+        }
+        if (engaged > most_engaged) most_engaged = engaged;
+    }
+    CHECK(most_engaged >= 1);
+    CHECK(most_engaged <= (int)ceilf(4.0f * tun.swarm_engage_share));
+    CHECK(count_events(&w, EV_ENEMY_SHOT) > shots);
+    for (int k = 0; k < w.enemies.pool.capacity; k++) {
+        if (!pool_alive(&w.enemies.pool, k) || w.enemies.items[k].state != SWARM_ENGAGE) continue;
+        float gap = Vector3Distance(w.enemies.items[k].pos, w.ship.pos);
+        CHECK(gap > tun.swarm_engage_distance * 0.5f && gap < tun.swarm_engage_distance * 1.8f);
+    }
+}
+
 // O piloto automático (ferramenta de teste) derruba um Escavador que já está
 // no túnel: para sobre a boca e atira reto para baixo, como um jogador faria.
 static void autopilot_shoots_down_the_tunnel(void)
@@ -448,6 +494,7 @@ void suite_enemies(void)
     RUN(kamikaze_dives_into_the_planet);
     RUN(digger_tunnels_toward_the_core);
     RUN(autopilot_shoots_down_the_tunnel);
+    RUN(swarm_holds_then_engages_the_ship);
     RUN(siphon_drains_the_ground);
     RUN(sniper_keeps_away_and_charges_before_firing);
     RUN(sniper_shot_can_be_dodged_after_the_lock);

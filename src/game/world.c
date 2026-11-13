@@ -14,6 +14,7 @@
 
 // --- câmera em terceira pessoa ---
 #define CHASE_MAX_STRETCH 2.0f   // o quanto a câmera pode ficar para trás, em distâncias normais
+#define CHASE_MIN_STRETCH 0.8f   // ... e o quanto a nave pode chegar perto dela (de ré)
 #define CHASE_PATH_STEPS  10     // pontos conferidos entre a nave e a câmera
 #define CHASE_MIN_FRACTION 0.45f // mais perto que isto (em distâncias normais), a câmera sobe por cima
 #define SLING_FOV         0.6f   // quanto o estilingue abre o campo de visão, em relação ao boost
@@ -118,11 +119,15 @@ static void tick_chase_camera(World *w, const Tuning *t, float dt, bool snap)
     if (!snap) {
         pos = Vector3Lerp(w->view.pos, desired, 1.0f - expf(-t->chase_pos_smooth * dt));
 
-        // Em alta velocidade o atraso cresce; aqui ele tem um teto.
+        // Em alta velocidade o atraso cresce; aqui ele tem um teto. E de ré a
+        // nave vem em direção à câmera: ela recua junto, sem deixar a nave
+        // chegar perto demais.
         Vector3 offset = Vector3Subtract(pos, s->pos);
         float length = Vector3Length(offset);
         float longest = t->chase_distance * CHASE_MAX_STRETCH;
+        float shortest = t->chase_distance * CHASE_MIN_STRETCH;
         if (length > longest) pos = Vector3Add(s->pos, Vector3Scale(offset, longest / length));
+        else if (length < shortest && length > 1e-3f) pos = Vector3Add(s->pos, Vector3Scale(offset, shortest / length));
     }
     pos = place_chase_camera(w, t, s->pos, pos);
 
@@ -466,6 +471,14 @@ int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 ce
 {
     EnemyContext ctx = world_enemy_context(w, t);
     return enemies_spawn_group(&w->enemies, &ctx, type, count, center);
+}
+
+int world_spawn_variant(World *w, const Tuning *t, EnemyType type, int count, Vector3 center, int variant)
+{
+    w->enemies.forced_variant = variant;
+    int spawned = world_spawn(w, t, type, count, center);
+    w->enemies.forced_variant = -1;
+    return spawned;
 }
 
 void world_clear_enemies(World *w)

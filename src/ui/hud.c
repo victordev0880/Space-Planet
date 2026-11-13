@@ -236,6 +236,7 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
 #define SHIP_INFO_WIDTH 164      // largura da coluna de velocidade e altitude, ao lado das barras
 #define HULL_LOW        0.25f    // o casco pisca em vermelho abaixo desta fração
 #define HIT_TIME        0.35f    // (mesma duração do aviso de dano em game/combat.c)
+#define LEAD_ANGLE      25.0f    // mostra onde mirar no inimigo mais perto do nariz, até este ângulo
 
 static const Color HULL_COLOR   = { 230, 232, 238, 255 };
 static const Color SHIELD_COLOR = { 90, 200, 255, 255 };
@@ -335,6 +336,21 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         draw_reticle(cx, cy, MARKER_COLOR);
         if (w->kill_marker > 0.0f) draw_hit_marker(cx, cy, w->kill_marker / 0.3f, true);
         else                      draw_hit_marker(cx, cy, w->hit_marker / 0.12f, false);
+    }
+
+    // Antecipação: onde mirar no inimigo mais perto do nariz. Ele se move e o
+    // tiro leva um tempo para chegar; com a mira em cima do marcador, acerta.
+    int lead = combat_lead_target(w, t, LEAD_ANGLE);
+    if (lead >= 0) {
+        const Enemy *en = &w->enemies.items[lead];
+        Vector3 point = combat_lead_point(w, t, en->pos, en->vel);
+        Vector2 at_enemy, at_lead;
+        if (project(camera, point, &at_lead) && project(camera, en->pos, &at_enemy)) {
+            Color c = ENEMY_COLORS[en->type];
+            if (Vector2Distance(at_enemy, at_lead) > 8.0f) DrawLineEx(at_enemy, at_lead, 1.5f, with_alpha(c, 0.45f));
+            DrawCircleLines((int)at_lead.x, (int)at_lead.y, 7.0f, with_alpha(c, 0.95f));
+            DrawCircle((int)at_lead.x, (int)at_lead.y, 2.5f, with_alpha(c, 0.95f));
+        }
     }
 
     // Trava da ajuda de mira: cantos em volta do alvo que puxa os tiros.

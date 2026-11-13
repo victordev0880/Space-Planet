@@ -113,6 +113,36 @@ static void consider(AssistSearch *search, const Ship *s, const Tuning *t, Vecto
     search->point = predicted;
 }
 
+Vector3 combat_lead_point(const World *w, const Tuning *t, Vector3 pos, Vector3 vel)
+{
+    const Ship *s = &w->ship;
+    float distance = Vector3Distance(pos, s->pos);
+    Vector3 relative = Vector3Subtract(vel, Vector3Add(s->vel, s->fall));
+    return Vector3Add(pos, Vector3Scale(relative, distance / t->weapon_speed));
+}
+
+int combat_lead_target(const World *w, const Tuning *t, float max_angle_deg)
+{
+    const Ship *s = &w->ship;
+    if (!s->alive) return -1;
+    Vector3 forward = ship_forward(s);
+    float best = cosf(max_angle_deg * DEG2RAD);
+    int found = -1;
+    const Enemies *e = &w->enemies;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
+        Vector3 to = Vector3Subtract(e->items[i].pos, s->pos);
+        float distance = Vector3Length(to);
+        if (distance < 1.0f || distance > t->weapon_range * 0.85f) continue;
+        float dot = Vector3DotProduct(forward, Vector3Scale(to, 1.0f / distance));
+        if (dot > best) {
+            best = dot;
+            found = i;
+        }
+    }
+    return found;
+}
+
 bool combat_aim_assist(const World *w, const Tuning *t, AimAssist *out)
 {
     out->enemy = -1;
@@ -264,12 +294,12 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
     for (int i = 0; i < e->pool.capacity; i++) {
         if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
         const Enemy *en = &e->items[i];
-        float hit = segment_sphere(a, b, en->pos, t->enemy[en->type].radius);
+        float hit = segment_sphere(a, b, en->pos, t->enemy[en->type].radius + t->weapon_hit_margin);
         bool on_weak = false;
         if (en->type == ENEMY_BOMBER) {
             // O motor sai um pouco para fora do casco: vindo de trás, o tiro
             // o acerta antes de chegar ao resto.
-            float weak_hit = segment_sphere(a, b, enemy_weak_spot(en, t), t->bomber_weak_radius);
+            float weak_hit = segment_sphere(a, b, enemy_weak_spot(en, t), t->bomber_weak_radius + t->weapon_hit_margin);
             if (weak_hit >= 0.0f && (hit < 0.0f || weak_hit <= hit)) {
                 hit = weak_hit;
                 on_weak = true;
@@ -285,7 +315,7 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
     Projectiles *p = &w->shots;
     for (int i = 0; i < p->pool.capacity; i++) {
         if (!pool_alive(&p->pool, i) || p->items[i].kind != SHOT_BOMB) continue;
-        float hit = segment_sphere(a, b, p->items[i].pos, t->bomber_bomb_radius);
+        float hit = segment_sphere(a, b, p->items[i].pos, t->bomber_bomb_radius + t->weapon_hit_margin);
         if (hit >= 0.0f && hit < first) {
             first = hit;
             bomb = i;

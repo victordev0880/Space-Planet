@@ -152,12 +152,13 @@ static void ship_accelerates_up_to_max_speed(void)
     CHECK(fastest <= tun.ship_speed_max * 1.001f);
     CHECK(cruise >= tun.ship_speed_max * 0.97f);
 
-    // Soltando o acelerador, o arrasto freia aos poucos; o freio (S), bem mais rápido.
+    // Soltando o acelerador, o arrasto freia aos poucos; o freio (S), bem mais
+    // rápido (em um segundo ele já pode ter virado ré: conta só o avanço).
     Ship coasting = s, braking = s;
     run(&coasting, input(0u, 0u, 0.0f, 0.0f), seconds(1.0f));
     run(&braking, input(ACT_BIT(ACT_BACK), 0u, 0.0f, 0.0f), seconds(1.0f));
     CHECK(Vector3Length(coasting.vel) < cruise);
-    CHECK(Vector3Length(braking.vel) < Vector3Length(coasting.vel) * 0.5f);
+    CHECK(Vector3DotProduct(braking.vel, forward) < Vector3Length(coasting.vel) * 0.5f);
 }
 
 static void ship_mouse_and_keys_turn_it(void)
@@ -414,7 +415,7 @@ static void ship_brakes_then_reverses(void)
     CHECK(s.reversing);
     CHECK(-Vector3DotProduct(s.vel, forward) > tun.ship_reverse_max * 0.95f);
     CHECK(fastest_back <= tun.ship_reverse_max * 1.001f);
-    CHECK(tun.ship_reverse_max < tun.ship_speed_max * 0.5f);   // ré é para manobrar, não para fugir
+    CHECK(tun.ship_reverse_max < tun.ship_speed_max * 0.75f);   // ré serve para manobrar e recuar, mais lenta que a frente
     CHECK_NEAR(Vector3DotProduct(ship_forward(&s), forward), 1.0f, 1e-3);   // o nariz continua para a frente
 }
 

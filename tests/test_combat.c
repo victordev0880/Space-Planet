@@ -470,7 +470,7 @@ static void swarm_attack_runs_dig_small_craters(void)
     world_spawn(&w, &real, ENEMY_SWARM, 4, Vector3Scale(Vector3Normalize(from), radius * real.enemies_spawn_distance));
 
     float lowest = 1e9f;
-    for (int i = 0; i < real.sim_hz * 14; i++) {
+    for (int i = 0; i < real.sim_hz * 24; i++) {
         run(&w, &real, input(0u, 0.0f, 0.0f), 1);
         for (int k = 0; k < w.enemies.pool.capacity; k++) {
             if (!pool_alive(&w.enemies.pool, k)) continue;

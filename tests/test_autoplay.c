@@ -376,7 +376,8 @@ static void autoplay_shipped_scripts_are_deterministic(void)
 {
     static const char *const SCRIPTS[] = {
         "roteiros/fundacao.txt", "roteiros/planeta.txt", "roteiros/desempenho.txt", "roteiros/cratera.txt",
-        "roteiros/voo.txt",      "roteiros/combate.txt", "roteiros/inimigos.txt", "roteiros/onda1.txt",
+        "roteiros/voo.txt",      "roteiros/combate.txt", "roteiros/inimigos.txt", "roteiros/modelos.txt",
+        "roteiros/onda1.txt",
     };
     Tuning t = test_tuning();
 

@@ -237,6 +237,7 @@ static const TuneField FIELDS[] = {
     F("weapon.graze_rate",      weapon_graze_rate,      1,      5),
     F("weapon.assist_angle",    weapon_assist_angle,    0,      45),
     F("weapon.assist_range",    weapon_assist_range,    0,      2000),
+    F("weapon.hit_margin",      weapon_hit_margin,      0,      20),
     F("ship.graze_shield",      ship_graze_shield,      1,      10),
 
     F("combat.hitstop_big",     combat_hitstop_big,     0,      0.5),
@@ -277,6 +278,10 @@ static const TuneField ENEMY_FIELDS[] = {
     F("swarm.crater_depth",     swarm_crater_depth,     0.2,    60),
     F("swarm.aggro_range",      swarm_aggro_range,      0,      2000),
     F("swarm.aggro_rate",       swarm_aggro_rate,       0,      60),
+    F("swarm.hold_time",        swarm_hold_time,        0,      60),
+    F("swarm.engage_distance",  swarm_engage_distance,  2,      500),
+    F("swarm.engage_time",      swarm_engage_time,      0.5,    120),
+    F("swarm.engage_share",     swarm_engage_share,     0,      1),
     F("swarm.spacing",          swarm_spacing,          0,      100),
     F("swarm.dive_stagger",     swarm_dive_stagger,     0,      30),
     F("swarm.drift",            swarm_drift,            0,      180),

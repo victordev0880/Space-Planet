@@ -207,8 +207,8 @@ ship.fall_drag     = 1.2     # freio da queda: sem motor, a nave afunda a no má
 ship.lift_speed    = 20      # sustentação: voando ao longo da superfície a esta velocidade ou mais, a nave não afunda
 
 # Ré: S freia; com a nave já quase parada, S passa a dar ré.
-ship.reverse_thrust = 26     # aceleração da ré
-ship.reverse_max    = 18     # velocidade máxima de ré (a de frente é 46)
+ship.reverse_thrust = 42     # aceleração da ré (indo para a frente, também ajuda a frear)
+ship.reverse_max    = 30     # velocidade máxima de ré (a de frente é 46)
 
 # Estabilizadores: sem nenhum comando e abaixo de hover_speed, a nave para
 # sozinha e fica no lugar (sem afundar). Acima disso, segue pela inércia.
@@ -271,8 +271,9 @@ weapon.speed         = 260     # velocidade do tiro
 weapon.range         = 230     # alcance; depois disso o tiro some
 weapon.damage        = 1       # dano de cada tiro (inimigos em data/enemies.txt contam em tiros)
 weapon.graze_rate    = 1.35    # no voo rasante a cadência é multiplicada por isto
-weapon.assist_angle  = 4       # ajuda de mira: inimigos até este ângulo (graus) do nariz puxam o tiro
+weapon.assist_angle  = 6.5     # ajuda de mira: inimigos até este ângulo (graus) do nariz puxam o tiro
 weapon.assist_range  = 200     # ... e até esta distância
+weapon.hit_margin    = 0.8     # o tiro acerta quem passar a até este tanto do inimigo (folga para acertar)
 ship.graze_shield    = 2.0     # no voo rasante o escudo recarrega este tanto mais rápido
 
 # --- combate ----------------------------------------------------------------

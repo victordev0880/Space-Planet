@@ -40,6 +40,14 @@ void combat_sweep(World *w, const Tuning *t);
 // Alvo da ajuda de mira, se houver algum dentro do cone à frente do nariz.
 bool combat_aim_assist(const World *w, const Tuning *t, AimAssist *out);
 
+// Onde mirar para acertar algo em `pos` andando a `vel`: o ponto em que ele
+// vai estar quando o tiro chegar (o tiro leva junto a velocidade da nave).
+Vector3 combat_lead_point(const World *w, const Tuning *t, Vector3 pos, Vector3 vel);
+
+// O inimigo mais perto do nariz (até `max_angle_deg` graus e ao alcance da
+// arma), para o HUD mostrar onde mirar nele. Devolve o índice, ou -1.
+int combat_lead_target(const World *w, const Tuning *t, float max_angle_deg);
+
 // Dano na nave do jogador, com toda a reação (aviso, tremor, congelamento,
 // destruição). `point` é onde o golpe acertou.
 void combat_damage_ship(World *w, const Tuning *t, float amount, Vector3 point);

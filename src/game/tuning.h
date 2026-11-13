@@ -255,6 +255,7 @@ typedef struct {
     float weapon_graze_rate;
     float weapon_assist_angle;
     float weapon_assist_range;
+    float weapon_hit_margin;
     float ship_graze_shield;
 
     // combate
@@ -293,6 +294,10 @@ typedef struct {
     float swarm_crater_depth;
     float swarm_aggro_range;
     float swarm_aggro_rate;
+    float swarm_hold_time;
+    float swarm_engage_distance;
+    float swarm_engage_time;
+    float swarm_engage_share;
     float swarm_spacing;
     float swarm_dive_stagger;
     float swarm_drift;

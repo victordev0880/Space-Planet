@@ -8,9 +8,13 @@
 
 // Constantes de comportamento comuns: dão a FORMA do movimento. O
 // balanceamento (vida, velocidade, cadência, dano) fica em data/enemies.txt.
-#define BANK_MAX         1.0f     // inclinação máxima nas curvas, em radianos
-#define BANK_GAIN        0.9f
-#define TURN_SMOOTH      8.0f     // rapidez com que o modelo acompanha a direção do voo
+#define BANK_MAX         0.55f    // inclinação máxima nas curvas, em radianos (~32 graus)
+#define BANK_GAIN        0.7f
+#define BANK_SMOOTH      3.0f     // rapidez com que a inclinação acompanha a curva
+#define TURN_SMOOTH      5.0f     // rapidez com que o modelo acompanha a direção do voo
+#define STILL_SPEED      1.5f     // abaixo disto, sem `look`, o modelo não gira
+#define LOOK_SPEED_MIN   3.0f     // abaixo disto, olha só para `look`...
+#define LOOK_SPEED_MAX   10.0f    // ... e acima disto, só para onde voa
 #define GROUND_LOOKAHEAD 0.25f    // segundos à frente em que o terreno é conferido
 #define GROUND_MARGIN    3.0f     // distância do terreno que os inimigos evitam
 #define GROUND_PUSH      2.0f
@@ -28,6 +32,7 @@ static const Vector3 BOMBER_ENGINE = { 0.0f, 0.08f, 1.05f };
 bool enemies_init(Enemies *e, Arena *arena)
 {
     memset(e, 0, sizeof *e);
+    e->forced_variant = -1;
     e->items = ARENA_ARRAY(arena, Enemy, ENEMIES_CAPACITY);
     return e->items != NULL && pool_init(&e->pool, ENEMIES_CAPACITY, arena);
 }
@@ -233,7 +238,10 @@ int ai_spawn(Enemies *e, const EnemyContext *ctx, EnemyType type, int count, Vec
         f->drift_axis = ai_random_perpendicular(ctx->rng, radial);
         f->pass = 0;
     }
-    uint8_t variant = (uint8_t)rng_below(ctx->rng, ENEMY_VARIANTS);   // o grupo inteiro tem a mesma cor
+    // O grupo inteiro tem o mesmo desenho e a mesma cor. (O sorteio acontece
+    // mesmo quando um roteiro escolhe a variação: a sequência aleatória não muda.)
+    uint8_t variant = (uint8_t)rng_below(ctx->rng, ENEMY_VARIANTS);
+    if (e->forced_variant >= 0) variant = (uint8_t)(e->forced_variant % ENEMY_VARIANTS);
 
     int spawned = 0;
     for (int i = 0; i < count; i++) {
@@ -315,21 +323,30 @@ static Vector3 avoid_obstacles(const Enemy *en, const EnemyContext *ctx, Vector3
 }
 
 // O modelo aponta para onde voa, com o topo para longe do planeta, e se
-// inclina nas curvas como um avião.
+// inclina nas curvas como um avião. Devagar, a direção do voo deixa de valer
+// (oscila à toa e faria o modelo tremer): ele olha para `look`, se a IA deu
+// um, ou fica como está. A inclinação é filtrada à parte, para não trocar de
+// lado de repente quando a curva muda.
 static void orient(Enemy *en, Vector3 applied_accel, float accel_limit, float dt)
 {
     float speed = Vector3Length(en->vel);
-    if (speed < 0.1f) return;
-    Vector3 forward = Vector3Scale(en->vel, 1.0f / speed);
+    bool has_look = Vector3LengthSqr(en->look) > 1e-4f;
+    float look_weight = has_look ? Clamp(1.0f - (speed - LOOK_SPEED_MIN) / (LOOK_SPEED_MAX - LOOK_SPEED_MIN), 0.0f, 1.0f)
+                                 : 0.0f;
+    if (speed < STILL_SPEED && look_weight <= 0.0f) return;
+
+    Vector3 forward = (speed > 1e-3f) ? Vector3Scale(en->vel, 1.0f / speed) : quat_forward(en->rot);
+    if (look_weight > 0.0f) forward = Vector3Normalize(Vector3Lerp(forward, Vector3Normalize(en->look), look_weight));
     Vector3 radial = Vector3Normalize(en->pos);
     Vector3 up = Vector3Subtract(radial, Vector3Scale(forward, Vector3DotProduct(radial, forward)));
     if (Vector3LengthSqr(up) < 0.01f) up = quat_up(en->rot);   // voando na vertical: mantém o topo
     up = Vector3Normalize(up);
     Vector3 right = Vector3CrossProduct(forward, up);
 
-    float bank = Clamp(Vector3DotProduct(applied_accel, right) / fmaxf(accel_limit, 1e-3f) * BANK_GAIN, -BANK_MAX,
-                       BANK_MAX);
-    Vector3 banked = Vector3Add(Vector3Scale(up, cosf(bank)), Vector3Scale(right, sinf(bank)));
+    float target_bank = Clamp(Vector3DotProduct(applied_accel, right) / fmaxf(accel_limit, 1e-3f) * BANK_GAIN,
+                              -BANK_MAX, BANK_MAX) * (1.0f - look_weight);
+    en->bank += (target_bank - en->bank) * (1.0f - expf(-BANK_SMOOTH * dt));
+    Vector3 banked = Vector3Add(Vector3Scale(up, cosf(en->bank)), Vector3Scale(right, sinf(en->bank)));
     Quaternion target = quat_look(forward, banked);
     en->rot = QuaternionNormalize(QuaternionSlerp(en->rot, target, 1.0f - expf(-TURN_SMOOTH * dt)));
 }
@@ -351,11 +368,14 @@ static void orient_enemy(Enemy *en, const Tuning *t, Vector3 applied_accel, floa
         en->rot = QuaternionNormalize(QuaternionSlerp(en->rot, upright, 1.0f - expf(-TURN_SMOOTH * dt)));
         return;
     }
-    if (en->type == ENEMY_SNIPER && en->arming > 0.0f) {
-        Vector3 aim = Vector3Subtract(en->aux, en->pos);
+    if (en->type == ENEMY_SNIPER) {
+        // Sempre de frente para a nave (`look`); carregando, o cano segue a mira, mais depressa.
+        bool charging = en->arming > 0.0f;
+        Vector3 aim = charging ? Vector3Subtract(en->aux, en->pos) : en->look;
         if (Vector3LengthSqr(aim) > 1e-4f) {
             Quaternion target = quat_look(aim, radial);
-            en->rot = QuaternionNormalize(QuaternionSlerp(en->rot, target, 1.0f - expf(-SNIPER_AIM_TURN * dt)));
+            float rate = charging ? SNIPER_AIM_TURN : TURN_SMOOTH;
+            en->rot = QuaternionNormalize(QuaternionSlerp(en->rot, target, 1.0f - expf(-rate * dt)));
             return;
         }
     }
@@ -382,6 +402,15 @@ void enemies_tick(Enemies *e, const EnemyContext *ctx)
     const Tuning *t = ctx->t;
     float dt = ctx->dt;
     e->carve_count = 0;
+
+    // Quantos drones de cada bando estão encarando a nave (os que morreram saem da conta).
+    for (int k = 0; k < FLOCKS_CAPACITY; k++) e->flocks[k].engaged = 0;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        const Enemy *en = &e->items[i];
+        if (pool_alive(&e->pool, i) && en->hp > 0.0f && en->type == ENEMY_SWARM && en->state == SWARM_ENGAGE) {
+            e->flocks[en->flock].engaged++;
+        }
+    }
 
     for (int i = 0; i < e->pool.capacity; i++) {
         if (!pool_alive(&e->pool, i)) continue;

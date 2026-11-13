@@ -20,7 +20,7 @@ static const Vector3 SPAWN_DIRECTION = { 0.2f, 0.35f, 1.0f };
 #define LEASH_PULL         0.6f    // força de volta por unidade de distância além do limite
 #define LEASH_MAX_THRUSTS  1.5f    // teto dessa força, em "empuxos do motor"
 #define SLING_FADE         1.5f    // nos últimos segundos, o ganho do estilingue vai sumindo
-#define REVERSE_ENGAGE     2.0f    // abaixo desta velocidade para a frente, S passa de freio a ré
+#define REVERSE_ENGAGE     6.0f    // abaixo desta velocidade para a frente, S passa de freio a ré
 
 // O quanto a nave está em voo rasante, de 0 a 1: inteiro dentro da atmosfera,
 // some aos poucos acima dela e também abaixo do nível do mar (dentro de
@@ -272,9 +272,10 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     bool thrusting = s->boosting || (in->held & ACT_BIT(ACT_FORWARD)) != 0u;
     float speed_before = Vector3Length(s->vel);
 
-    // S freia; com a nave já quase parada (ou andando para trás), dá ré.
-    bool backing = (in->held & ACT_BIT(ACT_BACK)) != 0u;
-    s->reversing = backing && !thrusting && Vector3DotProduct(s->vel, forward) < REVERSE_ENGAGE;
+    // S empurra a nave para trás: indo para a frente, isso freia (somado ao
+    // freio); devagar ou já andando para trás, é a ré.
+    bool backing = (in->held & ACT_BIT(ACT_BACK)) != 0u && !thrusting;
+    s->reversing = backing && Vector3DotProduct(s->vel, forward) < REVERSE_ENGAGE;
 
     // Estabilizadores: sem nenhum comando de movimento e devagar, a nave para
     // sozinha e fica no lugar, sem afundar. Em alta velocidade eles não
@@ -310,7 +311,7 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     float boost = (s->boosting ? t->ship_boost_mult : 1.0f) + sling;
     Vector3 accel = { 0.0f, 0.0f, 0.0f };
     if (thrusting) accel = Vector3Add(accel, Vector3Scale(forward, t->ship_thrust * boost));
-    if (s->reversing) accel = Vector3Subtract(accel, Vector3Scale(forward, t->ship_reverse_thrust));
+    if (backing) accel = Vector3Subtract(accel, Vector3Scale(forward, t->ship_reverse_thrust));
     if (in->held & ACT_BIT(ACT_RIGHT)) accel = Vector3Add(accel, Vector3Scale(right, t->ship_strafe));
     if (in->held & ACT_BIT(ACT_LEFT))  accel = Vector3Subtract(accel, Vector3Scale(right, t->ship_strafe));
 
