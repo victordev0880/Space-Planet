@@ -22,7 +22,7 @@
 #include "game/enemy_types.h"
 
 #define WAVES_MAX       16
-#define WAVE_GROUPS_MAX 8
+#define WAVE_GROUPS_MAX 12
 #define WAVE_GROUP_MAX_COUNT 24   // inimigos em um grupo
 
 typedef struct {

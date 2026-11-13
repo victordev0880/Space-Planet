@@ -10,6 +10,7 @@
 
 // Alcance máximo do raio de um impacto, em unidades do mundo.
 #define IMPACT_RAY_LENGTH 5000.0f
+#define CARVE_DEBRIS      0.3f     // destroços de uma escavação, em proporção a uma cratera do mesmo tamanho
 
 // --- câmera em terceira pessoa ---
 #define CHASE_MAX_STRETCH 2.0f   // o quanto a câmera pode ficar para trás, em distâncias normais
@@ -261,9 +262,29 @@ bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float 
     impact->pos = ground;
     impact->radius = rim_radius;
     impact->id = w->impact_count;
+    impact->quiet = false;
 
     check_collapse(w, t);
     return true;
+}
+
+void world_carve(World *w, const Tuning *t, Vector3 center, float radius)
+{
+    CarveResult carve = planet_carve(&w->planet, center, radius);
+    if (carve.removed == 0) return;
+
+    // Poucos destroços: a escavação é contínua, e cada mordida é pequena.
+    Vector3 normal = Vector3Normalize(center);
+    particles_impact(&w->particles, &w->rng, t, center, normal, radius * CARVE_DEBRIS, &carve);
+
+    Impact *impact = &w->impacts[w->impact_count % WORLD_IMPACT_HISTORY];
+    w->impact_count++;
+    impact->pos = center;
+    impact->radius = radius;
+    impact->id = w->impact_count;
+    impact->quiet = true;
+
+    check_collapse(w, t);
 }
 
 const Impact *world_find_impact(const World *w, uint32_t id)
@@ -447,6 +468,12 @@ int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 ce
     return enemies_spawn_group(&w->enemies, &ctx, type, count, center);
 }
 
+void world_clear_enemies(World *w)
+{
+    enemies_clear(&w->enemies);
+    projectiles_clear(&w->shots);
+}
+
 void world_set_plan(World *w, const WavePlan *plan)
 {
     w->plan = *plan;
@@ -481,10 +508,16 @@ void world_restart(World *w, const Tuning *t)
 
 // Faz a sequência de hordas andar: solta os grupos na hora e paga o bônus
 // de planeta intacto ao fim de cada horda.
-static void run_director(World *w, const Tuning *t, float dt)
+static void run_director(World *w, const InputState *in, const Tuning *t, float dt)
 {
     if (w->state != GAME_PLAYING || w->director.phase == DIRECTOR_OFF) return;
     uint32_t tick = (uint32_t)w->tick;
+
+    // Enter na calmaria: a próxima horda vem já.
+    if ((in->pressed & ACT_BIT(ACT_READY)) && w->director.phase == DIRECTOR_PAUSE && w->director.timer > 0.0f) {
+        w->director.timer = 0.0f;
+        events_push(&w->events, tick, EV_CALM_SKIP, 0, (Vector3){ 0.0f, 0.0f, 0.0f }, 0.0f);
+    }
     DirectorStep step = director_tick(&w->director, &w->plan, enemies_alive(&w->enemies), dt);
 
     if (step.wave_started) {
@@ -590,10 +623,14 @@ void world_tick(World *w, const InputState *in, const Tuning *t)
         ShipEvents ev = ship_tick(&w->ship, &input, &w->planet, &w->moon, t, dt);
         ship_effects(w, &ev);
         combat_fire(w, &input, t, dt);
-        run_director(w, t, dt);
+        run_director(w, &input, t, dt);
 
         EnemyContext ctx = world_enemy_context(w, t);
         enemies_tick(&w->enemies, &ctx);
+        for (int i = 0; i < w->enemies.carve_count; i++) {
+            world_carve(w, t, w->enemies.carves[i].center, w->enemies.carves[i].radius);
+        }
+        w->enemies.carve_count = 0;
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
         combat_sweep(w, t);
@@ -706,6 +743,7 @@ uint64_t world_hash(const World *w)
     for (int i = 0; i < w->enemies.pool.capacity; i++) {
         if (!pool_alive(&w->enemies.pool, i)) continue;
         h = hash_vec3(h, w->enemies.items[i].pos);
+        h = hash_quat(h, w->enemies.items[i].rot);   // a orientação decide de onde saem alguns tiros
         HASH(h, w->enemies.items[i].hp);
     }
     HASH(h, w->shots.pool.live);

@@ -5,22 +5,25 @@
 // aceleração (`accel` em data/enemies.txt). É o que dá curvas suaves e
 // previsíveis, em vez de mudanças de direção instantâneas.
 //
-// Enxame. Chega em bando e ataca o planeta em passadas:
-//   APPROACH  voa até o ponto acima do alvo do bando, na altura de cruzeiro;
-//   DIVE      espera a sua vez e mergulha atirando no solo (cada tiro abre uma
-//             cratera pequena); sai do mergulho na altura de ataque;
-//   CLIMB     sobe de volta, e o alvo do bando anda alguns graus.
-// Dentro do bando, cada drone mantém distância dos vizinhos ("boids"). Se a
-// nave do jogador fica na frente dele, atira nela.
-//
-// Bombardeiro. Desce até a altura da órbita e dá voltas no planeta. Antes de
-// cada bomba, marca no solo onde ela vai cair (`bomb_warning` segundos); a
-// bomba cai exatamente ali e pode ser derrubada no ar. Uma torreta atira na
-// nave quando ela chega perto. A frente é blindada; o motor, atrás, é o
-// ponto fraco.
+// O comportamento de cada tipo mora no seu arquivo (game/ai_*.c); aqui fica
+// o que é comum a todos. Resumo:
+//   Enxame        chega em bando e faz passadas rasantes, em fila, atirando no
+//                 solo; atira na nave se ela fica na frente.
+//   Bombardeiro   orbita soltando bombas; antes de cada uma, o alvo é marcado
+//                 no solo; blindado na frente, ponto fraco no motor.
+//   Kamikaze      trava na nave se ela passa perto e a persegue para explodir;
+//                 senão, mergulha no planeta (cratera média).
+//   Escavador     pousa e cava um túnel rumo ao núcleo.
+//   Sifão         paira baixo e drena o solo com um feixe.
+//   Atirador      fica longe e carrega tiros fortes contra a nave, com aviso.
+//   Escudeiro     acompanha os aliados e os protege dos tiros.
+//   Porta-drones  orbita alto e solta bandos de Enxame.
 //
 // Morte: quem aplica dano só marca o inimigo como morto (hp <= 0 e a causa).
 // Os efeitos (explosão, pontos) e a remoção ficam com game/combat.c.
+//
+// O planeta é só lido aqui. Quem cava (Escavador, Sifão) deixa um pedido de
+// escavação em `carves`, que o mundo executa logo depois.
 #ifndef GAME_ENEMIES_H
 #define GAME_ENEMIES_H
 
@@ -39,21 +42,32 @@
 #include "game/tuning.h"
 #include "voxel/planet.h"
 
-#define ENEMIES_CAPACITY 64
-#define FLOCKS_CAPACITY  16
+#define ENEMIES_CAPACITY 96
+#define FLOCKS_CAPACITY  32
+#define CARVES_CAPACITY  32
+#define ENEMY_VARIANTS   3     // variações de cor dentro de cada tipo
 
 typedef enum {
-    SWARM_APPROACH,
-    SWARM_DIVE,
-    SWARM_CLIMB,
-    BOMBER_APPROACH,
-    BOMBER_ORBIT,
+    SWARM_APPROACH,     // voa até o ponto de entrada da passada
+    SWARM_DIVE,         // passada: desce atirando no alvo
+    SWARM_CLIMB,        // sobe para a próxima passada
+    HEAVY_APPROACH,     // Bombardeiro e Porta-drones: descem até a órbita
+    HEAVY_ORBIT,        // ... e dão voltas no planeta
+    KAMIKAZE_DIVE,      // mergulha no planeta
+    KAMIKAZE_HUNT,      // persegue a nave
+    DIGGER_DESCEND,     // voa até o ponto de pouso
+    DIGGER_DRILL,       // cava rumo ao núcleo
+    SIPHON_APPROACH,    // voa até o ponto onde vai drenar
+    SIPHON_DRAIN,       // paira e drena
+    SNIPER_HUNT,        // mantém distância da nave e atira
+    SHIELDER_ESCORT,    // acompanha os aliados
 } EnemyState;
 
 typedef enum {
     DEATH_NONE,
-    DEATH_PLAYER,   // abatido pela nave: dá pontos
-    DEATH_CRASH,    // bateu no planeta, na Lua ou na nave
+    DEATH_PLAYER,     // abatido pela nave: dá pontos
+    DEATH_CRASH,      // bateu no planeta, na Lua ou na nave
+    DEATH_DETONATE,   // Kamikaze que explodiu junto da nave
 } DeathCause;
 
 typedef struct {
@@ -62,15 +76,17 @@ typedef struct {
     Quaternion rot;           // orientação do modelo (frente = direção do voo)
     Vector3    pos_prev;      // um passo antes, para interpolar o desenho
     Quaternion rot_prev;
-    Vector3    target;        // Enxame: ponto do solo da passada; Bombardeiro: alvo da bomba
-    Vector3    axis;          // Bombardeiro: eixo da órbita
+    Vector3    target;        // ponto ou direção que está atacando (depende do tipo)
+    Vector3    axis;          // eixo de órbita, ou de deriva do alvo
+    Vector3    aux;           // Sifão: onde o feixe toca o solo; Atirador: onde a mira está
     float      hp;
     float      age;           // segundos em cena
     float      flash;         // segundos restantes do clarão de dano (só desenho)
-    float      timer;         // Enxame: espera antes do mergulho; Bombardeiro: até a próxima bomba
-    float      arming;        // Bombardeiro: segundos até soltar a bomba marcada (0 = não está armando)
+    float      timer;         // uso de cada tipo (próxima bomba, próximo tiro, próxima mordida...)
+    float      arming;        // segundos de aviso restantes (bomba, lançamento, tiro carregando); 0 = nada
     float      fire_wait;     // até o próximo tiro
     float      turret_wait;   // até a próxima rajada (ou tiro na nave, no Enxame)
+    float      size;          // variação de tamanho do modelo (só desenho)
     int        burst;         // tiros restantes da rajada
     uint8_t    type;          // EnemyType
     uint8_t    state;         // EnemyState
@@ -78,6 +94,7 @@ typedef struct {
     uint8_t    slot;          // Enxame: posição no bando
     uint8_t    pass;          // Enxame: passada em que está
     uint8_t    death;         // DeathCause
+    uint8_t    variant;       // variação de cor (só desenho)
 } Enemy;
 
 typedef struct {
@@ -87,11 +104,20 @@ typedef struct {
     uint8_t pass;         // passadas já feitas
 } Flock;
 
+// Pedido de escavação: retirar uma esfera do planeta.
 typedef struct {
-    Pool   pool;
-    Enemy *items;         // array paralelo ao pool
-    Flock  flocks[FLOCKS_CAPACITY];
-    int    alive_by_type[ENEMY_TYPE_COUNT];
+    Vector3 center;
+    float   radius;
+    uint8_t type;      // quem pediu (EnemyType)
+} CarveRequest;
+
+typedef struct {
+    Pool         pool;
+    Enemy       *items;         // array paralelo ao pool
+    Flock        flocks[FLOCKS_CAPACITY];
+    int          alive_by_type[ENEMY_TYPE_COUNT];
+    CarveRequest carves[CARVES_CAPACITY];   // pedidos do passo atual
+    int          carve_count;
 } Enemies;
 
 // Tudo de que os inimigos precisam para pensar em um passo.
@@ -125,8 +151,18 @@ void enemies_remove(Enemies *e, int index);
 
 int enemies_alive(const Enemies *e);
 
+// O inimigo está coberto pelo escudo de um Escudeiro? (Escudeiros não
+// protegem uns aos outros.) Devolve o índice do Escudeiro, ou -1.
+int enemies_shielded_by(const Enemies *e, const Tuning *t, int index);
+
 // Ponto fraco do Bombardeiro (o motor), no mundo.
 Vector3 enemy_weak_spot(const Enemy *en, const Tuning *t);
+
+// Cratera que um inimigo deste tipo abre ao cair no planeta.
+void enemy_crater(const Tuning *t, EnemyType type, float *radius, float *depth);
+
+// Quanto o Escavador já avançou rumo ao núcleo (0 = na superfície, 1 = chegou).
+float digger_progress(const Enemy *en, const Planet *planet);
 
 static inline Vector3 enemy_forward(const Enemy *en) { return quat_forward(en->rot); }
 static inline Vector3 enemy_up(const Enemy *en)      { return quat_up(en->rot); }

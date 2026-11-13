@@ -1,31 +1,43 @@
-# Roteiro do marco 5: a fatia vertical inteira. As quatro hordas de
-# data/waves.txt, jogadas pelo piloto automático do autoplay, até a tela de
-# fim. Serve para conferir o ritmo da partida, o HUD (avisos de horda,
-# pontos, marcadores) e o desempenho com a maior horda em cena.
+# Roteiro da partida inteira: as dez hordas de data/waves.txt, jogadas pelo
+# piloto automático do autoplay, até a tela de fim. Serve para conferir o
+# ritmo da partida, o HUD (avisos de horda, pontos, marcadores, alertas), o
+# desempenho com as maiores hordas em cena e quanto do planeta se perde.
 #
 #   mingw32-make run ARGS="--autoplay roteiros/onda1.txt"
 #
 # O piloto automático é uma ferramenta de teste: persegue o inimigo mais
-# urgente e atira, sem a esperteza de um jogador.
+# urgente e atira, sem a esperteza de um jogador (não entra em túneis, não
+# desvia de tiros, não usa dash). Uma partida dele é o "pior caso razoável"
+# para o planeta.
 
-frames 9600
+frames 36000
 seed 1
 
-at 0    autopilot on
-at 200  shot onda1_01_calmaria
-at 380  shot onda1_02_horda1
-at 520  shot onda1_03_enxame
-at 640  shot onda1_04_combate
-at 760  shot onda1_05_combate
-at 1100 shot onda1_06_horda2
-at 1500 shot onda1_07_horda2_combate
-at 2200 shot onda1_08_horda3
-at 2400 shot onda1_09_bombardeiro
-at 2600 shot onda1_10_bombardeiro
-at 3600 shot onda1_11_horda4
-at 4200 shot onda1_12_horda4
-at 4800 shot onda1_13_horda4
-at 6000 shot onda1_14_horda4
-at 7200 shot onda1_15_horda4
-at 8400 shot onda1_16_horda4
-at 9599 shot onda1_17_fim
+at 0     autopilot on
+at 200   shot onda1_01_calmaria
+at 380   shot onda1_02_horda1
+at 640   shot onda1_03_combate
+at 1500  shot onda1_04
+at 3000  shot onda1_05
+at 4500  shot onda1_06
+at 6000  shot onda1_07
+at 7500  shot onda1_08
+at 9000  shot onda1_09
+at 10500 shot onda1_10
+at 12000 shot onda1_11
+at 13500 shot onda1_12
+at 15000 shot onda1_13
+at 16500 shot onda1_14
+at 18000 shot onda1_15
+at 19500 shot onda1_16
+at 21000 shot onda1_17
+at 22500 shot onda1_18
+at 24000 shot onda1_19
+at 25500 shot onda1_20
+at 27000 shot onda1_21
+at 28500 shot onda1_22
+at 30000 shot onda1_23
+at 31500 shot onda1_24
+at 33000 shot onda1_25
+at 34500 shot onda1_26
+at 35999 shot onda1_27_fim

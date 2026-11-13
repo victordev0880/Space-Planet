@@ -39,8 +39,10 @@
 //   at 100 autopilot on           um piloto automático simples assume a nave:
 //                                 persegue o inimigo mais urgente e atira
 //                                 (off devolve o controle ao roteiro)
+//   at 110 clear                  tira de cena todos os inimigos e tiros (para
+//                                 separar as cenas de um roteiro)
 //
-// Em um mesmo quadro a ordem é: view, ship, cam, waves, spawn, crateras. Um
+// Em um mesmo quadro a ordem é: view, ship, cam, waves, clear, spawn, crateras. Um
 // "cam" depois de um "ship" fotografa a nave de fora (na câmera livre a
 // partida fica congelada).
 //
@@ -66,7 +68,7 @@
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR
 } AutoplayCmd;
 
 typedef struct {
@@ -108,6 +110,7 @@ typedef struct {
     float       ship_speed;
     bool        has_waves;    // true = ligar ou desligar as hordas
     bool        waves_on;
+    bool        clear;        // tirar de cena todos os inimigos e tiros
     bool        autopilot;    // o piloto automático está no comando neste quadro
 
     AutoplaySpawn spawns[AUTOPLAY_MAX_SPAWNS];

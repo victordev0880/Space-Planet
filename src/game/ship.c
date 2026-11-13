@@ -20,6 +20,7 @@ static const Vector3 SPAWN_DIRECTION = { 0.2f, 0.35f, 1.0f };
 #define LEASH_PULL         0.6f    // força de volta por unidade de distância além do limite
 #define LEASH_MAX_THRUSTS  1.5f    // teto dessa força, em "empuxos do motor"
 #define SLING_FADE         1.5f    // nos últimos segundos, o ganho do estilingue vai sumindo
+#define REVERSE_ENGAGE     2.0f    // abaixo desta velocidade para a frente, S passa de freio a ré
 
 // O quanto a nave está em voo rasante, de 0 a 1: inteiro dentro da atmosfera,
 // some aos poucos acima dela e também abaixo do nível do mar (dentro de
@@ -157,11 +158,11 @@ static void turn(Ship *s, const InputState *in, const Planet *planet, const Tuni
 // de colisão: o centro, o nariz, a cauda, as pontas das asas, o topo e o fundo.
 static const Vector3 PROBES[] = {
     { 0.0f, 0.0f, 0.0f },
-    { 0.0f, 0.0f, -1.6f },
-    { 0.0f, 0.0f, 1.1f },
-    { 1.3f, 0.0f, 0.7f },
-    { -1.3f, 0.0f, 0.7f },
-    { 0.0f, 0.5f, 0.3f },
+    { 0.0f, 0.0f, -1.85f },
+    { 0.0f, 0.0f, 1.15f },
+    { 1.55f, 0.0f, 0.85f },
+    { -1.55f, 0.0f, 0.85f },
+    { 0.0f, 0.55f, 0.35f },
     { 0.0f, -0.4f, 0.0f },
 };
 #define PROBE_COUNT ((int)(sizeof PROBES / sizeof PROBES[0]))
@@ -271,6 +272,18 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     bool thrusting = s->boosting || (in->held & ACT_BIT(ACT_FORWARD)) != 0u;
     float speed_before = Vector3Length(s->vel);
 
+    // S freia; com a nave já quase parada (ou andando para trás), dá ré.
+    bool backing = (in->held & ACT_BIT(ACT_BACK)) != 0u;
+    s->reversing = backing && !thrusting && Vector3DotProduct(s->vel, forward) < REVERSE_ENGAGE;
+
+    // Estabilizadores: sem nenhum comando de movimento e devagar, a nave para
+    // sozinha e fica no lugar, sem afundar. Em alta velocidade eles não
+    // agem, e a nave segue pela inércia. No drift ficam desligados.
+    const uint32_t moving = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_LEFT) | ACT_BIT(ACT_RIGHT)
+                          | ACT_BIT(ACT_BOOST);
+    bool idle = (in->held & moving) == 0u && !s->drifting;
+    s->hover = idle ? Clamp(1.0f - speed_before / t->ship_hover_speed, 0.0f, 1.0f) : 0.0f;
+
     // --- Lua: puxão e estilingue ---------------------------------------------
     // Perto da Lua ela puxa a nave, o que curva a passagem. E quem passa em
     // velocidade arma o estilingue: a velocidade máxima fica maior enquanto a
@@ -283,8 +296,10 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
         if (gap < reach && gap > 1e-3f) {
             s->near_moon = true;
             float nearness = Clamp((reach - gap) / (reach - moon->radius), 0.0f, 1.0f);
-            // Como a gravidade do planeta, entra na velocidade de queda.
-            s->fall = Vector3Add(s->fall, Vector3Scale(to_moon, t->moon_gravity * nearness * dt / gap));
+            // Como a gravidade do planeta, entra na velocidade de queda (e os
+            // estabilizadores também a anulam).
+            float pull = t->moon_gravity * nearness * (1.0f - s->hover);
+            s->fall = Vector3Add(s->fall, Vector3Scale(to_moon, pull * dt / gap));
             if (speed_before >= t->ship_speed_max * t->moon_sling_speed) s->sling = t->moon_sling_time;
         }
     }
@@ -295,6 +310,7 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     float boost = (s->boosting ? t->ship_boost_mult : 1.0f) + sling;
     Vector3 accel = { 0.0f, 0.0f, 0.0f };
     if (thrusting) accel = Vector3Add(accel, Vector3Scale(forward, t->ship_thrust * boost));
+    if (s->reversing) accel = Vector3Subtract(accel, Vector3Scale(forward, t->ship_reverse_thrust));
     if (in->held & ACT_BIT(ACT_RIGHT)) accel = Vector3Add(accel, Vector3Scale(right, t->ship_strafe));
     if (in->held & ACT_BIT(ACT_LEFT))  accel = Vector3Subtract(accel, Vector3Scale(right, t->ship_strafe));
 
@@ -317,6 +333,7 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
         // lento, ou subindo e descendo na vertical.
         Vector3 across = Vector3Subtract(s->vel, Vector3Scale(down, Vector3DotProduct(s->vel, down)));
         pull *= 1.0f - Clamp(Vector3Length(across) / t->ship_lift_speed, 0.0f, 1.0f);
+        pull *= 1.0f - s->hover;   // os estabilizadores seguram a nave no lugar
 
         s->fall = Vector3Add(s->fall, Vector3Scale(down, pull * dt));
 
@@ -329,14 +346,15 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
             accel = Vector3Add(accel, Vector3Scale(down, back));
         }
     }
-    float fall_keep = 1.0f - t->ship_fall_drag * dt;
+    float fall_keep = 1.0f - (t->ship_fall_drag + s->hover * t->ship_hover_drag) * dt;
     s->fall = Vector3Scale(s->fall, (fall_keep > 0.0f) ? fall_keep : 0.0f);
 
     s->vel = Vector3Add(s->vel, Vector3Scale(accel, dt));
 
     // --- freio, arrasto e aderência -----------------------------------------
     float keep = 1.0f - (s->drifting ? t->ship_drift_drag : t->ship_drag) * dt;
-    if (in->held & ACT_BIT(ACT_BACK)) keep -= t->ship_brake * dt;
+    if (backing && !s->reversing) keep -= t->ship_brake * dt;
+    keep -= s->hover * t->ship_hover_drag * dt;
     s->vel = Vector3Scale(s->vel, (keep > 0.0f) ? keep : 0.0f);
 
     float speed = Vector3Length(s->vel);
@@ -365,6 +383,12 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     if (speed_before > max_speed) limit += (speed_before - max_speed) * expf(-OVERSPEED_DRAG * dt);
     speed = Vector3Length(s->vel);
     if (speed > limit && s->dash_left <= 0.0f) s->vel = Vector3Scale(s->vel, limit / speed);
+
+    // De ré, o limite é bem menor: dá para recuar e manobrar, não para fugir.
+    float backward = -Vector3DotProduct(s->vel, forward);
+    if (s->reversing && backward > t->ship_reverse_max && s->dash_left <= 0.0f) {
+        s->vel = Vector3Add(s->vel, Vector3Scale(forward, backward - t->ship_reverse_max));
+    }
 
     // --- dash ----------------------------------------------------------------
     if ((in->pressed & ACT_BIT(ACT_DASH)) && s->dash_wait <= 0.0f && s->energy >= t->ship_dash_cost) {

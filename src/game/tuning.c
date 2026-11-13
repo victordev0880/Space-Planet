@@ -186,6 +186,10 @@ static const TuneField FIELDS[] = {
     F("ship.gravity_range",     ship_gravity_range,     1.01,   50),
     F("ship.fall_drag",         ship_fall_drag,         0.05,   50),
     F("ship.lift_speed",        ship_lift_speed,        0.1,    1000),
+    F("ship.reverse_thrust",    ship_reverse_thrust,    0,      1000),
+    F("ship.reverse_max",       ship_reverse_max,       0,      1000),
+    F("ship.hover_speed",       ship_hover_speed,       0.1,    1000),
+    F("ship.hover_drag",        ship_hover_drag,        0,      50),
     F("ship.hug",               ship_hug,               0,      1),
     F("ship.hug_fade",          ship_hug_fade,          0.1,    100),
     F("ship.spawn_pitch",       ship_spawn_pitch,       -80,    80),
@@ -301,6 +305,52 @@ static const TuneField ENEMY_FIELDS[] = {
     F("bomber.turret_interval", bomber_turret_interval, 0.1,    600),
     I("bomber.turret_burst",    bomber_turret_burst,    0,      50),
     F("bomber.turret_damage",   bomber_turret_damage,   0,      10000),
+
+#define STATS(name, type)                                                       \
+    F(name ".hp",         enemy[type].hp,         0.1, 10000),                  \
+    F(name ".radius",     enemy[type].radius,     0.1, 50),                     \
+    F(name ".scale",      enemy[type].scale,      0.1, 50),                     \
+    F(name ".speed",      enemy[type].speed,      0.1, 500),                    \
+    F(name ".accel",      enemy[type].accel,      0.1, 1000),                   \
+    F(name ".points",     enemy[type].points,     0,   1000000),                \
+    F(name ".ram_damage", enemy[type].ram_damage, 0,   10000)
+
+    STATS("kamikaze", ENEMY_KAMIKAZE),
+    F("kamikaze.aggro_range",   kamikaze_aggro_range,   0,      2000),
+    F("kamikaze.blast_radius",  kamikaze_blast_radius,  0.1,    100),
+    F("kamikaze.crater_radius", kamikaze_crater_radius, 0.2,    60),
+    F("kamikaze.crater_depth",  kamikaze_crater_depth,  0.2,    60),
+
+    STATS("digger", ENEMY_DIGGER),
+    F("digger.drill_speed",     digger_drill_speed,     0.01,   100),
+    F("digger.drill_radius",    digger_drill_radius,    0.5,    30),
+    F("digger.drill_interval",  digger_drill_interval,  0.02,   10),
+
+    STATS("siphon", ENEMY_SIPHON),
+    F("siphon.altitude",        siphon_altitude,        1,      500),
+    F("siphon.drain_radius",    siphon_drain_radius,    0.2,    30),
+    F("siphon.drain_interval",  siphon_drain_interval,  0.02,   10),
+    F("siphon.wander",          siphon_wander,          0,      100),
+
+    STATS("sniper", ENEMY_SNIPER),
+    F("sniper.range",           sniper_range,           5,      2000),
+    F("sniper.charge_time",     sniper_charge_time,     0.1,    30),
+    F("sniper.lock_time",       sniper_lock_time,       0,      30),
+    F("sniper.fire_interval",   sniper_fire_interval,   0.2,    120),
+    F("sniper.shot_speed",      sniper_shot_speed,      1,      5000),
+    F("sniper.shot_damage",     sniper_shot_damage,     0,      10000),
+
+    STATS("shielder", ENEMY_SHIELDER),
+    F("shielder.shield_radius", shielder_radius,        1,      500),
+    F("shielder.follow",        shielder_follow,        0,      500),
+
+    STATS("carrier", ENEMY_CARRIER),
+    F("carrier.altitude",        carrier_altitude,        1,    500),
+    F("carrier.launch_interval", carrier_launch_interval, 0.5,  600),
+    F("carrier.launch_warning",  carrier_launch_warning,  0,    60),
+    I("carrier.launch_count",    carrier_launch_count,    1,    24),
+    I("carrier.max_swarm",       carrier_max_swarm,       0,    200),
+#undef STATS
 };
 
 #undef I
@@ -427,6 +477,10 @@ bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *ene
     }
     if (t.swarm_attack_altitude >= t.swarm_cruise_altitude) {
         snprintf(err, err_len, "swarm.attack_altitude precisa ser menor que swarm.cruise_altitude");
+        return false;
+    }
+    if (t.sniper_lock_time >= t.sniper_charge_time || t.sniper_charge_time >= t.sniper_fire_interval) {
+        snprintf(err, err_len, "atirador: lock_time < charge_time < fire_interval");
         return false;
     }
 

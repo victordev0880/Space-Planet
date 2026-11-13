@@ -79,8 +79,12 @@ static void react_to_impacts(Renderer *r, const World *w, const Tuning *t, Vecto
         const Impact *impact = world_find_impact(w, id);
         if (impact == NULL) continue;   // já saiu da fila do mundo: perdemos este
 
-        float distance = Vector3Distance(camera_pos, impact->pos);
-        r->shake += t->shake_strength * impact->radius / (1.0f + distance / t->shake_falloff);
+        // Os impactos "quietos" (a broca do Escavador, o feixe do Sifão)
+        // acontecem várias vezes por segundo: apagam cidades, mas não tremem.
+        if (!impact->quiet) {
+            float distance = Vector3Distance(camera_pos, impact->pos);
+            r->shake += t->shake_strength * impact->radius / (1.0f + distance / t->shake_falloff);
+        }
         city_lights_impact(&r->cities, &w->planet, impact->pos, impact->radius);
     }
     r->impacts_seen = w->impact_count;
@@ -96,8 +100,11 @@ static void react_to_impacts(Renderer *r, const World *w, const Tuning *t, Vecto
     if (w->events.count < r->events_seen) r->events_seen = w->events.count;
     for (uint32_t id = r->events_seen + 1; id <= w->events.count; id++) {
         const GameEvent *e = events_find(&w->events, id);
-        if (e == NULL || (e->type != EV_KILL && e->type != EV_CRASH && e->type != EV_BOMB_DOWN)) continue;
-        float size = (e->type == EV_BOMB_DOWN) ? KILL_SHAKE_BOMB : t->enemy[e->sub].scale;
+        if (e == NULL) continue;
+        if (e->type != EV_KILL && e->type != EV_CRASH && e->type != EV_BOMB_DOWN && e->type != EV_DETONATE) continue;
+        float size = (e->type == EV_BOMB_DOWN) ? KILL_SHAKE_BOMB
+                   : (e->type == EV_DETONATE)  ? KILL_SHAKE_BOMB * 1.5f
+                                               : t->enemy[e->sub].scale;
         float distance = Vector3Distance(camera_pos, e->pos);
         r->shake += t->shake_strength * size * KILL_SHAKE / (1.0f + distance / t->shake_falloff);
     }
@@ -170,7 +177,7 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     Texture2D glow = stars_glow_texture(&r->stars);
     float moving = (w->hitstop > 0) ? 1.0f : alpha;
     enemies_draw(w, t, alpha, glow, camera);
-    if (w->ship_active) ship_draw(&w->ship, &w->planet, t, alpha, glow, camera);
+    if (w->ship_active) ship_draw(&w->ship, &w->planet, t, alpha, time, glow, camera);
     projectiles_draw(w, t, alpha, glow, camera);
     particles_draw(&w->particles, camera, glow, t, moving);
 

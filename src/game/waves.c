@@ -5,8 +5,14 @@
 #include <string.h>
 
 static const char *const TYPE_NAMES[ENEMY_TYPE_COUNT] = {
-    [ENEMY_SWARM]  = "swarm",
-    [ENEMY_BOMBER] = "bomber",
+    [ENEMY_SWARM]    = "swarm",
+    [ENEMY_BOMBER]   = "bomber",
+    [ENEMY_KAMIKAZE] = "kamikaze",
+    [ENEMY_DIGGER]   = "digger",
+    [ENEMY_SIPHON]   = "siphon",
+    [ENEMY_SNIPER]   = "sniper",
+    [ENEMY_SHIELDER] = "shielder",
+    [ENEMY_CARRIER]  = "carrier",
 };
 
 const char *enemy_type_name(EnemyType type)

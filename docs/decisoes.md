@@ -525,6 +525,136 @@ e o que o jogador vê (a superfície) é uma parte pequena dele. Nesta fatia,
 portanto, não dá para perder pelo planeta. Ver as opções no relatório do
 marco 5.
 
+### Resposta do Victor sobre o HP (2026-11-12)
+"Destruir um pouco mais do HP total, mas sem facilitar o colapso subindo a
+porcentagem." O limiar continua em 35%. O que mudou foi o dano: crateras
+maiores (Enxame 3,4/2,6, Bombardeiro 13/10,5, Kamikaze 7/6) e quatro
+inimigos novos que tiram massa de outros jeitos (túnel, feixe, explosão,
+mais drones). Resultado medido no marco 6: uma partida do piloto automático
+termina com cerca de 75% do planeta (antes, 91%), e o núcleo passa a ser a
+ameaça real (o Escavador vai direto para ele).
+
+## Marco 6: Ondas e os oito inimigos (2026-11-12)
+
+Pedido junto: ré e pairar na nave, nave mais bonita, inimigos com variação,
+hordas maiores começando em 10.
+
+### Ré e pairar
+- **Ré:** segurar S com a nave quase parada (abaixo de 2 u/s para a frente)
+  passa a empurrar para trás, com força e velocidade máximas menores que as
+  da frente (`ship.reverse_thrust`, `ship.reverse_max`). Freio e ré ficam na
+  mesma tecla, como em carro: primeiro freia, depois dá ré.
+- **Pairar:** sem nenhuma tecla de movimento, abaixo de `ship.hover_speed` os
+  estabilizadores entram em proporção (`hover` vai de 0 a 1): anulam a
+  gravidade e a puxada da Lua e freiam o resto do movimento. A regra do
+  CLAUDE.md ("só afunda quem está parado") foi trocada: parado de propósito,
+  a nave fica onde está; quem afunda é quem perde velocidade fazendo outra
+  coisa (drift, por exemplo). O HUD mostra RÉ e PAIRANDO.
+
+### Nave redesenhada e luz dos modelos
+O modelo low-poly ganhou seções de fuselagem, cabine, carenagens, anel do
+motor aceso, luzes de navegação (vermelha à esquerda, verde à direita, como
+em avião) e retrofoguetes acesos na ré. A luz dos modelos ganhou três termos,
+ainda calculados na CPU por face: reflexo do Sol (Blinn), luz de borda (rim)
+e a luz que o planeta devolve de baixo. Isso vale para nave e inimigos, e
+funciona igual com e sem `--no-shaders`.
+
+### Uma IA por arquivo
+`enemies.c` ficou só com a infraestrutura (pool, nascimento, passo,
+orientação, dano). Cada comportamento mora em `ai_<tipo>.c` e devolve um
+`Steer` (velocidade desejada + flags: desviar do chão, bater no planeta, ou
+"já me movi sozinho"). O cabeçalho `enemy_ai.h` é interno: o resto do jogo
+não o enxerga.
+
+### O inimigo pede, o mundo cava
+A IA não chama `planet_carve`: anota pedidos de escavação (`CarveRequest`),
+que o mundo executa depois do passo dos inimigos. Assim os inimigos não
+dependem do planeta mutável no meio do próprio passo, e a ordem é a mesma
+sempre (determinismo). Essas escavações geram impactos "quietos": apagam
+cidades e entram no HP, mas não tremem a câmera nem tocam o som de explosão,
+porque a broca e o feixe mordem várias vezes por segundo.
+
+### Os seis tipos novos
+- **Kamikaze:** mergulha no planeta (cratera média) ou, se a nave passa a
+  menos de `aggro_range`, trava nela com um bipe e a persegue; junto dela
+  explode (dano decresce com a distância, mínimo de 35%). Não dá pontos ao
+  explodir: só quem o derruba ganha.
+- **Escavador:** desce sem desviar do chão, pousa e cava um túnel reto até o
+  núcleo (`drill_speed`, cerca de 27 s). A boca do túnel ganha um anel
+  laranja no solo, e o HUD mostra a profundidade em %. É o jeito de ameaçar o
+  núcleo de verdade.
+- **Sifão:** paira a `altitude` e morde o solo embaixo com um feixe a cada
+  `drain_interval`, andando devagar (`wander`): deixa um sulco. Fica sempre de
+  pé (cúpula para cima), girando devagar.
+- **Atirador:** mantém `range` da nave, circulando. Carrega por
+  `charge_time` com uma linha de mira fina que segue a nave; nos últimos
+  `lock_time` a mira **trava** (linha grossa, aviso "DESVIE!") e o tiro sai
+  no ponto travado. Quem se mexe depois da trava escapa. O cano aponta para a
+  mira durante a carga.
+- **Escudeiro:** acompanha o grupo aliado mais próximo e protege quem está a
+  menos de `shield_radius`: tiros da nave param no escudo (faísca turquesa e
+  um "tim"). Escudeiros não protegem uns aos outros, então ele é sempre
+  vulnerável: é o alvo prioritário. Cabos de energia e bolhas mostram quem
+  está protegido.
+- **Porta-drones:** orbita alto, acende o hangar por `launch_warning` e
+  lança `launch_count` drones do Enxame, até haver `max_swarm` drones em
+  cena (16). Esse teto segura a regra das hordas legíveis: com 36, a horda 9
+  virou uma nuvem de drones.
+
+### Variações
+Cada grupo sai em uma de três paletas do seu tipo (tinta das peças e cor das
+partes acesas) e cada inimigo varia ±8% de tamanho. O ponto fraco do
+Bombardeiro fica sempre magenta: é informação, não enfeite.
+
+### Hordas e calmaria
+Dez hordas em `data/waves.txt`, de 10 a 40 inimigos, chegando em grupos ao
+longo de até 26 s. Cada tipo novo aparece primeiro com pouca companhia. Na
+calmaria, Enter chama a próxima horda na hora (quem já está pronto não
+precisa esperar).
+
+### HUD
+- Painel da horda com quantos de cada tipo, na cor do tipo, quebrando linha.
+- Alertas abaixo da barra do planeta para o que fere o planeta ou mira na
+  nave agora: Escavador (com profundidade), Sifão drenando, Atirador mirando
+  ou travado.
+- Etiquetas sobre os inimigos (BOMBA, LANÇANDO, ESCAVANDO 40%, DRENANDO,
+  MIRANDO/TRAVOU, "!" no Kamikaze travado); fora da tela, a seta desses pisca.
+- Escudeiro marcado com círculo, não losango. Barra de vida nos resistentes.
+
+### Áudio
+Nove sons novos, todos sintetizados: trava do Kamikaze, explosão dele,
+broca, feixe, carga do Atirador (dura o mesmo que a carga: dá para "ouvir"
+quando o tiro vai sair), o tiro dele, o "tim" no escudo, o hangar abrindo e o
+Enter da calmaria.
+
+### Roteiros
+- `inimigos.txt`: os seis modelos de perto e cada tipo em ação, com a nave
+  pairando. Usa o comando novo `clear` (tira inimigos e tiros de cena).
+- `onda1.txt`: agora a partida inteira, 10 minutos.
+
+### Piloto automático no túnel
+Contra um Escavador cavando, o piloto vai até um ponto 22 unidades acima da
+boca do túnel, para sem tocar em nada (segurar S para frear conta como mexer
+e desligaria os estabilizadores: a nave cairia túnel abaixo) e atira reto
+para baixo. Sem isso, a horda com Escavador nunca terminava. Há um teste.
+
+### Medições (Vega 8, `onda1.txt`, 10 minutos)
+- Sem vsync: mediana de 5,25 ms, p99 de 18 ms; simulação de 0,14 ms em
+  média. Em tempo real: 60 FPS, p99 de 18,25 ms (igual ao marco 5).
+- Partida do piloto: chega à horda 10, 225 abates, planeta em 79%, núcleo
+  em 91%. Antes do aumento das crateras, 91% de planeta na horda 9.
+- Picos isolados de ~300 ms aparecem em quadros diferentes a cada execução
+  com o mesmo hash: ruído da máquina. O remalhamento respeita os 4 ms por
+  quadro; um chunk sozinho às vezes passa disso (envio à placa).
+
+### Limitações conhecidas do marco 6
+- O planeta de 128³ ainda faz o colapso por massa ser difícil: o caminho
+  real para a derrota é o núcleo. Se ficar fácil demais com jogadores reais,
+  dá para subir `defeat.core_hp` sem mexer no limiar de massa.
+- O Escudeiro protege qualquer aliado no raio, não só o grupo que segue.
+- O hash do estado passou a incluir a orientação dos inimigos (o cano do
+  Atirador decide de onde sai o tiro).
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

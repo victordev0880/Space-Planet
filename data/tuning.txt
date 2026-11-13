@@ -206,6 +206,15 @@ ship.gravity_range = 2.2     # até onde a gravidade alcança, em raios do plane
 ship.fall_drag     = 1.2     # freio da queda: sem motor, a nave afunda a no máximo gravity / fall_drag
 ship.lift_speed    = 20      # sustentação: voando ao longo da superfície a esta velocidade ou mais, a nave não afunda
 
+# Ré: S freia; com a nave já quase parada, S passa a dar ré.
+ship.reverse_thrust = 26     # aceleração da ré
+ship.reverse_max    = 18     # velocidade máxima de ré (a de frente é 46)
+
+# Estabilizadores: sem nenhum comando e abaixo de hover_speed, a nave para
+# sozinha e fica no lugar (sem afundar). Acima disso, segue pela inércia.
+ship.hover_speed    = 16
+ship.hover_drag     = 3.0    # quão depressa ela para
+
 # Voo rasante: dentro da atmosfera a nave acompanha a curvatura do planeta, ou
 # seja, voar "reto" mantém a altitude em vez de sair pela tangente. Acima da
 # atmosfera o efeito some aos poucos e o voo volta a ser livre.

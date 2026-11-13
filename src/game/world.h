@@ -49,6 +49,7 @@ typedef struct {
     Vector3  pos;      // ponto atingido
     float    radius;   // raio da boca da cratera
     uint32_t id;       // 1 para o primeiro impacto da partida, 2 para o segundo...
+    bool     quiet;    // escavação contínua (broca, feixe): sem tremor nem som
 } Impact;
 
 #define WORLD_IMPACT_HISTORY 32
@@ -132,6 +133,9 @@ void world_set_waves(World *w, bool on);
 // Ferramenta de debug e do autoplay: põe um grupo de inimigos em `center`.
 int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 center);
 
+// Ferramenta do autoplay: tira de cena todos os inimigos e tiros.
+void world_clear_enemies(World *w);
+
 // Nova partida com o mesmo plano: planeta inteiro, sem inimigos, nave no
 // ponto de partida, pontuação zerada.
 void world_restart(World *w, const Tuning *t);
@@ -146,6 +150,10 @@ EnemyContext world_enemy_context(World *w, const Tuning *t);
 // e abre ali uma cratera com a boca de raio `rim_radius` e a profundidade
 // `depth`, soltando destroços. Retorna false se o raio não acerta o planeta.
 bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float rim_radius, float depth);
+
+// Retira uma esfera do planeta sem o estardalhaço de um impacto (a broca do
+// Escavador, o feixe do Sifão): poucos destroços, sem tremor nem som.
+void world_carve(World *w, const Tuning *t, Vector3 center, float radius);
 
 // Ferramenta de debug: devolve o planeta ao estado inicial.
 void world_reset_planet(World *w, const Tuning *t);

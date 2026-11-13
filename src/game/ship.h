@@ -2,7 +2,10 @@
 //
 // Voo "arcade" em seis eixos:
 //   - o mouse gira o nariz (em relação à própria nave, não ao mundo);
-//   - W acelera, S freia, A/D empurram de lado, Q/E rolam;
+//   - W acelera, S freia (e, com a nave quase parada, dá ré, mais devagar),
+//     A/D empurram de lado, Q/E rolam;
+//   - sem nenhum comando e devagar, os estabilizadores param a nave e a
+//     seguram no lugar (sem afundar); em alta velocidade ela segue pela inércia;
 //   - a velocidade tem inércia, mas o rumo acompanha o nariz aos poucos
 //     ("aderência"), então virar a nave vira o voo;
 //   - no drift (Ctrl) a aderência desliga: a nave segue em linha reta
@@ -71,6 +74,8 @@ typedef struct {
     bool  boosting;
     bool  boost_spent;         // a energia acabou no meio do boost: só rearma ao soltar a tecla
     bool  drifting;
+    bool  reversing;           // dando ré (S com a nave já quase parada)
+    float hover;               // 0 a 1: o quanto os estabilizadores estão segurando a nave parada
     bool  in_atmosphere;       // dentro da camada de ar: nem acima dela, nem no fundo de um túnel
     bool  near_moon;           // dentro do alcance do estilingue da Lua
 } Ship;

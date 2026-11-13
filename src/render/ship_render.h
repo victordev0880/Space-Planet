@@ -17,6 +17,8 @@
 
 // Chamar dentro de BeginMode3D, depois do planeta.
 // alpha: fração entre o passo de lógica anterior e o atual (0 a 1).
-void ship_draw(const Ship *s, const Planet *planet, const Tuning *t, float alpha, Texture2D glow, Camera3D camera);
+// time: tempo de jogo em segundos (para o pisca da luz da cauda).
+void ship_draw(const Ship *s, const Planet *planet, const Tuning *t, float alpha, float time, Texture2D glow,
+               Camera3D camera);
 
 #endif

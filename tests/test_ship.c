@@ -360,14 +360,15 @@ static void ship_gravity_is_gentle_and_local(void)
     setup(&s);
     float radius = planet.params.radius;
 
-    // Parada perto do planeta, com o nariz de lado: afunda devagar, reto
-    // para baixo. A queda não vira impulso para a frente.
+    // Parada perto do planeta, de nariz de lado e com os estabilizadores
+    // desligados (drift): afunda devagar, reto para baixo. A queda não vira
+    // impulso para a frente.
     Vector3 start = { 0.0f, radius * 1.5f, 0.0f };
     place(&s, start, (Vector3){ 1.0f, 0.0f, 0.0f }, (Vector3){ 0.0f, 1.0f, 0.0f });
     float fastest_fall = 0.0f;
-    InputState idle = input(0u, 0u, 0.0f, 0.0f);
+    InputState loose = input(ACT_BIT(ACT_DRIFT), 0u, 0.0f, 0.0f);
     for (int i = 0; i < seconds(1.5f); i++) {
-        ship_tick(&s, &idle, &planet, NULL, &tun, dt);
+        ship_tick(&s, &loose, &planet, NULL, &tun, dt);
         if (Vector3Length(s.fall) > fastest_fall) fastest_fall = Vector3Length(s.fall);
     }
     CHECK(s.fall.y < 0.0f && s.pos.y < start.y);
@@ -385,6 +386,65 @@ static void ship_gravity_is_gentle_and_local(void)
 
     // O motor vence a gravidade com folga.
     CHECK(tun.ship_thrust > tun.ship_gravity * 3.0f);
+}
+
+// S freia e, já quase parada, dá ré, mais devagar que para a frente.
+static void ship_brakes_then_reverses(void)
+{
+    Ship s;
+    setup_far(&s);
+    Vector3 forward = ship_forward(&s);
+    run(&s, input(ACT_BIT(ACT_FORWARD), 0u, 0.0f, 0.0f), seconds(2.0f));
+    CHECK(Vector3DotProduct(s.vel, forward) > tun.ship_speed_max * 0.8f);
+
+    // Primeiro freia: ainda anda para a frente, mais devagar, sem ré.
+    InputState back = input(ACT_BIT(ACT_BACK), 0u, 0.0f, 0.0f);
+    float before = Vector3DotProduct(s.vel, forward);
+    run(&s, back, 10);
+    CHECK(Vector3DotProduct(s.vel, forward) > 0.0f);
+    CHECK(Vector3DotProduct(s.vel, forward) < before);
+    CHECK(!s.reversing);
+
+    // Segurando, para e passa a andar de ré, até o limite de ré.
+    float fastest_back = 0.0f;
+    for (int i = 0; i < seconds(4.0f); i++) {
+        ship_tick(&s, &back, &planet, NULL, &tun, dt);
+        fastest_back = fmaxf(fastest_back, -Vector3DotProduct(s.vel, forward));
+    }
+    CHECK(s.reversing);
+    CHECK(-Vector3DotProduct(s.vel, forward) > tun.ship_reverse_max * 0.95f);
+    CHECK(fastest_back <= tun.ship_reverse_max * 1.001f);
+    CHECK(tun.ship_reverse_max < tun.ship_speed_max * 0.5f);   // ré é para manobrar, não para fugir
+    CHECK_NEAR(Vector3DotProduct(ship_forward(&s), forward), 1.0f, 1e-3);   // o nariz continua para a frente
+}
+
+// Sem comandos e devagar, a nave para e fica no lugar, mesmo perto do planeta.
+static void ship_holds_still_when_idle(void)
+{
+    Ship s;
+    setup(&s);
+    float radius = planet.params.radius;
+    Vector3 start = { 0.0f, radius + 8.0f, 0.0f };
+    InputState idle = input(0u, 0u, 0.0f, 0.0f);
+
+    // Devagar: os estabilizadores param a nave e ela não afunda.
+    ship_place(&s, &tun, &planet, start, (Vector3){ 1.0f, 0.0f, 0.0f }, 10.0f);
+    run(&s, idle, seconds(3.0f));
+    CHECK(Vector3Length(Vector3Add(s.vel, s.fall)) < 0.3f);
+    CHECK(s.hover > 0.95f);
+    float altitude = s.altitude;
+    run(&s, idle, seconds(5.0f));
+    CHECK_NEAR(s.altitude, altitude, 0.05f);   // pairando
+    CHECK(Vector3Length(Vector3Add(s.vel, s.fall)) < 0.05f);
+
+    // Rápido: soltar tudo deixa a nave seguir pela inércia.
+    Ship fast;
+    setup_far(&fast);
+    run(&fast, input(ACT_BIT(ACT_FORWARD), 0u, 0.0f, 0.0f), seconds(2.0f));
+    float cruise = Vector3Length(fast.vel);
+    run(&fast, idle, seconds(1.0f));
+    CHECK(Vector3Length(fast.vel) > cruise * 0.6f);
+    CHECK(fast.hover == 0.0f);
 }
 
 static void ship_never_ends_up_inside_the_ground(void)
@@ -420,9 +480,10 @@ static void ship_gentle_touch_does_no_damage(void)
     setup(&s);
     float radius = planet.params.radius;
 
-    // Solta a nave parada pouco acima do solo e deixa a gravidade pousá-la.
+    // Solta a nave parada pouco acima do solo, com os estabilizadores
+    // desligados (drift), e deixa a gravidade pousá-la.
     place(&s, (Vector3){ 0.0f, radius + 6.0f, 0.0f }, (Vector3){ 1.0f, 0.0f, 0.0f }, (Vector3){ 0.0f, 1.0f, 0.0f });
-    ShipEvents ev = run(&s, input(0u, 0u, 0.0f, 0.0f), seconds(8.0f));
+    ShipEvents ev = run(&s, input(ACT_BIT(ACT_DRIFT), 0u, 0.0f, 0.0f), seconds(8.0f));
     CHECK(ev.hit);
     CHECK(ev.hit_speed < tun.ship_crash_min);
     CHECK(s.alive && s.hull == tun.ship_hull_max && s.shield == tun.ship_shield_max);
@@ -581,6 +642,8 @@ void suite_ship(void)
     RUN(ship_shield_absorbs_before_the_hull);
     RUN(ship_dies_and_comes_back);
     RUN(ship_gravity_is_gentle_and_local);
+    RUN(ship_brakes_then_reverses);
+    RUN(ship_holds_still_when_idle);
     RUN(ship_never_ends_up_inside_the_ground);
     RUN(ship_gentle_touch_does_no_damage);
     RUN(ship_flies_inside_craters);

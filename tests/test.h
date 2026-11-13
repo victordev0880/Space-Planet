@@ -40,6 +40,7 @@ void suite_moon(void);
 void suite_pool(void);
 void suite_waves(void);
 void suite_combat(void);
+void suite_enemies(void);
 void suite_config(void);
 void suite_loop(void);
 void suite_input(void);

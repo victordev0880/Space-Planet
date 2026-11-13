@@ -135,7 +135,7 @@ static void waves_parse_rejects_mistakes(void)
     expect_wave_error("wave.1.pause = -1\nwave.1.group.1 = swarm 6 0 0 0\n", "pause");
     expect_wave_error("wave.1.pausa = 1\n", "chave desconhecida");
     expect_wave_error("wave.0.pause = 1\n", "hordas vao de 1");
-    expect_wave_error("wave.1.pause = 1\nwave.1.group.9 = swarm 1 0 0 0\n", "grupos vao de 1");
+    expect_wave_error("wave.1.pause = 1\nwave.1.group.13 = swarm 1 0 0 0\n", "grupos vao de 1");
 }
 
 static void director_runs_the_sequence(void)
@@ -398,7 +398,7 @@ static void bomber_marks_the_target_then_bombs_it(void)
     t.enemies_spawn_spread = 0.0f;
     world_spawn(&w, &t, ENEMY_BOMBER, 1, spot);
     Enemy *en = &w.enemies.items[first_enemy(&w)];
-    en->state = BOMBER_ORBIT;
+    en->state = HEAVY_ORBIT;
     en->timer = 0.05f;
     int64_t volume = w.planet.volume;
 

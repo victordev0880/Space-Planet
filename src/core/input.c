@@ -21,6 +21,7 @@ static const char *const ACTION_NAMES[ACT_COUNT] = {
     [ACT_RESET]      = "reset",
     [ACT_DEBUG_CRATER] = "debug_crater",
     [ACT_DEBUG_SIZE]   = "debug_size",
+    [ACT_READY]        = "ready",
 };
 
 void input_init(InputTracker *t)

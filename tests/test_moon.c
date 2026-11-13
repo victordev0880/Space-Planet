@@ -120,7 +120,7 @@ static void moon_pulls_gently(void)
     Vector3 start = Vector3Add(moon.pos, Vector3Scale(away, moon.radius + 6.0f));
     ship_place(&s, &tun, &planet, start, sideways(away), 0.0f);
 
-    InputState idle = input(0u);
+    InputState idle = input(ACT_BIT(ACT_DRIFT));   // estabilizadores desligados
     ShipEvents all;
     memset(&all, 0, sizeof all);
     for (int i = 0; i < seconds(6.0f); i++) {

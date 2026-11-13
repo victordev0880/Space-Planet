@@ -33,6 +33,7 @@ typedef enum {
     ACT_RESET,       // R: nova partida depois do fim; com o F1 aberto, restaura o planeta
     ACT_DEBUG_CRATER,  // C (com o F1 aberto): abre uma cratera onde a nave mira
     ACT_DEBUG_SIZE,    // V (com o F1 aberto): troca o tamanho dessa cratera
+    ACT_READY,         // Enter: na calmaria, chama a próxima horda
     ACT_COUNT
 } Action;
 

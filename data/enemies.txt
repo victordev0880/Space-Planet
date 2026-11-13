@@ -28,8 +28,8 @@ swarm.attack_altitude = 8        # altura em que sai do mergulho
 swarm.fire_rate       = 2.5      # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
 swarm.shot_speed      = 55
 swarm.shot_damage     = 6        # dano de um tiro na nave
-swarm.crater_radius   = 2.4
-swarm.crater_depth    = 1.6
+swarm.crater_radius   = 3.4
+swarm.crater_depth    = 2.6
 swarm.aggro_range     = 45       # com a nave até esta distância e na frente, atira nela
 swarm.aggro_rate      = 0.7      # tiros por segundo na nave
 swarm.spacing         = 5        # distância que cada drone mantém dos vizinhos
@@ -56,8 +56,8 @@ bomber.bomb_accel      = 14      # ... e quanto ela acelera ao cair
 bomber.bomb_hp         = 2       # tiros para derrubar uma bomba
 bomber.bomb_radius     = 1.5     # raio de colisão da bomba
 bomber.bomb_points     = 150
-bomber.crater_radius   = 9
-bomber.crater_depth    = 7
+bomber.crater_radius   = 13
+bomber.crater_depth    = 10.5
 bomber.armor           = 0.25    # fração do dano que atravessa a blindagem
 bomber.weak_mult       = 2.5     # multiplicador do dano no ponto fraco (o motor)
 bomber.weak_radius     = 2.2     # tamanho do ponto fraco
@@ -65,3 +65,93 @@ bomber.turret_range    = 55      # a torreta atira na nave até esta distância
 bomber.turret_interval = 3       # segundos entre rajadas
 bomber.turret_burst    = 3       # tiros por rajada
 bomber.turret_damage   = 6
+
+# --- Kamikaze ---------------------------------------------------------------
+# Esfera de espinhos que acende em vermelho. Se a nave passa perto, trava
+# nela (bipe) e a persegue para explodir junto; senão, mergulha no planeta e
+# abre uma cratera média. Frágil: dois tiros.
+kamikaze.hp            = 2
+kamikaze.radius        = 1.5
+kamikaze.scale         = 1.1
+kamikaze.speed         = 34
+kamikaze.accel         = 42
+kamikaze.points        = 150
+kamikaze.ram_damage    = 22      # dano da explosão, junto da nave (cai com a distância)
+kamikaze.aggro_range   = 85      # trava na nave a esta distância
+kamikaze.blast_radius  = 8       # alcance da explosão
+kamikaze.crater_radius = 7
+kamikaze.crater_depth  = 6
+
+# --- Escavador --------------------------------------------------------------
+# Pousa e cava um túnel reto rumo ao núcleo. Lá dentro ele só pode ser
+# alcançado voando pelo túnel.
+digger.hp             = 16
+digger.radius         = 2.4
+digger.scale          = 1.7
+digger.speed          = 18
+digger.accel          = 16
+digger.points         = 700
+digger.ram_damage     = 20
+digger.drill_speed    = 1.6      # quanto desce por segundo
+digger.drill_radius   = 4.8      # raio do túnel (a nave cabe com folga)
+digger.drill_interval = 0.3      # segundos entre duas mordidas da broca
+
+# --- Sifão ------------------------------------------------------------------
+# Paira baixo e drena o solo com um feixe, que anda devagar pela superfície.
+siphon.hp             = 14
+siphon.radius         = 2.6
+siphon.scale          = 1.9
+siphon.speed          = 14
+siphon.accel          = 12
+siphon.points         = 600
+siphon.ram_damage     = 15
+siphon.altitude       = 15
+siphon.drain_radius   = 2.8      # tamanho de cada mordida do feixe
+siphon.drain_interval = 0.4
+siphon.wander         = 3        # velocidade com que o feixe anda pelo solo
+
+# --- Atirador ---------------------------------------------------------------
+# Fica longe e carrega tiros fortes contra a nave. Durante a carga, uma linha
+# vermelha liga o cano à nave; no fim ela trava, e um dash ou um desvio
+# escapa do tiro.
+sniper.hp            = 6
+sniper.radius        = 1.9
+sniper.scale         = 1.5
+sniper.speed         = 24
+sniper.accel         = 28
+sniper.points        = 350
+sniper.ram_damage    = 10
+sniper.range         = 105       # distância que tenta manter da nave
+sniper.charge_time   = 1.4       # segundos de aviso antes do tiro
+sniper.lock_time     = 0.35      # nos últimos segundos a mira para de seguir a nave
+sniper.fire_interval = 3.8
+sniper.shot_speed    = 150
+sniper.shot_damage   = 18
+
+# --- Escudeiro --------------------------------------------------------------
+# Acompanha os aliados e os cobre com um escudo: os tiros não os atingem
+# enquanto ele estiver vivo e perto. Alvo prioritário.
+shielder.hp            = 12
+shielder.radius        = 2.2
+shielder.scale         = 1.6
+shielder.speed         = 22
+shielder.accel         = 24
+shielder.points        = 500
+shielder.ram_damage    = 12
+shielder.shield_radius = 26      # protege os aliados até esta distância
+shielder.follow        = 12      # distância que mantém do grupo que protege
+
+# --- Porta-drones -----------------------------------------------------------
+# Nave-mãe lenta e resistente que orbita alto e solta bandos de Enxame.
+carrier.hp              = 70
+carrier.radius          = 6.0
+carrier.scale           = 3.8
+carrier.speed           = 8
+carrier.accel           = 6
+carrier.points          = 2500
+carrier.ram_damage      = 40
+carrier.altitude        = 40
+carrier.launch_interval = 12     # segundos entre dois lançamentos
+carrier.launch_warning  = 1.5    # o hangar acende este tanto antes de lançar
+carrier.launch_count    = 3      # drones por lançamento
+carrier.max_swarm       = 16     # não lança se já houver tantos drones em cena

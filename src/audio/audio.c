@@ -283,6 +283,118 @@ static void synth_warp(float *out, int n)
     }
 }
 
+static void synth_lock(float *out, int n)
+{
+    // Kamikaze travou: guincho agudo em dois toques rápidos, subindo.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float inside = fmodf(t, 0.11f);
+        float on = (t < 0.22f && inside < 0.08f) ? 1.0f : 0.0f;
+        phase += sweep(1300.0f, 2400.0f, inside, 0.08f) / SAMPLE_RATE;
+        out[i] = (0.6f * square(phase) + 0.4f * sine(phase * 0.5f)) * on * 0.5f;
+    }
+}
+
+static void synth_detonate(float *out, int n)
+{
+    // Explosão seca e brilhante, com muitos estalos.
+    explosion(out, n, 5200.0f, 4.0f, 110.0f, 0.03f);
+}
+
+static void synth_dig(float *out, int n)
+{
+    // Broca mordendo a rocha: ruído grave pulsando rápido, com um ronco.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float chop = 0.55f + 0.45f * square(38.0f * t);
+        float grind = lowpass(&lp, noise(), 900.0f) * 2.4f * chop;
+        phase += sweep(70.0f, 52.0f, t, length) / SAMPLE_RATE;
+        float shape = fminf(t / 0.05f, 1.0f) * fminf((length - t) / 0.3f, 1.0f);
+        out[i] = (grind + 0.5f * saw(phase)) * shape;
+    }
+}
+
+static void synth_drain(float *out, int n)
+{
+    // Feixe do Sifão: um zumbido que oscila e desce, como algo sendo sugado.
+    float phase = 0.0f;
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float wobble = 1.0f + 0.12f * sinf(2.0f * PI * 9.0f * t);
+        phase += sweep(520.0f, 180.0f, t, length) * wobble / SAMPLE_RATE;
+        float shape = fminf(t / 0.12f, 1.0f) * fminf((length - t) / 0.3f, 1.0f);
+        out[i] = lowpass(&lp, saw(phase) + 0.3f * noise(), 1600.0f) * shape * 0.8f;
+    }
+}
+
+static void synth_charge(float *out, int n)
+{
+    // Atirador carregando: um apito que sobe durante toda a carga (o som
+    // dura o mesmo que a carga, então o jogador "ouve" quando vai sair).
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float u = t / length;
+        phase += sweep(380.0f, 2600.0f, t, length) / SAMPLE_RATE;
+        float tremolo = 0.7f + 0.3f * sinf(2.0f * PI * (4.0f + 20.0f * u) * t);   // pulsa cada vez mais rápido
+        out[i] = (0.7f * sine(phase) + 0.2f * square(phase)) * tremolo * (0.3f + 0.7f * u);
+    }
+}
+
+static void synth_lance(float *out, int n)
+{
+    // Tiro do Atirador: estalo forte e um rasgo descendo.
+    float phase = 0.0f;
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(2600.0f, 300.0f, t, 0.25f) / SAMPLE_RATE;
+        float crack = (t < 0.012f) ? noise() : 0.0f;
+        float tear = lowpass(&lp, noise(), sweep(6000.0f, 800.0f, t, 0.3f));
+        out[i] = (0.5f * saw(phase) + crack + 0.8f * tear) * envelope(t, 0.001f, 9.0f);
+    }
+}
+
+static void synth_deflect(float *out, int n)
+{
+    // Tiro parado pelo escudo: "tim" de vidro, agudo e curto.
+    static const float PARTIALS[3] = { 2300.0f, 3450.0f, 5100.0f };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float v = 0.0f;
+        for (int k = 0; k < 3; k++) v += sine(PARTIALS[k] * t) * expf(-t * (30.0f + 15.0f * (float)k));
+        out[i] = 0.5f * v * envelope(t, 0.001f, 10.0f);
+    }
+}
+
+static void synth_launch(float *out, int n)
+{
+    // Hangar abrindo: chiado pneumático e uma escada de bipes descendo.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float hiss = (noise() - lowpass(&lp, noise(), 1500.0f)) * envelope(t, 0.01f, 6.0f);
+        int step = (int)(t / 0.08f);
+        float on = (step < 4 && fmodf(t, 0.08f) < 0.05f) ? 1.0f : 0.0f;
+        phase += (900.0f - 140.0f * (float)step) / SAMPLE_RATE;
+        out[i] = 0.7f * hiss + 0.35f * square(phase) * on;
+    }
+}
+
+static void synth_ready(float *out, int n)
+{
+    static const float NOTES[2] = { 784.0f, 1174.7f };
+    arpeggio(out, n, NOTES, 2, 0.07f, 9.0f);
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -313,6 +425,15 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_DASH]         = { synth_dash,         0.35f, 0.45f, 2 },
     [SND_BUMP]         = { synth_bump,         0.25f, 0.60f, 3 },
     [SND_WARP]         = { synth_warp,         0.90f, 0.40f, 3 },
+    [SND_LOCK]         = { synth_lock,         0.24f, 0.55f, 3 },
+    [SND_DETONATE]     = { synth_detonate,     1.10f, 1.00f, 2 },
+    [SND_DIG]          = { synth_dig,          1.20f, 0.55f, 2 },
+    [SND_DRAIN]        = { synth_drain,        1.00f, 0.45f, 2 },
+    [SND_CHARGE]       = { synth_charge,       1.40f, 0.40f, 3 },   // a carga do Atirador (sniper.charge_time)
+    [SND_LANCE]        = { synth_lance,        0.40f, 0.65f, 3 },
+    [SND_DEFLECT]      = { synth_deflect,      0.22f, 0.35f, 4 },
+    [SND_LAUNCH]       = { synth_launch,       0.60f, 0.55f, 2 },
+    [SND_READY]        = { synth_ready,        0.40f, 0.50f, 1 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -400,7 +521,7 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
     if (w->impact_count < a->impacts_seen) a->impacts_seen = w->impact_count;
     for (uint32_t id = a->impacts_seen + 1; id <= w->impact_count; id++) {
         const Impact *impact = world_find_impact(w, id);
-        if (impact == NULL) continue;
+        if (impact == NULL || impact->quiet) continue;   // broca e feixe têm som próprio, no começo
         SoundId s = (impact->radius >= t->bomber_crater_radius * 0.6f) ? SND_IMPACT_BIG : SND_IMPACT_SMALL;
         if (played[s]++ < PER_FRAME) play(a, t, s, &impact->pos, camera, 1.0f, 0.15f);
     }
@@ -415,12 +536,23 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         bool positional = true;
         switch ((EventType)e->type) {
         case EV_SHOT:        s = SND_SHOT; positional = false; break;
-        case EV_ENEMY_SHOT:  s = SND_ENEMY_SHOT; break;
+        case EV_ENEMY_SHOT:  s = (e->sub == ENEMY_SNIPER) ? SND_LANCE : SND_ENEMY_SHOT; floor = 0.1f; break;
         case EV_HIT:         s = SND_HIT; break;
         case EV_ARMOR_HIT:   s = SND_ARMOR; break;
         case EV_WEAK_HIT:    s = SND_WEAK; break;
         case EV_KILL:
-        case EV_CRASH:       s = (e->sub == ENEMY_BOMBER) ? SND_KILL_BIG : SND_KILL_SMALL; floor = 0.2f; break;
+        case EV_CRASH:
+            s = (e->sub == ENEMY_BOMBER || e->sub == ENEMY_CARRIER) ? SND_KILL_BIG : SND_KILL_SMALL;
+            floor = 0.2f;
+            break;
+        case EV_LOCK:          s = SND_LOCK; floor = 0.5f; break;
+        case EV_DETONATE:      s = SND_DETONATE; floor = 0.4f; break;
+        case EV_DIG_START:     s = SND_DIG; floor = 0.35f; break;
+        case EV_DRAIN_START:   s = SND_DRAIN; floor = 0.3f; break;
+        case EV_SNIPER_CHARGE: s = SND_CHARGE; floor = 0.5f; break;   // mira na nave: tem de ser ouvido
+        case EV_SHIELDED:      s = SND_DEFLECT; break;
+        case EV_LAUNCH:        s = SND_LAUNCH; floor = 0.3f; break;
+        case EV_CALM_SKIP:     s = SND_READY; positional = false; break;
         case EV_BOMB_ARMING: s = SND_BOMB_ARM; floor = 0.45f; break;
         case EV_BOMB_DROP:   s = SND_BOMB_DROP; floor = 0.3f; break;
         case EV_BOMB_DOWN:   s = SND_BOMB_DOWN; break;

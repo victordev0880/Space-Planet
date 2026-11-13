@@ -200,6 +200,10 @@ typedef struct {
     float ship_gravity_range;
     float ship_fall_drag;
     float ship_lift_speed;
+    float ship_reverse_thrust;
+    float ship_reverse_max;
+    float ship_hover_speed;
+    float ship_hover_drag;
     float ship_hug;
     float ship_hug_fade;
     float ship_spawn_pitch;
@@ -311,6 +315,42 @@ typedef struct {
     float bomber_turret_interval;
     int   bomber_turret_burst;
     float bomber_turret_damage;
+
+    // Kamikaze
+    float kamikaze_aggro_range;
+    float kamikaze_blast_radius;
+    float kamikaze_crater_radius;
+    float kamikaze_crater_depth;
+
+    // Escavador
+    float digger_drill_speed;
+    float digger_drill_radius;
+    float digger_drill_interval;
+
+    // Sifão
+    float siphon_altitude;
+    float siphon_drain_radius;
+    float siphon_drain_interval;
+    float siphon_wander;
+
+    // Atirador
+    float sniper_range;
+    float sniper_charge_time;
+    float sniper_lock_time;
+    float sniper_fire_interval;
+    float sniper_shot_speed;
+    float sniper_shot_damage;
+
+    // Escudeiro
+    float shielder_radius;
+    float shielder_follow;
+
+    // Porta-drones
+    float carrier_altitude;
+    float carrier_launch_interval;
+    float carrier_launch_warning;
+    int   carrier_launch_count;
+    int   carrier_max_swarm;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4

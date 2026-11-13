@@ -36,6 +36,14 @@ typedef enum {
     EV_GAME_LOST,
     EV_DASH,
     EV_BUMP,           // a nave bateu no terreno           (value = velocidade contra o chão)
+    EV_LOCK,           // um Kamikaze travou na nave
+    EV_DETONATE,       // um Kamikaze explodiu junto da nave
+    EV_DIG_START,      // um Escavador começou a cavar      (pos = boca do túnel)
+    EV_DRAIN_START,    // um Sifão começou a drenar         (pos = onde o feixe toca o solo)
+    EV_SNIPER_CHARGE,  // um Atirador começou a carregar    (value = segundos até o tiro)
+    EV_SHIELDED,       // tiro da nave parado por um escudo
+    EV_LAUNCH,         // o Porta-drones soltou um bando    (value = quantos)
+    EV_CALM_SKIP,      // o jogador chamou a próxima horda antes da hora
     EV_TYPE_COUNT
 } EventType;
 

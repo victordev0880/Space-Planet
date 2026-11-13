@@ -17,6 +17,10 @@
 #define SMALL_SIZE   10
 #define BANNER_SIZE  54
 
+// Faixa do topo ocupada pelos painéis (horda, planeta, pontos) e pelos
+// alertas: marcadores, etiquetas e pontos que sobem não entram nela.
+#define PANELS_BOTTOM 112.0f
+
 // O núcleo só ganha barra depois de perder pelo menos esta fração.
 #define CORE_SHOW_BELOW 0.999f
 
@@ -35,16 +39,65 @@ static const Color CORE_COLOR   = { 255, 190, 90, 255 };
 static const Color MARKER_COLOR = { 255, 255, 255, 230 };
 static const Color PRIZE_COLOR         = { 255, 214, 110, 255 };
 
-// Cores de cada tipo de inimigo nos marcadores (as mesmas do brilho deles).
+// Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
+// principal deles, um pouco mais claras para ler sobre o planeta).
 static const Color ENEMY_COLORS[ENEMY_TYPE_COUNT] = {
-    [ENEMY_SWARM]  = { 196, 130, 255, 255 },
-    [ENEMY_BOMBER] = { 255, 150, 70, 255 },
+    [ENEMY_SWARM]    = { 196, 130, 255, 255 },
+    [ENEMY_BOMBER]   = { 255, 150, 70, 255 },
+    [ENEMY_KAMIKAZE] = { 255, 96, 72, 255 },
+    [ENEMY_DIGGER]   = { 255, 186, 80, 255 },
+    [ENEMY_SIPHON]   = { 120, 255, 190, 255 },
+    [ENEMY_SNIPER]   = { 255, 110, 140, 255 },
+    [ENEMY_SHIELDER] = { 110, 230, 255, 255 },
+    [ENEMY_CARRIER]  = { 214, 150, 255, 255 },
 };
 static const char *const ENEMY_NAMES[ENEMY_TYPE_COUNT] = {
-    [ENEMY_SWARM]  = "Enxame",
-    [ENEMY_BOMBER] = "Bombardeiro",
+    [ENEMY_SWARM]    = "Enxame",
+    [ENEMY_BOMBER]   = "Bombardeiro",
+    [ENEMY_KAMIKAZE] = "Kamikaze",
+    [ENEMY_DIGGER]   = "Escavador",
+    [ENEMY_SIPHON]   = "Sifão",
+    [ENEMY_SNIPER]   = "Atirador",
+    [ENEMY_SHIELDER] = "Escudeiro",
+    [ENEMY_CARRIER]  = "Porta-drones",
 };
 static const Color BOMB_COLOR = { 255, 70, 50, 255 };
+
+static void text(const char *s, int x, int y, int size, Color color);
+static Color with_alpha(Color c, float alpha);
+
+// Uma linha centralizada em `cx` com "Nome xN" (ou "N Nome", com
+// `count_first`) para cada tipo com contagem, cada um na sua cor.
+static void type_list(const int counts[ENEMY_TYPE_COUNT], bool count_first, int cx, int y, int size, float alpha)
+{
+    char items[ENEMY_TYPE_COUNT][32];
+    int types[ENEMY_TYPE_COUNT], n = 0, width = 0;
+    const int gap = size + 2;
+    for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
+        if (counts[type] <= 0) continue;
+        if (count_first) snprintf(items[n], sizeof items[n], "%d %s", counts[type], ENEMY_NAMES[type]);
+        else             snprintf(items[n], sizeof items[n], "%s x%d", ENEMY_NAMES[type], counts[type]);
+        types[n] = type;
+        width += MeasureText(items[n], size) + (n > 0 ? gap : 0);
+        n++;
+    }
+    int x = cx - width / 2;
+    for (int k = 0; k < n; k++) {
+        text(items[k], x, y, size, with_alpha(ENEMY_COLORS[types[k]], alpha));
+        x += MeasureText(items[k], size) + gap;
+    }
+}
+
+// Os grandões ganham marcador maior e barra de vida.
+static bool is_big(EnemyType type)
+{
+    return type == ENEMY_BOMBER || type == ENEMY_CARRIER;
+}
+
+static bool has_health_bar(const Tuning *t, EnemyType type)
+{
+    return t->enemy[type].hp >= 12.0f;
+}
 
 static Color with_alpha(Color c, float alpha)
 {
@@ -266,9 +319,12 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
     DrawText(TextFormat("vel %3.0f", (double)speed), info_x, y - 5, LABEL_SIZE, TEXT_COLOR);
     DrawText(TextFormat("alt %3.0f", (double)s->altitude), info_x, y - 5 + SHIP_ROW, LABEL_SIZE, TEXT_COLOR);
     // Uma palavra para o que a nave está fazendo de especial.
-    if (s->sling > 0.0f)       DrawText("ESTILINGUE", info_x, y - 5 + SHIP_ROW * 2, LABEL_SIZE, SLING_COLOR);
-    else if (s->in_atmosphere) DrawText("RASANTE", info_x, y - 5 + SHIP_ROW * 2, LABEL_SIZE, GRAZE_COLOR);
-    else if (s->drifting)      DrawText("DRIFT", info_x, y - 5 + SHIP_ROW * 2, LABEL_SIZE, ENERGY_COLOR);
+    int status_y = y - 5 + SHIP_ROW * 2;
+    if (s->sling > 0.0f)       DrawText("ESTILINGUE", info_x, status_y, LABEL_SIZE, SLING_COLOR);
+    else if (s->drifting)      DrawText("DRIFT", info_x, status_y, LABEL_SIZE, ENERGY_COLOR);
+    else if (s->reversing)     DrawText("RÉ", info_x, status_y, LABEL_SIZE, HULL_COLOR);
+    else if (s->hover > 0.6f)  DrawText("PAIRANDO", info_x, status_y, LABEL_SIZE, DIM_COLOR);
+    else if (s->in_atmosphere) DrawText("RASANTE", info_x, status_y, LABEL_SIZE, GRAZE_COLOR);
 
     // Mira: onde os canhões se cruzam. Como a câmera vem atrás com atraso,
     // esse ponto nem sempre é o centro da tela.
@@ -356,31 +412,106 @@ static int enemies_of(const World *w, EnemyType type)
     return w->enemies.alive_by_type[type];
 }
 
+#define WAVE_PANEL_WIDTH 330   // largura do painel da horda (os nomes quebram de linha)
+#define WAVE_ITEM_SIZE   16
+#define WAVE_LINE        20
+
 static void draw_wave_info(const World *w, const Tuning *t)
 {
     const WaveDirector *d = &w->director;
     if (d->phase == DIRECTOR_OFF || w->plan.count == 0) return;
     int x = WAVE_LEFT, y = SCORE_TOP;
-    DrawRectangle(x - 10, y - 6, 250, 62, FRAME_COLOR);
-
     int shown = (d->phase == DIRECTOR_DONE) ? w->plan.count : d->wave + 1;
+
+    // Primeiro mede quantas linhas os inimigos vivos ocupam, para o painel
+    // crescer junto.
+    int lines = 1, line_x = 0;
+    if (d->phase == DIRECTOR_ACTIVE) {
+        for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
+            int count = enemies_of(w, (EnemyType)type);
+            if (count == 0) continue;
+            int width = MeasureText(TextFormat("%s %d", ENEMY_NAMES[type], count), WAVE_ITEM_SIZE);
+            if (line_x > 0 && line_x + width > WAVE_PANEL_WIDTH - 20) {
+                lines++;
+                line_x = 0;
+            }
+            line_x += width + 14;
+        }
+    } else if (d->phase == DIRECTOR_PAUSE) {
+        lines = 2;
+    }
+    DrawRectangle(x - 10, y - 6, WAVE_PANEL_WIDTH, 40 + lines * WAVE_LINE + 4, FRAME_COLOR);
     DrawText("HORDA", x, y, LABEL_SIZE, DIM_COLOR);
     DrawText(TextFormat("%d / %d", shown, w->plan.count), x + 80, y - 2, LABEL_SIZE + 4, TEXT_COLOR);
 
+    int row_y = y + 30;
     if (d->phase == DIRECTOR_PAUSE) {
-        DrawText(TextFormat("chega em %.0f s", (double)ceilf(d->timer)), x, y + 28, LABEL_SIZE, PRIZE_COLOR);
+        DrawText(TextFormat("próxima horda em %.0f s", (double)ceilf(d->timer)), x, row_y, LABEL_SIZE - 2, PRIZE_COLOR);
+        // A calmaria pode ser encurtada: quem já está pronto chama a horda.
+        float blink = 0.65f + 0.35f * sinf(seconds(w, t) * 3.0f);
+        DrawText("Enter: chamar agora", x, row_y + WAVE_LINE + 2, WAVE_ITEM_SIZE, with_alpha(DIM_COLOR, blink));
     } else if (d->phase == DIRECTOR_ACTIVE) {
-        int line_x = x;
+        line_x = x;
+        bool any = false;
         for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
             int count = enemies_of(w, (EnemyType)type);
             if (count == 0) continue;
             const char *item = TextFormat("%s %d", ENEMY_NAMES[type], count);
-            DrawText(item, line_x, y + 28, LABEL_SIZE - 2, ENEMY_COLORS[type]);
-            line_x += MeasureText(item, LABEL_SIZE - 2) + 16;
+            int width = MeasureText(item, WAVE_ITEM_SIZE);
+            if (line_x > x && line_x + width > x + WAVE_PANEL_WIDTH - 20) {
+                row_y += WAVE_LINE;
+                line_x = x;
+            }
+            DrawText(item, line_x, row_y, WAVE_ITEM_SIZE, ENEMY_COLORS[type]);
+            line_x += width + 14;
+            any = true;
         }
-        if (line_x == x) DrawText("chegando...", x, y + 28, LABEL_SIZE - 2, DIM_COLOR);
+        if (!any) DrawText("chegando...", x, row_y, WAVE_ITEM_SIZE, DIM_COLOR);
     }
-    (void)t;
+}
+
+// Avisos de ameaça logo abaixo da barra do planeta: o que está ferindo o
+// planeta (ou mirando na nave) agora, para o jogador decidir o que caçar.
+#define ALERT_SIZE 18
+
+static void draw_alerts(const World *w, const Tuning *t, int center_x)
+{
+    const Enemies *e = &w->enemies;
+    float digging = -1.0f;
+    int draining = 0, aiming = 0;
+    bool locked = false;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
+        const Enemy *en = &e->items[i];
+        if (en->type == ENEMY_DIGGER && en->state == DIGGER_DRILL) {
+            digging = fmaxf(digging, digger_progress(en, &w->planet));
+        } else if (en->type == ENEMY_SIPHON && en->state == SIPHON_DRAIN) {
+            draining++;
+        } else if (en->type == ENEMY_SNIPER && en->arming > 0.0f) {
+            aiming++;
+            if (en->arming <= t->sniper_lock_time) locked = true;
+        }
+    }
+
+    float now = seconds(w, t);
+    int y = BAR_TOP + LABEL_SIZE + BAR_HEIGHT + 40;
+    if (planet_core_hp(&w->planet) < CORE_SHOW_BELOW) y += LABEL_SIZE + 22;
+    if (digging >= 0.0f) {
+        float blink = 0.7f + 0.3f * sinf(now * (4.0f + 10.0f * digging));
+        text_centered(TextFormat("ESCAVADOR CAVANDO RUMO AO NÚCLEO  %.0f%%", (double)digging * 100.0), center_x, y,
+                      ALERT_SIZE, with_alpha(ENEMY_COLORS[ENEMY_DIGGER], blink));
+        y += ALERT_SIZE + 6;
+    }
+    if (draining > 0) {
+        const char *msg = (draining > 1) ? TextFormat("%d SIFÕES DRENANDO O PLANETA", draining) : "SIFÃO DRENANDO O PLANETA";
+        text_centered(msg, center_x, y, ALERT_SIZE, with_alpha(ENEMY_COLORS[ENEMY_SIPHON], 0.75f + 0.25f * sinf(now * 5.0f)));
+        y += ALERT_SIZE + 6;
+    }
+    if (aiming > 0 && w->ship.alive) {
+        const char *msg = locked ? "ATIRADOR TRAVOU: DESVIE!" : "ATIRADOR MIRANDO EM VOCÊ";
+        float blink = locked ? (sinf(now * 30.0f) > 0.0f ? 1.0f : 0.4f) : 0.8f;
+        text_centered(msg, center_x, y, ALERT_SIZE + (locked ? 4 : 0), with_alpha(ENEMY_COLORS[ENEMY_SNIPER], blink));
+    }
 }
 
 // Avisos grandes no meio da tela: começo e fim de cada horda.
@@ -404,16 +535,12 @@ static void draw_banners(const World *w, const Tuning *t)
             DrawRectangle(0, y - 14, sw, BANNER_SIZE + 64, with_alpha((Color){ 10, 4, 18, 255 }, fade * 0.55f));
             text_centered(TextFormat("HORDA %d", number), sw / 2, y, BANNER_SIZE, with_alpha(TEXT_COLOR, fade));
             if (number >= 1 && number <= w->plan.count) {
-                const WaveDef *wave = &w->plan.waves[number - 1];
-                char line[96] = "";
-                int len = 0;
+                // A composição da horda, cada tipo na sua cor.
+                int counts[ENEMY_TYPE_COUNT];
                 for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
-                    int count = wave_enemy_count(wave, (EnemyType)type);
-                    if (count == 0) continue;
-                    len += snprintf(line + len, sizeof line - (size_t)len, "%s%s x%d", len > 0 ? "   " : "",
-                                    ENEMY_NAMES[type], count);
+                    counts[type] = wave_enemy_count(&w->plan.waves[number - 1], (EnemyType)type);
                 }
-                text_centered(line, sw / 2, y + BANNER_SIZE + 8, LABEL_SIZE, with_alpha(PRIZE_COLOR, fade));
+                type_list(counts, false, sw / 2, y + BANNER_SIZE + 8, LABEL_SIZE, fade);
             }
         } else {
             text_centered("HORDA VENCIDA", sw / 2, y, BANNER_SIZE - 10, with_alpha(HEALTHY, fade));
@@ -438,8 +565,10 @@ static void draw_popups(const World *w, const Tuning *t, Camera3D camera)
         Vector2 p;
         if (!project(camera, e->pos, &p)) continue;
         float life = age / POPUP_TIME;
-        Color c = (e->type == EV_BOMB_DOWN) ? BOMB_COLOR : (e->sub == ENEMY_BOMBER ? PRIZE_COLOR : TEXT_COLOR);
-        int size = (e->sub == ENEMY_BOMBER && e->type == EV_KILL) ? 30 : 20;
+        if (p.y - 24.0f - POPUP_RISE * life < PANELS_BOTTOM) continue;
+        bool big = (e->type == EV_KILL && is_big((EnemyType)e->sub));
+        Color c = (e->type == EV_BOMB_DOWN) ? BOMB_COLOR : (big ? PRIZE_COLOR : TEXT_COLOR);
+        int size = big ? 30 : 20;
         text_centered(TextFormat("+%s", format_points((int64_t)e->value)), (int)p.x, (int)(p.y - 24.0f - POPUP_RISE * life),
                       size, with_alpha(c, 1.0f - life * life));
     }
@@ -449,7 +578,7 @@ static void draw_popups(const World *w, const Tuning *t, Camera3D camera)
 //  Marcadores de inimigos
 // ---------------------------------------------------------------------------
 #define EDGE_MARGIN  46.0f   // as setas ficam a esta distância das bordas dos lados
-#define EDGE_TOP     112.0f  // ... e abaixo dos painéis do topo
+#define EDGE_TOP     PANELS_BOTTOM   // ... e abaixo dos painéis do topo
 #define EDGE_BOTTOM  70.0f
 #define ARROW_SIZE   12.0f
 
@@ -500,6 +629,36 @@ static bool on_screen(Vector2 p)
         && p.y <= (float)GetScreenHeight() - slack;
 }
 
+// Etiqueta sobre um inimigo que está fazendo algo perigoso agora (NULL se nada).
+static const char *enemy_label(const World *w, const Tuning *t, const Enemy *en, Color *color)
+{
+    switch ((EnemyType)en->type) {
+    case ENEMY_BOMBER:
+        *color = BOMB_COLOR;
+        return (en->arming > 0.0f) ? "BOMBA" : NULL;
+    case ENEMY_CARRIER:
+        *color = ENEMY_COLORS[ENEMY_CARRIER];
+        return (en->arming > 0.0f) ? "LANÇANDO" : NULL;
+    case ENEMY_DIGGER:
+        *color = ENEMY_COLORS[ENEMY_DIGGER];
+        return (en->state == DIGGER_DRILL)
+                   ? TextFormat("ESCAVANDO %.0f%%", (double)digger_progress(en, &w->planet) * 100.0)
+                   : NULL;
+    case ENEMY_SIPHON:
+        *color = ENEMY_COLORS[ENEMY_SIPHON];
+        return (en->state == SIPHON_DRAIN) ? "DRENANDO" : NULL;
+    case ENEMY_SNIPER:
+        *color = ENEMY_COLORS[ENEMY_SNIPER];
+        if (en->arming <= 0.0f) return NULL;
+        return (en->arming <= t->sniper_lock_time) ? "TRAVOU" : "MIRANDO";
+    case ENEMY_KAMIKAZE:
+        *color = ENEMY_COLORS[ENEMY_KAMIKAZE];
+        return (en->state == KAMIKAZE_HUNT) ? "!" : NULL;
+    default:
+        return NULL;
+    }
+}
+
 static void draw_markers(const World *w, const Tuning *t, Camera3D camera)
 {
     float now = seconds(w, t);
@@ -507,23 +666,39 @@ static void draw_markers(const World *w, const Tuning *t, Camera3D camera)
     for (int i = 0; i < e->pool.capacity; i++) {
         if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
         const Enemy *en = &e->items[i];
-        bool arming = en->arming > 0.0f;
-        Color color = ENEMY_COLORS[en->type];
-        if (arming) color = mix_color(color, BOMB_COLOR, 0.5f + 0.5f * sinf(now * 14.0f));
-        float big = (en->type == ENEMY_BOMBER) ? 1.5f : 1.0f;
+        EnemyType type = (EnemyType)en->type;
+        Color label_color = WHITE;
+        const char *label = enemy_label(w, t, en, &label_color);
+        Color color = ENEMY_COLORS[type];
+        if (label != NULL) color = mix_color(color, label_color, 0.5f + 0.5f * sinf(now * 14.0f));
+        float big = is_big(type) ? 1.5f : 1.0f;
 
         Vector2 p;
         if (project(camera, en->pos, &p) && on_screen(p)) {
             float distance = Vector3Distance(camera.position, en->pos);
-            if (en->type == ENEMY_BOMBER) {
-                // Vida do Bombardeiro, embaixo dele.
-                float fill = en->hp / t->enemy[ENEMY_BOMBER].hp;
-                draw_bar((int)p.x - 30, (int)p.y + 26, 60, 5, fill, color);
-                if (arming) text_centered("BOMBA", (int)p.x, (int)p.y - 66, 18, BOMB_COLOR);
+            float lift = 18.0f * big;
+            if (has_health_bar(t, type) && (is_big(type) || en->hp < t->enemy[type].hp)) {
+                // Vida dos mais resistentes, embaixo deles.
+                int width = is_big(type) ? 60 : 40;
+                draw_bar((int)p.x - width / 2, (int)p.y + 26, width, 5, en->hp / t->enemy[type].hp, color);
             }
-            if (distance > t->combat_marker_distance) diamond((Vector2){ p.x, p.y - 18.0f * big }, 5.0f * big, color);
+            // (não sobe para a faixa dos painéis e avisos do topo)
+            if (label != NULL && p.y - lift - 30.0f > EDGE_TOP) {
+                text_centered(label, (int)p.x, (int)(p.y - lift - 30.0f), 18, label_color);
+            }
+            if (type == ENEMY_SHIELDER) {
+                // O Escudeiro é alvo prioritário: um círculo, não um losango.
+                if (distance > t->combat_marker_distance * 0.5f) {
+                    DrawCircleLines((int)p.x, (int)(p.y - lift), 7.0f, color);
+                    DrawCircleLines((int)p.x, (int)(p.y - lift), 4.0f, color);
+                }
+            } else if (distance > t->combat_marker_distance) {
+                diamond((Vector2){ p.x, p.y - lift }, 5.0f * big, color);
+            }
         } else {
-            edge_arrow(camera, en->pos, ARROW_SIZE * big, with_alpha(color, 0.9f));
+            // Fora da tela: quem está ferindo o planeta (ou mirando) pisca.
+            float alpha = (label != NULL) ? 0.6f + 0.4f * sinf(now * 12.0f) : 0.85f;
+            edge_arrow(camera, en->pos, ARROW_SIZE * big * (label != NULL ? 1.25f : 1.0f), with_alpha(color, alpha));
         }
     }
 
@@ -577,16 +752,20 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
     y += 40;
 
     int reached = won ? w->plan.count : w->director.wave + 1;
-    const char *lines[4];
-    lines[0] = TextFormat("planeta salvo   %.1f%%", (double)planet_hp(&w->planet) * 100.0);
-    lines[1] = TextFormat("horda   %d de %d", reached, w->plan.count);
-    lines[2] = TextFormat("abates   %d Enxame   %d Bombardeiro   %d bombas", sc->kills_by_type[ENEMY_SWARM],
-                          sc->kills_by_type[ENEMY_BOMBER], sc->bombs_down);
-    lines[3] = TextFormat("maior combo   %d   bônus de planeta   %s", sc->best_chain, format_points(sc->planet_bonus));
-    for (int i = 0; i < 4; i++) {
-        text_centered(lines[i], sw / 2, y, LABEL_SIZE, with_alpha(TEXT_COLOR, panel));
-        y += 28;
-    }
+    Color body = with_alpha(TEXT_COLOR, panel);
+    text_centered(TextFormat("planeta salvo   %.1f%%      horda   %d de %d", (double)planet_hp(&w->planet) * 100.0,
+                             reached, w->plan.count),
+                  sw / 2, y, LABEL_SIZE, body);
+    y += 28;
+    text_centered(TextFormat("abates   %d      bombas derrubadas   %d", sc->kills, sc->bombs_down), sw / 2, y,
+                  LABEL_SIZE, body);
+    y += 26;
+
+    type_list(sc->kills_by_type, true, sw / 2, y, LABEL_SIZE - 4, panel);   // abates por tipo
+    y += 30;
+    text_centered(TextFormat("maior combo   %d   bônus de planeta   %s", sc->best_chain, format_points(sc->planet_bonus)),
+                  sw / 2, y, LABEL_SIZE, body);
+    y += 28;
     float blink = 0.6f + 0.4f * sinf(since * 4.0f);
     text_centered("R para jogar de novo", sw / 2, y + 16, LABEL_SIZE + 2, with_alpha(PRIZE_COLOR, panel * blink));
 }
@@ -605,6 +784,7 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
         draw_popups(w, t, ctx->camera);
     }
     draw_planet(w, t, ctx->center_x);
+    if (playing && w->state == GAME_PLAYING) draw_alerts(w, t, ctx->center_x);
     if (w->director.phase != DIRECTOR_OFF) {
         draw_score(w, t, ctx);
         draw_wave_info(w, t);

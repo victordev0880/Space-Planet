@@ -17,6 +17,9 @@
 #define RAM_SPEED_FULL   20.0f    // trombar com o Bombardeiro a esta velocidade dá o dano inteiro
 #define RAM_MIN_SPEED    2.0f
 #define BOMB_EXPLOSION   1.2f     // tamanho da explosão de uma bomba derrubada
+#define DETONATE_SIZE    2.0f     // a explosão do Kamikaze junto da nave é maior que a de um abate
+#define DETONATE_MIN     0.35f    // mesmo na borda da explosão, o dano não cai abaixo desta fração
+#define BIG_KILL_SCALE   2.5f     // inimigos deste tamanho para cima congelam o jogo ao morrer
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -34,9 +37,22 @@ static const Rgb8 WRECK_COOL    = { 110, 190, 255 };
 
 typedef struct { Rgb8 hot, glow, debris; } Blast;
 static const Blast BLASTS[ENEMY_TYPE_COUNT] = {
-    [ENEMY_SWARM]  = { { 210, 255, 200 }, { 160, 90, 255 }, { 70, 46, 92 } },
-    [ENEMY_BOMBER] = { { 255, 226, 170 }, { 255, 120, 60 }, { 92, 62, 56 } },
+    [ENEMY_SWARM]    = { { 210, 255, 200 }, { 160, 90, 255 }, { 70, 46, 92 } },
+    [ENEMY_BOMBER]   = { { 255, 226, 170 }, { 255, 120, 60 }, { 92, 62, 56 } },
+    [ENEMY_KAMIKAZE] = { { 255, 230, 160 }, { 255, 70, 40 }, { 90, 40, 36 } },
+    [ENEMY_DIGGER]   = { { 255, 220, 150 }, { 255, 160, 60 }, { 110, 84, 60 } },
+    [ENEMY_SIPHON]   = { { 220, 255, 220 }, { 90, 255, 170 }, { 50, 80, 70 } },
+    [ENEMY_SNIPER]   = { { 255, 220, 220 }, { 255, 60, 90 }, { 70, 60, 70 } },
+    [ENEMY_SHIELDER] = { { 220, 255, 255 }, { 80, 230, 255 }, { 50, 76, 90 } },
+    [ENEMY_CARRIER]  = { { 255, 236, 190 }, { 200, 120, 255 }, { 80, 70, 96 } },
 };
+static const Rgb8 SHIELD_BLOCK = { 120, 240, 255 };
+
+// Pesados empurram a nave quando ela tromba neles; os leves se despedaçam.
+static bool is_heavy(EnemyType type)
+{
+    return type == ENEMY_BOMBER || type == ENEMY_CARRIER || type == ENEMY_DIGGER || type == ENEMY_SIPHON;
+}
 static const Blast BOMB_BLAST = { { 255, 210, 170 }, { 255, 70, 60 }, { 80, 40, 40 } };
 
 static int seconds_to_ticks(const Tuning *t, float seconds)
@@ -299,7 +315,11 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
     Vector3 point = Vector3Lerp(a, b, first);
     Vector3 back = Vector3Normalize(Vector3Negate(travel));
 
-    if (enemy >= 0) {
+    if (enemy >= 0 && enemies_shielded_by(e, t, enemy) >= 0) {
+        // Coberto por um Escudeiro: o tiro para no escudo.
+        particles_sparks(&w->particles, &w->rng, point, back, 6, 10.0f, SHIELD_BLOCK);
+        events_push(&w->events, (uint32_t)w->tick, EV_SHIELDED, e->items[enemy].type, point, 0.0f);
+    } else if (enemy >= 0) {
         Enemy *en = &e->items[enemy];
         float damage = s->damage;
         EventType kind = EV_HIT;
@@ -384,14 +404,18 @@ static void resolve_rams(World *w, const Tuning *t)
 
         Vector3 normal = Vector3Scale(offset, 1.0f / distance);
         Vector3 point = Vector3Add(en->pos, Vector3Scale(normal, stats->radius));
-        if (en->type == ENEMY_SWARM) {
-            // O drone se despedaça na nave (e conta como abate).
+        if (en->type == ENEMY_KAMIKAZE) {
+            enemies_damage(e, i, en->hp, DEATH_DETONATE);   // a explosão cuida do dano
+            continue;
+        }
+        if (!is_heavy((EnemyType)en->type)) {
+            // O inimigo leve se despedaça na nave (e conta como abate).
             enemies_damage(e, i, en->hp, DEATH_PLAYER);
             combat_damage_ship(w, t, stats->ram_damage, point);
             continue;
         }
 
-        // O Bombardeiro é um muro: a nave é empurrada para fora e quica.
+        // Os pesados são um muro: a nave é empurrada para fora e quica.
         s->pos = Vector3Add(en->pos, Vector3Scale(normal, reach + 0.05f));
         Vector3 relative = Vector3Subtract(Vector3Add(s->vel, s->fall), en->vel);
         float into = -Vector3DotProduct(relative, normal);
@@ -427,25 +451,35 @@ void combat_sweep(World *w, const Tuning *t)
         Enemy *en = &e->items[i];
         EnemyType type = (EnemyType)en->type;
         const Blast *blast = &BLASTS[type];
-        particles_explosion(&w->particles, &w->rng, en->pos, en->vel, t->enemy[type].scale, blast->hot, blast->glow,
-                            blast->debris);
+        bool detonated = (en->death == DEATH_DETONATE);
+        float size = t->enemy[type].scale * (detonated ? DETONATE_SIZE : 1.0f);
+        particles_explosion(&w->particles, &w->rng, en->pos, en->vel, size, blast->hot, blast->glow, blast->debris);
 
-        if (en->death == DEATH_PLAYER && playing(w)) {
+        if (detonated) {
+            // Kamikaze junto da nave: o dano cai com a distância.
+            const Ship *s = &w->ship;
+            float d = Vector3Distance(s->pos, en->pos);
+            if (s->alive && d < t->kamikaze_blast_radius) {
+                float falloff = Clamp(1.0f - d / t->kamikaze_blast_radius, DETONATE_MIN, 1.0f);
+                combat_damage_ship(w, t, t->enemy[type].ram_damage * falloff, en->pos);
+            }
+            events_push(&w->events, (uint32_t)w->tick, EV_DETONATE, (uint8_t)type, en->pos, 0.0f);
+        } else if (en->death == DEATH_PLAYER && playing(w)) {
             int gained = score_kill(&w->score, t, t->enemy[type].points);
             w->score.kills_by_type[type]++;
             w->kill_marker = KILL_MARKER_TIME;
             events_push(&w->events, (uint32_t)w->tick, EV_KILL, (uint8_t)type, en->pos, (float)gained);
-            if (type == ENEMY_BOMBER) {
+            if (t->enemy[type].scale >= BIG_KILL_SCALE) {
                 int ticks = seconds_to_ticks(t, t->combat_hitstop_big);
                 if (ticks > w->hitstop) w->hitstop = ticks;
             }
         } else {
             events_push(&w->events, (uint32_t)w->tick, EV_CRASH, (uint8_t)type, en->pos, 0.0f);
             // Caiu no planeta: abre uma cratera onde bateu.
-            if (planet_sample(&w->planet, en->pos) >= VOXEL_ISO) {
+            if (planet_sample(&w->planet, en->pos) >= VOXEL_ISO && en->state != DIGGER_DRILL) {
                 Vector3 up = Vector3Normalize(en->pos);
-                float radius = (type == ENEMY_BOMBER) ? t->bomber_crater_radius : t->swarm_crater_radius;
-                float depth = (type == ENEMY_BOMBER) ? t->bomber_crater_depth : t->swarm_crater_depth;
+                float radius, depth;
+                enemy_crater(t, type, &radius, &depth);
                 world_impact(w, t, Vector3Add(en->pos, Vector3Scale(up, 6.0f)), Vector3Negate(up), radius, depth);
             }
         }

@@ -1,0 +1,110 @@
+# Roteiro do marco 6: os seis inimigos novos, em cenas montadas. Primeiro os
+# modelos de perto (com a câmera livre a partida fica congelada); depois cada
+# tipo em ação, com a nave parada assistindo (pairando: sem nenhuma tecla).
+#
+#   mingw32-make run ARGS="--autoplay roteiros/inimigos.txt"
+#
+# O Sol fica na direção (0.56, 0.21, 0.80); o planeta tem raio 57.6.
+# "clear" tira de cena os inimigos e tiros da cena anterior.
+
+frames 4100
+seed 6
+
+at 0    waves off
+
+# --- os modelos, de perto ----------------------------------------------------
+at 5    spawn kamikaze 1  37.6 50.1 125.2
+at 5    cam 36.8 50.7 133.0  37.6 50.1 125.2
+at 6    shot inimigos_01_kamikaze
+at 10   spawn digger 1  -28.2 42.3 141.1
+at 10   cam -36.0 44.0 147.0  -28.2 42.3 141.1
+at 11   shot inimigos_02_escavador
+at 15   spawn siphon 1  80.0 20.0 115.0
+at 15   cam 86.0 23.0 121.0  80.0 20.0 115.0
+at 16   shot inimigos_03_sifao
+at 20   spawn sniper 1  100.0 -10.0 100.0
+at 20   cam 106.0 -7.0 106.0  100.0 -10.0 100.0
+at 21   shot inimigos_04_atirador
+at 25   spawn shielder 1  60.0 80.0 100.0
+at 25   cam 64.0 82.0 107.0  60.0 80.0 100.0
+at 26   shot inimigos_05_escudeiro
+at 30   spawn carrier 1  -60.0 10.0 130.0
+at 30   cam -74.0 16.0 141.0  -60.0 10.0 130.0
+at 31   shot inimigos_06_porta_drones
+
+# --- Kamikaze: travam na nave e explodem junto dela --------------------------
+at 70   clear
+at 70   ship -9.0 42.1 133.2  26.0 20.2 47.3
+at 80   spawn kamikaze 3  16.9 32.2 88.9
+at 100  shot inimigos_07_kamikaze_vindo
+at 150  shot inimigos_08_kamikaze_vindo
+at 185  shot inimigos_09_kamikaze_perto
+at 200  shot inimigos_10_kamikaze_perto
+at 212  shot inimigos_11_kamikaze_explosao
+at 225  shot inimigos_12_kamikaze_explosao
+at 260  shot inimigos_13_kamikaze_depois
+
+# --- Escavador: pousa e cava um túnel rumo ao núcleo -------------------------
+at 600  clear
+at 600  ship 13.1 30.7 86.2  25.9 20.2 47.2
+at 600  spawn digger 1  49.5 38.5 90.2
+at 640  shot inimigos_12_escavador_descendo
+at 720  shot inimigos_13_escavador_pousando
+at 800  shot inimigos_14_escavador_cavando
+at 1000 shot inimigos_15_escavador_cavando
+at 1300 shot inimigos_16_escavador_fundo
+at 1490 shot inimigos_17_escavador_fundo
+
+# --- Sifão: paira e drena o solo com um feixe --------------------------------
+at 1500 clear
+at 1500 ship 13.1 30.7 86.2  17.3 28.8 46.7
+at 1500 spawn siphon 1  33.0 55.0 89.1
+at 1560 shot inimigos_18_sifao_chegando
+at 1680 shot inimigos_19_sifao_drenando
+at 1800 shot inimigos_20_sifao_drenando
+at 2050 shot inimigos_21_sifao_buraco
+
+# --- Atirador: mantém distância, carrega a mira e dispara --------------------
+at 2100 clear
+at 2100 ship 13.1 30.7 86.2  -84.5 19.3 105.1
+at 2100 spawn sniper 1  -101.2 23.6 127.6
+at 2130 shot inimigos_22_atirador
+at 2160 shot inimigos_23_atirador
+at 2190 shot inimigos_24_atirador
+at 2220 shot inimigos_25_atirador
+at 2250 shot inimigos_26_atirador
+at 2280 shot inimigos_27_atirador
+at 2310 shot inimigos_28_atirador
+at 2340 shot inimigos_29_atirador
+at 2400 shot inimigos_30_atirador
+at 2480 shot inimigos_31_atirador
+
+# --- Escudeiro: protege o bando até cair -------------------------------------
+at 2600 clear
+at 2600 ship -9.0 42.1 133.2  26.0 20.2 47.3
+at 2600 spawn swarm 5  85.6 66.6 156.0
+at 2600 spawn shielder 1  85.6 66.6 156.0
+at 2760 shot inimigos_32_escudeiro_chegando
+at 2860 shot inimigos_33_escudeiro_bando
+at 2940 shot inimigos_34_escudeiro_bando
+at 3000 autopilot on
+at 3060 shot inimigos_35_escudeiro_atacado
+at 3120 shot inimigos_36_escudeiro_atacado
+at 3180 shot inimigos_37_escudeiro_atacado
+at 3260 shot inimigos_38_escudeiro_depois
+at 3290 autopilot off
+
+# --- Porta-drones: avisa e lança um bando ------------------------------------
+at 3300 clear
+at 3300 ship 13.1 30.7 86.2  45.0 35.0 82.0
+at 3300 spawn carrier 1  45.0 35.0 82.0
+at 3330 shot inimigos_39_porta_drones
+at 3420 shot inimigos_40_porta_drones
+at 3510 shot inimigos_41_porta_drones_avisando
+at 3560 shot inimigos_42_porta_drones_avisando
+at 3620 shot inimigos_43_porta_drones_lancou
+at 3700 shot inimigos_44_porta_drones_lancou
+at 3850 autopilot on
+at 3950 shot inimigos_45_contra_o_porta_drones
+at 4050 shot inimigos_46_contra_o_porta_drones
+at 4099 shot inimigos_47_fim

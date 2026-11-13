@@ -139,17 +139,34 @@ static void draw_hint(const DebugOverlay *o, const World *w)
     } else if (w->cam_mode == CAM_FREE) {
         hint = "WASD mover   mouse olhar   Shift rápido   F2 volta ao jogo   F1 debug";
     } else if (w->cam_mode == CAM_SHIP && first_moments) {
-        hint = "clique atira   W acelera   S freia   A/D lado   Q/E rola   Shift boost   Espaço dash   Ctrl drift";
+        hint = "clique atira   W acelera   S freia e dá ré   sem teclas a nave paira   A/D lado   Q/E rola\n"
+               "Shift boost   Espaço dash   Ctrl drift   Enter chama a próxima horda";
     } else if (w->cam_mode == CAM_ORBIT) {
         hint = "F1 debug   F2 câmera livre   F3 wireframe";
     }
     if (hint == NULL) return;
-    int width = MeasureText(hint, FONT_SIZE);
-    int x = (GetScreenWidth() - width) / 2;
-    int y = GetScreenHeight() - 36;
-    // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
-    DrawText(hint, x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
-    DrawText(hint, x, y, FONT_SIZE, HINT_COLOR);
+
+    // Uma ou duas linhas ('\n'), cada uma centralizada. Uma linha fica no pé
+    // da tela, embaixo do painel da nave; duas não cabem ali sem cobrir o
+    // painel, então sobem para logo acima dele.
+    char lines[2][160] = { "", "" };
+    const char *split = strchr(hint, '\n');
+    int count = 1;
+    if (split != NULL) {
+        snprintf(lines[0], sizeof lines[0], "%.*s", (int)(split - hint), hint);
+        snprintf(lines[1], sizeof lines[1], "%s", split + 1);
+        count = 2;
+    } else {
+        snprintf(lines[0], sizeof lines[0], "%s", hint);
+    }
+    for (int i = 0; i < count; i++) {
+        int width = MeasureText(lines[i], FONT_SIZE);
+        int x = (GetScreenWidth() - width) / 2;
+        int y = (count == 1) ? GetScreenHeight() - 36 : GetScreenHeight() - 170 + i * (FONT_SIZE + 8);
+        // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
+        DrawText(lines[i], x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
+        DrawText(lines[i], x, y, FONT_SIZE, HINT_COLOR);
+    }
 }
 
 void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *info)

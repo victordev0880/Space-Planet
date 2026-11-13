@@ -192,6 +192,9 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         }
         e.count = (int)n;
         e.cmd = AP_SPAWN;
+    } else if (strcmp(cmd, "clear") == 0) {
+        if (count != 3) return fail(ap, line_no, "esperado: at <quadro> clear");
+        e.cmd = AP_CLEAR;
     } else {
         return fail(ap, line_no, "comando desconhecido: \"%s\"", cmd);
     }
@@ -313,6 +316,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->has_view = false;
     out->has_ship = false;
     out->has_waves = false;
+    out->clear = false;
     out->spawn_count = 0;
     out->crater_count = 0;
     out->barrage_count = 0;
@@ -360,6 +364,10 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_AUTOPILOT:
             ap->autopilot = (e->count != 0);
             break;
+        case AP_CLEAR:
+            out->clear = true;
+            out->spawn_count = 0;   // o que veio antes no mesmo quadro também sai
+            break;
         case AP_SPAWN:
             if (out->spawn_count < AUTOPLAY_MAX_SPAWNS) {
                 AutoplaySpawn *s = &out->spawns[out->spawn_count++];
@@ -384,6 +392,7 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     if (frame->has_ship) world_place_ship(w, t, frame->ship_pos, frame->ship_target, frame->ship_speed);
     if (frame->has_cam) world_place_camera(w, frame->cam_pos, frame->cam_target);
     if (frame->has_waves) world_set_waves(w, frame->waves_on);
+    if (frame->clear) world_clear_enemies(w);
     for (int i = 0; i < frame->spawn_count; i++) {
         world_spawn(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center);
     }
