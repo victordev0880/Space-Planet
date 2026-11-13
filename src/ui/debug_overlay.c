@@ -7,6 +7,7 @@
 
 #include "core/vmath.h"
 #include "ui/font.h"
+#include "ui/hud.h"
 
 #define FONT_SIZE     20
 #define LINE_HEIGHT   24
@@ -167,7 +168,8 @@ static void draw_hint(const DebugOverlay *o, const World *w, const DebugInfo *in
     for (int i = 0; i < count; i++) {
         int width = ui_measure_text(lines[i], FONT_SIZE);
         int x = (GetScreenWidth() - width) / 2;
-        int y = (count == 1) ? GetScreenHeight() - 36 : GetScreenHeight() - 196 + i * (FONT_SIZE + 8);
+        int y = (count == 1) ? GetScreenHeight() - 36
+                             : (int)hud_radar_top() - 14 - (count - i) * (FONT_SIZE + 8);   // acima do radar
         // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
         ui_draw_text(lines[i], x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
         ui_draw_text(lines[i], x, y, FONT_SIZE, HINT_COLOR);

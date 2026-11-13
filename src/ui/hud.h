@@ -38,6 +38,9 @@ bool hud_gamepad(void);
 // Escolhe o texto da dica conforme o que o jogador está usando.
 const char *hud_keys(const char *keyboard, const char *gamepad);
 
+// Linha da tela onde começa o radar (textos do pé da tela ficam acima dela).
+float hud_radar_top(void);
+
 // Seta do direcional (0 = esquerda, 1 = cima, 2 = direita) num quadrado de `size` pixels.
 void hud_dpad_arrow(int x, int y, int size, int dir, Color color);
 

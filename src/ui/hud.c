@@ -8,6 +8,7 @@
 #include "core/vmath.h"
 #include "game/combat.h"
 #include "ui/font.h"
+#include "ui/radar.h"
 
 #define BAR_WIDTH    400
 #define BAR_HEIGHT   14
@@ -822,9 +823,25 @@ static void draw_popups(const World *w, const Tuning *t, Camera3D camera)
 // ---------------------------------------------------------------------------
 //  Marcadores de inimigos
 // ---------------------------------------------------------------------------
+// Radar no pé da tela, entre o painel da nave e a loja.
+#define RADAR_SCREEN 0.10f    // raio em fração da altura da tela...
+#define RADAR_MIN    56.0f    // ... dentro destes limites, em pixels
+#define RADAR_MAX    100.0f
+#define RADAR_BOTTOM 14.0f    // espaço até a borda de baixo
+
+static float radar_radius(void)
+{
+    return Clamp((float)GetScreenHeight() * RADAR_SCREEN, RADAR_MIN, RADAR_MAX);
+}
+
+float hud_radar_top(void)
+{
+    return (float)GetScreenHeight() - RADAR_BOTTOM - radar_radius() * 2.0f - 6.0f;
+}
+
 #define EDGE_MARGIN  46.0f   // as setas ficam a esta distância das bordas dos lados
 #define EDGE_TOP     PANELS_BOTTOM   // ... e abaixo dos painéis do topo
-#define EDGE_BOTTOM  70.0f
+#define EDGE_BOTTOM  (radar_radius() * 2.0f + RADAR_BOTTOM + 26.0f)   // ... e acima do radar
 #define ARROW_SIZE   12.0f
 
 // Seta na borda da tela apontando para algo fora dela.
@@ -1364,6 +1381,8 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
             draw_boss(w, t, ctx->camera);
             draw_ship(w, t, ctx->camera);
             draw_shop(w, t);
+            float radius = radar_radius();
+            radar_draw(w, t, (Vector2){ (float)screen_w * 0.5f, (float)screen_h - radius - RADAR_BOTTOM }, radius);
             draw_banners(w, t);
         }
     } else if (w->cam_mode == CAM_FREE) {

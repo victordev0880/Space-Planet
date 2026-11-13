@@ -1064,6 +1064,111 @@ Com isso:
 - O piloto automático compra numa ordem fixa; não reflete escolhas de um
   jogador.
 
+## Marco 10: polimento (2026-11-13)
+
+Hit-stop, tremor de câmera, tela de fim, recorde e efeitos sonoros vieram dos
+marcos 5 a 9. O marco 10 completou o resto: fonte, telas, opções, música,
+controle e radar.
+
+### Fonte
+A fonte padrão do raylib é pixelada e passa cara de protótipo. Entrou a
+Rajdhani (Google Fonts, licença OFL; o texto da licença vai junto em
+`assets/fonts`), carregada em cinco tamanhos (18, 30 e 46 na SemiBold; 60 e
+120 na Bold). Cada texto usa o menor tamanho que não precise ser ampliado.
+`ui_draw_text` e `ui_measure_text` têm a assinatura de `DrawText` e
+`MeasureText` e o mesmo sentido para o tamanho (as maiúsculas ocupam o mesmo
+espaço), então o HUD trocou de fonte sem ser redesenhado. Abaixo do tamanho
+12 a fonte suave fica ilegível, e esses textos sobem para 12. Sem os arquivos,
+volta a fonte padrão. O overlay de debug continua pixelado.
+
+### Telas
+- O `Esc` fechava o jogo (padrão do raylib). Agora `SetExitKey(KEY_NULL)` e o
+  `Esc` abre a pausa.
+- O menu (`ui/menus.c`) não conhece o aplicativo: recebe o input já traduzido
+  (setas, confirmar, voltar, mouse; teclado, mouse e controle viram a mesma
+  coisa) e devolve um comando que o `main` executa.
+- Título: a câmera de apresentação vira 20° de lado (só no desenho,
+  `Renderer.yaw_offset`) e o planeta fica à direita do nome, que tem uma
+  rachadura de lava.
+- Pausa: a simulação não roda, nem o relógio dela. Ao sair, `input_resync`
+  recomeça o input a partir do que está apertado sem gerar "apertou". O Enter
+  que fecha a pausa também é "chamar a horda", e o clique viraria tiro.
+- Transições em fade: recomeçar a partida (planeta gerado e remalhado
+  inteiro) trava alguns décimos de segundo, e no escuro isso não aparece.
+- Opções em `save/settings.txt` (chave = valor). Não são simulação: volume,
+  sensibilidade e tremor nunca mudam o resultado, e o autoplay ignora o
+  arquivo. A tela cheia é sem bordas (`ToggleBorderlessWindowed`), também no F11.
+
+### Música
+É sintetizada em código, como os efeitos: uma peça em ré menor, a 112 bpm, na
+progressão i-VI-III-VII. As camadas:
+- pad: três vozes de serras desafinadas que deslizam de um acorde para o outro;
+- arpejo: sininho com eco pingue-pongue;
+- baixo e bateria;
+- metais, no boss;
+- tique-taque de tensão.
+
+O clima escolhe quais camadas soam. Elas entram e saem em 1,6 s, sempre no
+compasso, então a música se transforma em vez de trocar de faixa. Quando o
+planeta ou o núcleo chega a `audio.danger` da derrota, o fim da progressão
+muda para sol menor e lá maior e entra o tique-taque. Na pausa, um filtro
+abafa tudo.
+
+A música roda na thread de áudio do raylib (`SetAudioStreamCallback`), então
+um quadro travado (o recomeço da partida) não a faz engasgar. Só inteiros
+atômicos atravessam as threads. Custo: 90 s de música em menos de 2 s de
+processador. `--music-wav arquivo` grava todos os climas num .wav e mostra o
+pico e o volume médio de cada trecho, assim os níveis se conferem sem ouvir.
+No autoplay, que é mudo, a música nem começa.
+
+### Controle
+- O analógico esquerdo vira W/A/S/D (limiar `gamepad.move`). O direito vira
+  "pixels de mouse" por segundo, com zona morta circular e curva de resposta
+  (`input_stick`, testada). Os gatilhos atiram. O L3 liga o boost, que fica
+  ligado até o jogador soltar o "frente", porque segurar o analógico apertado
+  cansa.
+- O direcional serve às compras e às cartas ao mesmo tempo: com as cartas na
+  tela a partida congela e as compras não valem; fora delas, as cartas não
+  valem.
+- As dicas na tela (HUD, cartas, linha de controles, menus) trocam para os
+  botões quando o jogador mexe no controle, e voltam ao teclado com qualquer
+  tecla ou mouse. Na loja e nas cartas aparecem setas do direcional.
+- **A vibração ficou de fora.** O raylib 5.5 no Windows (GLFW) não implementa
+  `SetGamepadVibration`. Daria para chamar a XInput do Windows direto, mas é
+  dependência nova, e a decisão fica com o Victor.
+- Não há controle nesta máquina. O mapeamento foi conferido só pelo código e
+  pelas capturas com `pad on` (as dicas).
+
+### Radar
+O radar mostra o planeta inteiro num disco no pé da tela, em projeção
+azimutal equidistante centrada na nave: o centro é o chão embaixo dela, a
+borda é o lado oposto do planeta, e a frente da nave aponta para cima. Uma
+horda atacando do outro lado aparece perto da borda. Era a informação que
+faltava para "defender ou caçar".
+
+Aparecem no disco:
+- inimigos na cor do tipo (os que ferem o planeta, com anel pulsante);
+- boss, bombas, meteoros, cicatrizes e defesas;
+- um anel a cada impacto no planeta.
+
+A borda fica vermelha com o planeta perto do colapso. As setas de borda da
+tela e a linha de controles subiram para não cobrir o radar.
+
+### Autoplay
+Comandos `menu title|pause|options|controls|game` e `pad on|off`; roteiros
+`menus.txt` e `radar.txt`.
+
+### Medições (Vega 8)
+- `onda1.txt`: vitória com o planeta em 92%, mediana de 5,0 ms, p99 de
+  12,5 ms. O resultado da partida é o mesmo de antes do marco: a simulação não
+  mudou, e `evolucao.txt` também dá o mesmo hash de antes.
+
+### Limitações conhecidas do marco 10
+- Sem vibração (acima).
+- Sem controle físico para testar: o primeiro teste de verdade é do Victor.
+- A música é uma peça só, e as variações são de arranjo. Se cansar, dá para
+  escrever uma segunda progressão para a segunda metade das hordas.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

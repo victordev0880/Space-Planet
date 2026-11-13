@@ -1,0 +1,24 @@
+# Radar: inimigos em direções conhecidas em volta do planeta, para conferir
+# o disco. A nave fica sobre o polo norte (+Y) olhando para +Z: no radar,
+# +Z fica para cima, -X à direita e o polo sul (o outro lado) na borda.
+frames 420
+seed 4321
+
+at 0   waves off
+at 0   ship 0 85 0 0 85 60
+at 5   spawn swarm 5 0 62 70          # na frente, perto
+at 5   spawn bomber 1 -95 10 0        # à direita, um quarto de volta
+at 5   spawn carrier 1 0 10 -110      # atrás, um quarto de volta
+at 5   spawn digger 1 30 -80 0        # quase do outro lado
+at 5   spawn siphon 1 75 -50 -20      # à esquerda, atrás, embaixo
+at 6   rock meteor 70 40 30 0 0 -10
+at 8   crater 0 -1 0.2 7 5            # feridas do outro lado
+at 8   crater 0.6 -0.8 0 6 4
+at 9   ore 60
+at 10  press buy2                      # um escudo embaixo da nave
+
+at 60  shot radar_01_inicio
+at 200 shot radar_02_escavador
+at 330 crater -1 0 0 8 5               # impacto à direita: anel no radar
+at 334 shot radar_03_impacto
+at 419 shot radar_04_fim
