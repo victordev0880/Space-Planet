@@ -31,6 +31,16 @@ typedef struct {
 
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx);
 
+// Com o controle em uso, as dicas mostram os botões dele em vez das teclas.
+void hud_set_gamepad(bool on);
+bool hud_gamepad(void);
+
+// Escolhe o texto da dica conforme o que o jogador está usando.
+const char *hud_keys(const char *keyboard, const char *gamepad);
+
+// Seta do direcional (0 = esquerda, 1 = cima, 2 = direita) num quadrado de `size` pixels.
+void hud_dpad_arrow(int x, int y, int size, int dir, Color color);
+
 // Cor e nome de cada tipo de inimigo (também a cor da linha de evolução).
 Color       hud_enemy_color(EnemyType type);
 const char *hud_enemy_name(EnemyType type);

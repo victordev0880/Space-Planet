@@ -68,6 +68,7 @@ typedef struct {
 
 typedef struct {
     const char *autoplay_path;   // NULL = jogo normal
+    const char *music_wav;       // grava uma demonstração da música e sai
     bool        realtime;        // autoplay com relógio real e vsync
     bool        no_shaders;      // desenha sem shaders próprios
     bool        verbose;
@@ -112,6 +113,8 @@ static void print_usage(void)
            "                         no jogo normal (o padrao e um passo por quadro)\n"
            "  --no-shaders           desenha sem os shaders de assets/shaders (mais simples)\n"
            "  --mute                 sem som\n"
+           "  --music-wav <arquivo>  grava num .wav a musica passando por todos os climas\n"
+           "                         (titulo, calmaria, horda, boss, perigo, pausa, fim)\n"
            "  --verbose              mostra as mensagens informativas do raylib\n"
            "  --help                 mostra esta ajuda\n");
 }
@@ -119,6 +122,7 @@ static void print_usage(void)
 static bool parse_options(int argc, char **argv, Options *opt)
 {
     opt->autoplay_path = NULL;
+    opt->music_wav = NULL;
     opt->realtime = false;
     opt->no_shaders = false;
     opt->verbose = false;
@@ -127,6 +131,8 @@ static bool parse_options(int argc, char **argv, Options *opt)
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--autoplay") == 0 && i + 1 < argc) {
             opt->autoplay_path = argv[++i];
+        } else if (strcmp(argv[i], "--music-wav") == 0 && i + 1 < argc) {
+            opt->music_wav = argv[++i];
         } else if (strcmp(argv[i], "--realtime") == 0) {
             opt->realtime = true;
         } else if (strcmp(argv[i], "--no-shaders") == 0) {
@@ -199,6 +205,73 @@ static void reload_data(Tuning *tuning, WavePlan *plan, FixedLoop *loop, World *
                          world->tick + (uint64_t)(tuning->sim_hz * 2));
 }
 
+// --music-wav: toca a música passando por todos os climas, grava em 16 bits e
+// mostra o pico e o volume médio de cada trecho (para conferir que nada estoura).
+static int write_music_demo(const char *path)
+{
+    typedef struct { const char *name; MusicMood mood; bool danger, muffled; float seconds; } Part;
+    static const Part PARTS[] = {
+        { "titulo",          MOOD_TITLE,   false, false, 14.0f },
+        { "calmaria",        MOOD_CALM,    false, false, 10.0f },
+        { "horda",           MOOD_BATTLE,  false, false, 14.0f },
+        { "boss",            MOOD_BOSS,    false, false, 14.0f },
+        { "horda em perigo", MOOD_BATTLE,  true,  false, 12.0f },
+        { "pausa no boss",   MOOD_BOSS,    false, true,   6.0f },
+        { "vitoria",         MOOD_VICTORY, false, false, 10.0f },
+        { "derrota",         MOOD_DEFEAT,  false, false, 10.0f },
+    };
+    int count = (int)(sizeof PARTS / sizeof PARTS[0]);
+    int total = 0;
+    for (int p = 0; p < count; p++) total += (int)(PARTS[p].seconds * MUSIC_SAMPLE_RATE);
+
+    short *samples = MemAlloc((unsigned int)total * 2u * sizeof(short));
+    static float block[1024 * 2];
+    music_reset();
+    int at = 0, bad = 0;
+    for (int p = 0; p < count; p++) {
+        music_set(PARTS[p].mood, PARTS[p].danger, PARTS[p].muffled);
+        int frames = (int)(PARTS[p].seconds * MUSIC_SAMPLE_RATE);
+        double sum = 0.0;
+        float peak = 0.0f;
+        for (int done = 0; done < frames;) {
+            int n = (frames - done < 1024) ? frames - done : 1024;
+            music_render(block, n);
+            for (int i = 0; i < n * 2; i++) {
+                float v = block[i];
+                if (!(v == v) || fabsf(v) > 1.0f) { bad++; v = 0.0f; }
+                peak = fmaxf(peak, fabsf(v));
+                sum += (double)v * (double)v;
+                samples[(at + done) * 2 + i] = (short)(v * 32000.0f);
+            }
+            done += n;
+        }
+        // O volume médio só do fim do trecho, depois da transição.
+        printf("%-16s pico %.2f   rms %.3f\n", PARTS[p].name, (double)peak, sqrt(sum / (double)(frames * 2)));
+        at += frames;
+    }
+    Wave wave = { (unsigned int)total, MUSIC_SAMPLE_RATE, 16, 2, samples };
+    bool ok = ExportWave(wave, path);
+    MemFree(samples);
+    printf("%s: %.0f s, %d amostras invalidas -> %s\n", ok ? "ok" : "ERRO", (double)total / MUSIC_SAMPLE_RATE, bad, path);
+    return (ok && bad == 0) ? EXIT_OK : EXIT_PROBLEMS;
+}
+
+static bool title_context(const Menu *m);
+
+// O clima da música para o momento do jogo.
+static MusicMood music_mood(const World *w, const Menu *m, const Tuning *t, bool *danger)
+{
+    *danger = false;
+    if (title_context(m)) return MOOD_TITLE;
+    if (w->state == GAME_WON) return MOOD_VICTORY;
+    if (w->state == GAME_LOST || w->collapsed) return MOOD_DEFEAT;
+    *danger = planet_hp(&w->planet) < t->defeat_planet_hp + t->audio_danger
+           || planet_core_hp(&w->planet) < t->defeat_core_hp + t->audio_danger;
+    if (boss_active(&w->boss)) return MOOD_BOSS;
+    if (w->director.phase == DIRECTOR_ACTIVE) return MOOD_BATTLE;
+    return MOOD_CALM;
+}
+
 // Preferências que valem já: volumes, tremor e tela cheia. O autoplay não
 // mexe na janela (tela cheia atrapalharia quem está usando o computador).
 static void apply_settings(const Settings *s, Audio *audio, const Tuning *t, Renderer *r, bool window)
@@ -251,6 +324,7 @@ int main(int argc, char **argv)
 {
     Options opt;
     if (!parse_options(argc, argv, &opt)) return EXIT_USAGE;
+    if (opt.music_wav != NULL) return write_music_demo(opt.music_wav);
 
     // static: structs grandes ficam fora da pilha.
     static Autoplay script;
@@ -354,6 +428,7 @@ int main(int argc, char **argv)
         renderer.yaw_offset = TITLE_YAW;
     }
     bool fresh = true;   // a partida do mundo ainda não começou: "jogar" não precisa recomeçar
+    bool autoplay_pad = false;   // roteiro pediu as dicas do controle ("pad on")
     bool quit = false;
     Transition fade = { autoplay ? 0.0f : 1.0f, autoplay ? 0 : -1, MENU_NONE };
 
@@ -385,10 +460,12 @@ int main(int argc, char **argv)
         InputSample sample = { 0u, 0.0f, 0.0f };
         const char *shot = NULL;
         MenuCommand command = MENU_NONE;
+        if (!autoplay) platform_input_update();   // teclado ou controle? (muda as dicas na tela)
         if (autoplay) {
             AutoplayFrame step;
             autoplay_step(&script, frame, &step);
             if (step.screen != AP_SCREEN_KEEP) open_screen(&menu, (Screen)step.screen, &world, &tuning);
+            if (step.pad_hints >= 0) autoplay_pad = (step.pad_hints == 1);
             sample = step.input;
             shot = step.shot;
             autoplay_apply(&step, &world, &tuning);   // câmera, nave, inimigos e crateras pedidos pelo roteiro
@@ -403,7 +480,7 @@ int main(int argc, char **argv)
             command = menu_update(&menu, &in, &settings, ui_dt);
             if (menu.sound != MENU_SOUND_NONE) audio_play_ui(&audio, &tuning, menu_sound(menu.sound));
         } else if (platform_pause_pressed()) {
-            // Esc na partida: pausa. Depois do fim, volta ao título.
+            // Esc (ou Start) na partida: pausa. Depois do fim, volta ao título.
             if (world.state == GAME_PLAYING) {
                 menu_open(&menu, SCREEN_PAUSE);
                 audio_play_ui(&audio, &tuning, SND_UI_BACK);
@@ -411,21 +488,29 @@ int main(int argc, char **argv)
                 command = MENU_TO_TITLE;
             }
         } else {
-            sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0, &settings);
+            sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0, &settings, &tuning);
             if (skip_mouse_frames > 0) skip_mouse_frames--;
             // Cartas de evolução: um clique numa carta vale como a tecla dela.
             if (world.evo.choosing && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
                 int card = cards_hit(&world, GetMousePosition());
                 if (card >= 0) sample.held |= ACT_BIT(ACT_CARD1 + card);
             }
+            // Tela de fim no controle: A joga de novo, B volta ao menu.
+            if (world.state != GAME_PLAYING) {
+                int choice = platform_end_choice();
+                if (choice == 1) sample.held |= ACT_BIT(ACT_RESET);
+                if (choice == 2) command = MENU_TO_TITLE;
+            }
         }
+        menu.gamepad = autoplay ? autoplay_pad : platform_using_gamepad();
+        hud_set_gamepad(menu.gamepad);
         input_feed(&tracker, &sample);
 
         // Comandos dos menus. Os que trocam a partida esperam a tela escurecer.
         switch (command) {
         case MENU_RESUME:
             menu_open(&menu, SCREEN_GAME);
-            input_resync(&tracker, platform_poll_input(false, &settings).held);
+            input_resync(&tracker, platform_poll_input(false, &settings, &tuning).held);
             skip_mouse_frames = 2;
             break;
         case MENU_SETTINGS:
@@ -521,7 +606,7 @@ int main(int argc, char **argv)
                 }
                 new_best = false;
                 last_state = world.state;
-                input_resync(&tracker, autoplay ? 0u : platform_poll_input(false, &settings).held);
+                input_resync(&tracker, autoplay ? 0u : platform_poll_input(false, &settings, &tuning).held);
                 fixed_loop_init(&loop, tuning.sim_hz, tuning.sim_max_steps);   // sem correr atrás do tempo da troca
                 if (autoplay) {
                     fade.alpha = 0.0f;
@@ -596,6 +681,7 @@ int main(int argc, char **argv)
         info.autoplay_frames = script.frames;
 
         info.menu_open = (menu.screen != SCREEN_GAME);
+        info.gamepad = menu.gamepad;
 
         // No título a câmera vira de lado e o planeta fica à direita, ao lado do nome.
         bool on_title = title_context(&menu);
@@ -633,6 +719,9 @@ int main(int argc, char **argv)
             DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){ 0, 0, 0, (unsigned char)(255.0f * fade.alpha) });
         }
         audio_update(&audio, &world, play_tuning, hud.camera);
+        bool danger = false;
+        MusicMood mood = music_mood(&world, &menu, &tuning, &danger);
+        audio_music(&audio, mood, danger, menu_freezes_game(&menu));
         rlDrawRenderBatchActive();
         double cpu_ms = (GetTime() - start) * 1000.0;
 

@@ -18,6 +18,7 @@
 
 #include "raylib.h"
 
+#include "audio/music.h"
 #include "game/tuning.h"
 #include "game/world.h"
 
@@ -53,6 +54,10 @@ typedef struct {
     float    volume;    // geral (multiplica o audio.volume do tuning)
     float    sfx;       // efeitos
     float    music;     // música
+
+    // Música (audio/music.c), tocada por um stream que a thread de áudio enche.
+    AudioStream music_stream;
+    bool        music_on;
 } Audio;
 
 // Abre o dispositivo de som e gera os efeitos. Se não houver dispositivo, o
@@ -65,6 +70,9 @@ void audio_set_levels(Audio *a, const Tuning *t, float volume, float sfx, float 
 
 // Som de interface (menus), sem posição. Aceita SND_UI_*.
 void audio_play_ui(Audio *a, const Tuning *t, SoundId id);
+
+// Clima da música (ver audio/music.h). Chamar a cada quadro.
+void audio_music(Audio *a, MusicMood mood, bool danger, bool muffled);
 
 // Toca os sons do que aconteceu desde o quadro anterior.
 void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera);

@@ -299,6 +299,13 @@ typedef struct {
     // áudio
     float audio_volume;
     float audio_falloff;
+    float audio_danger;
+
+    float gamepad_deadzone;
+    float gamepad_curve;
+    float gamepad_look_speed;
+    float gamepad_move;
+    float gamepad_trigger;
 
     // autoplay
     int   autoplay_warmup_frames;

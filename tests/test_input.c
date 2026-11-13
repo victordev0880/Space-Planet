@@ -1,5 +1,7 @@
 #include "test.h"
 
+#include <math.h>
+
 #include "core/input.h"
 
 static InputSample sample(uint32_t held, float dx, float dy)
@@ -114,8 +116,26 @@ static void input_resync_swallows_the_closing_press(void)
     CHECK(st.released == held);
 }
 
+static void input_stick_deadzone_and_curve(void)
+{
+    float x, y;
+    input_stick(0.1f, 0.05f, 0.15f, 1.6f, &x, &y);      // dentro da zona morta
+    CHECK(x == 0.0f && y == 0.0f);
+    input_stick(1.0f, 0.0f, 0.15f, 1.6f, &x, &y);       // fim do curso: velocidade total
+    CHECK_NEAR(x, 1.0f, 1e-5);
+    CHECK_NEAR(y, 0.0f, 1e-6);
+    input_stick(0.0f, -0.575f, 0.15f, 1.0f, &x, &y);    // curva linear: meio do curso útil
+    CHECK_NEAR(y, -0.5f, 1e-4);
+    input_stick(0.0f, -0.575f, 0.15f, 2.0f, &x, &y);    // curva 2: um quarto
+    CHECK_NEAR(y, -0.25f, 1e-4);
+    input_stick(0.9f, 0.9f, 0.15f, 1.6f, &x, &y);       // diagonal além do círculo: não passa de 1
+    CHECK(sqrtf(x * x + y * y) <= 1.0f + 1e-5f);
+    CHECK_NEAR(x, y, 1e-6);                              // e mantém a direção
+}
+
 void suite_input(void)
 {
+    RUN(input_stick_deadzone_and_curve);
     RUN(input_resync_swallows_the_closing_press);
     RUN(input_reports_edges_once);
     RUN(input_quick_tap_between_ticks_is_not_lost);

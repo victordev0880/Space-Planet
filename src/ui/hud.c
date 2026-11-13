@@ -76,6 +76,36 @@ static const Color BOMB_COLOR = { 255, 70, 50, 255 };
 static void text(const char *s, int x, int y, int size, Color color);
 static Color with_alpha(Color c, float alpha);
 
+static bool gamepad_hints = false;
+
+void hud_set_gamepad(bool on) { gamepad_hints = on; }
+bool hud_gamepad(void) { return gamepad_hints; }
+
+const char *hud_keys(const char *keyboard, const char *gamepad)
+{
+    return gamepad_hints ? gamepad : keyboard;
+}
+
+void hud_dpad_arrow(int x, int y, int size, int dir, Color color)
+{
+    float s = (float)size, fx = (float)x, fy = (float)y;
+    Vector2 a, b, c;
+    if (dir == 0) {        // esquerda
+        a = (Vector2){ fx + s * 0.2f, fy + s * 0.5f };
+        b = (Vector2){ fx + s * 0.85f, fy + s * 0.85f };
+        c = (Vector2){ fx + s * 0.85f, fy + s * 0.15f };
+    } else if (dir == 1) { // cima
+        a = (Vector2){ fx + s * 0.5f, fy + s * 0.15f };
+        b = (Vector2){ fx + s * 0.15f, fy + s * 0.8f };
+        c = (Vector2){ fx + s * 0.85f, fy + s * 0.8f };
+    } else {               // direita
+        a = (Vector2){ fx + s * 0.8f, fy + s * 0.5f };
+        b = (Vector2){ fx + s * 0.15f, fy + s * 0.15f };
+        c = (Vector2){ fx + s * 0.15f, fy + s * 0.85f };
+    }
+    DrawTriangle(a, b, c, color);   // vértices no sentido anti-horário
+}
+
 Color hud_enemy_color(EnemyType type)
 {
     return ((int)type >= 0 && type < ENEMY_TYPE_COUNT) ? ENEMY_COLORS[type] : WHITE;
@@ -395,7 +425,7 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         Color c = (ab->cooldown <= 0.0f) ? ABILITY_COLOR : with_alpha(ABILITY_COLOR, 0.45f);
         draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, (ab->charge > 0.0f) ? ab->charge / t->ability_charge : ready, c);
         if (ab->cooldown <= 0.0f && ab->charge <= 0.0f) {
-            ui_draw_text("botão direito", x + 96 + SHIP_BAR_WIDTH - ui_measure_text("botão direito", SMALL_SIZE + 2), ay - 12,
+            ui_draw_text(hud_keys("botão direito", "LT"), x + 96 + SHIP_BAR_WIDTH - ui_measure_text(hud_keys("botão direito", "LT"), SMALL_SIZE + 2), ay - 12,
                      SMALL_SIZE + 2, DIM_COLOR);
         }
     }
@@ -554,7 +584,7 @@ static void draw_wave_info(const World *w, const Tuning *t)
         ui_draw_text(TextFormat("próxima horda em %.0f s", (double)ceilf(d->timer)), x, row_y, LABEL_SIZE - 2, PRIZE_COLOR);
         // A calmaria pode ser encurtada: quem já está pronto chama a horda.
         float blink = 0.65f + 0.35f * sinf(seconds(w, t) * 3.0f);
-        ui_draw_text("Enter: chamar agora", x, row_y + WAVE_LINE + 2, WAVE_ITEM_SIZE, with_alpha(DIM_COLOR, blink));
+        ui_draw_text(hud_keys("Enter: chamar agora", "Y: chamar agora"), x, row_y + WAVE_LINE + 2, WAVE_ITEM_SIZE, with_alpha(DIM_COLOR, blink));
     } else if (d->phase == DIRECTOR_ACTIVE) {
         line_x = x;
         bool any = false;
@@ -665,13 +695,13 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
 
     // Rochas: o que fazer com a que está no raio, e o aviso de meteoro novo.
     if (rocks_towed(&w->rocks) != NULL) {
-        text_centered("REBOCANDO: solte (F) em cima de uma cratera", center_x, y, ALERT_SIZE, with_alpha(TRACTOR_COLOR, 0.9f));
+        text_centered(hud_keys("REBOCANDO: solte (F) em cima de uma cratera", "REBOCANDO: solte (X) em cima de uma cratera"), center_x, y, ALERT_SIZE, with_alpha(TRACTOR_COLOR, 0.9f));
     } else if (rocks_count(&w->rocks, ROCK_METEOR) > 0) {
         for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
             const GameEvent *ev = events_find(&w->events, id);
             if (ev == NULL || event_age(w, t, ev) > METEOR_NOTE_TIME) break;
             if (ev->type != EV_METEOR) continue;
-            text_centered("METEORO À VISTA: puxe com F e leve até uma cratera", center_x, y, ALERT_SIZE,
+            text_centered(hud_keys("METEORO À VISTA: puxe com F e leve até uma cratera", "METEORO À VISTA: puxe com X e leve até uma cratera"), center_x, y, ALERT_SIZE,
                           with_alpha(METEOR_COLOR, 0.75f + 0.25f * sinf(now * 5.0f)));
             break;
         }
@@ -719,7 +749,7 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
         break;
     default:   // EV_REWARD
         text_centered("NÚCLEO ROMPE-MUNDOS ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(ABILITY_COLOR, fade));
-        text_centered(TextFormat("segure o botão direito: um raio que atravessa tudo (recarga de %.0f s)",
+        text_centered(TextFormat(hud_keys("segure o botão direito: um raio que atravessa tudo (recarga de %.0f s)", "segure LT: um raio que atravessa tudo (recarga de %.0f s)"),
                                  (double)t->ability_cooldown),
                       sw / 2, y + BANNER_SIZE - 6, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
         break;
@@ -1029,7 +1059,7 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
         y += evolution_list(w, sw / 2, y, LABEL_SIZE - 4, panel);
     }
     float blink = 0.6f + 0.4f * sinf(since * 4.0f);
-    text_centered("R joga de novo      Esc volta ao menu", sw / 2, y + 16, LABEL_SIZE + 2,
+    text_centered(hud_keys("R joga de novo      Esc volta ao menu", "A joga de novo      B volta ao menu"), sw / 2, y + 16, LABEL_SIZE + 2,
                   with_alpha(PRIZE_COLOR, panel * blink));
 }
 
@@ -1159,7 +1189,7 @@ static void draw_rocks(const World *w, const Tuning *t, Camera3D camera)
             // Ao alcance do raio: colchetes e a tecla.
             float half = fmaxf(screen_size(camera, k->radius * 1.4f, Vector3Distance(camera.position, k->pos)), 12.0f);
             draw_brackets(p, half, TRACTOR_COLOR);
-            text_centered("F  puxa", (int)p.x, (int)(p.y + half + 6.0f), 18, TRACTOR_COLOR);
+            text_centered(hud_keys("F  puxa", "X  puxa"), (int)p.x, (int)(p.y + half + 6.0f), 18, TRACTOR_COLOR);
             continue;
         }
         if (k->kind == ROCK_METEOR) {
@@ -1299,7 +1329,9 @@ static void draw_shop(const World *w, const Tuning *t)
         int cost = defense_cost(t, type), max = defense_max(t, type), have = defenses_count(&w->defenses, type);
         bool full = have >= max, cheap = w->ore >= cost;
         Color c = (full || !cheap) ? DIM_COLOR : TEXT_COLOR;
-        ui_draw_text(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, (full || !cheap) ? DIM_COLOR : PRIZE_COLOR);
+        Color key = (full || !cheap) ? DIM_COLOR : PRIZE_COLOR;
+        if (hud_gamepad()) hud_dpad_arrow(x - 2, ry, 16, k, key);
+        else               ui_draw_text(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, key);
         ui_draw_text(defense_name(type), x + 24, ry, LABEL_SIZE - 2, c);
         const char *right = full ? TextFormat("%d/%d", have, max) : TextFormat("%d    %d/%d", cost, have, max);
         ui_draw_text(right, x + SHOP_WIDTH - ui_measure_text(right, LABEL_SIZE - 2), ry, LABEL_SIZE - 2,

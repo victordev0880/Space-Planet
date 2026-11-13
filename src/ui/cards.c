@@ -176,8 +176,12 @@ static void draw_card(const World *w, const Tuning *t, int index, float appear, 
         if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
     }
     shadowed(header, x + 16, y + 13, SMALL_SIZE + 2, alpha_of(line, a));
-    const char *key = TextFormat("[%d]", index + 1);
-    shadowed(key, x + CARD_W - 16 - ui_measure_text(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
+    if (hud_gamepad()) {
+        hud_dpad_arrow(x + CARD_W - 34, y + 10, 18, index, alpha_of(TEXT, a));   // a seta do direcional
+    } else {
+        const char *key = TextFormat("[%d]", index + 1);
+        shadowed(key, x + CARD_W - 16 - ui_measure_text(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
+    }
 
     // Emblema: um círculo na cor da linha, com o nível novo dentro.
     int ey = y + 96;
@@ -224,7 +228,8 @@ void cards_draw(const World *w, const Tuning *t, double time)
     float title = Clamp(since / 0.2f, 0.0f, 1.0f);
     int top = (int)card_rect(0, 1).y;
     centered(TextFormat("NÍVEL %d", w->evo.level), sw / 2, top - 112, TITLE_SIZE, alpha_of(HIGHLIGHT, title));
-    centered("escolha uma evolução  (1, 2, 3 ou clique)", sw / 2, top - 58, TEXT_SIZE, alpha_of(TEXT, title));
+    centered(hud_keys("escolha uma evolução  (1, 2, 3 ou clique)", "escolha uma evolução  (direcional: esquerda, cima ou direita)"),
+             sw / 2, top - 58, TEXT_SIZE, alpha_of(TEXT, title));
 
     int hover = cards_hit(w, GetMousePosition());
     for (int i = 0; i < w->evo.choice_count; i++) {

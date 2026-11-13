@@ -80,6 +80,11 @@ InputState input_tick(InputTracker *t);
 // Movimento de mouse pendente é descartado.
 void       input_resync(InputTracker *t, uint32_t held_now);
 
+// Analógico: zona morta circular e curva de resposta. Abaixo de `deadzone`
+// dá zero; acima, sobe de 0 a 1 elevado a `curve` (curva > 1 dá precisão
+// nos movimentos pequenos e velocidade no fim do curso). A direção se mantém.
+void input_stick(float x, float y, float deadzone, float curve, float *out_x, float *out_y);
+
 const char *action_name(Action a);
 int         action_from_name(const char *name);   // -1 se o nome não existe
 

@@ -47,6 +47,7 @@ typedef struct {
     int         autoplay_frame;
     int         autoplay_frames;
     bool        menu_open;         // um menu na tela: sem a linha de controles
+    bool        gamepad;           // o jogador está no controle (a linha mostra os botões)
 } DebugInfo;
 
 void debug_overlay_init(DebugOverlay *o);

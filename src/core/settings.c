@@ -24,7 +24,6 @@ static const SettingDef DEFS[SET_COUNT] = {
     [SET_INVERT_Y]   = { "invert_y",   "Inverter o eixo vertical",   true,  0.0f,  1.0f, 1.0f,  false, 0.0f },
     [SET_SHAKE]      = { "shake",      "Tremor da câmera",           false, 0.0f,  1.0f, 0.10f, true,  1.0f },
     [SET_FULLSCREEN] = { "fullscreen", "Tela cheia",                 true,  0.0f,  1.0f, 1.0f,  false, 0.0f },
-    [SET_VIBRATION]  = { "vibration",  "Vibração do controle",       true,  0.0f,  1.0f, 1.0f,  false, 1.0f },
 };
 
 static float *number_of(Settings *s, SettingId id)
@@ -45,7 +44,6 @@ static bool *flag_of(Settings *s, SettingId id)
     switch (id) {
     case SET_INVERT_Y:   return &s->invert_y;
     case SET_FULLSCREEN: return &s->fullscreen;
-    case SET_VIBRATION:  return &s->vibration;
     default:             return NULL;
     }
 }

@@ -319,6 +319,12 @@ static const TuneField FIELDS[] = {
 
     F("audio.volume",          audio_volume,           0,      1),
     F("audio.falloff",          audio_falloff,          1,      10000),
+    F("audio.danger",           audio_danger,           0,      1),
+    F("gamepad.deadzone",       gamepad_deadzone,       0,      0.9),
+    F("gamepad.curve",          gamepad_curve,          0.5,    4),
+    F("gamepad.look_speed",     gamepad_look_speed,     10,     20000),
+    F("gamepad.move",           gamepad_move,           0.05,   0.95),
+    F("gamepad.trigger",        gamepad_trigger,        0.05,   0.95),
 
     I("autoplay.warmup_frames", autoplay_warmup_frames, 0,      1000),
 };

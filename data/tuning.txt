@@ -400,6 +400,15 @@ satellite.rate     = 1.6         # interceptações por segundo
 # --- áudio ------------------------------------------------------------------
 audio.volume  = 0.7             # volume geral (0 a 1)
 audio.falloff = 140             # distância em que um som cai pela metade
+audio.danger  = 0.15            # a música fica tensa quando o planeta (ou o núcleo) chega
+                                # a esta distância do ponto de derrota
+
+# --- controle (gamepad) -----------------------------------------------------
+gamepad.deadzone   = 0.15        # analógico direito: abaixo disto, nada
+gamepad.curve      = 1.6         # curva de resposta da mira (>1: preciso no começo, rápido no fim)
+gamepad.look_speed = 1700        # giro com o analógico no fim do curso, em "pixels de mouse" por segundo
+gamepad.move       = 0.35        # analógico esquerdo: a partir daqui conta como W/A/S/D
+gamepad.trigger    = 0.30        # gatilhos: fração apertada que já conta como tiro
 
 # --- autoplay ---------------------------------------------------------------
 autoplay.warmup_frames = 10    # quadros iniciais ignorados nas medições de tempo

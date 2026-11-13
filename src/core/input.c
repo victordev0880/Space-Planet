@@ -1,5 +1,6 @@
 #include "core/input.h"
 
+#include <math.h>
 #include <string.h>
 
 static const char *const ACTION_NAMES[ACT_COUNT] = {
@@ -71,6 +72,20 @@ void input_resync(InputTracker *t, uint32_t held_now)
     t->held_at_tick = held_now;
     t->pending_dx = 0.0f;
     t->pending_dy = 0.0f;
+}
+
+void input_stick(float x, float y, float deadzone, float curve, float *out_x, float *out_y)
+{
+    float length = sqrtf(x * x + y * y);
+    if (length <= deadzone || deadzone >= 1.0f) {
+        *out_x = 0.0f;
+        *out_y = 0.0f;
+        return;
+    }
+    float amount = (fminf(length, 1.0f) - deadzone) / (1.0f - deadzone);
+    float scale = powf(amount, curve) / length;
+    *out_x = x * scale;
+    *out_y = y * scale;
 }
 
 const char *action_name(Action a)

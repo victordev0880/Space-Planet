@@ -19,12 +19,11 @@ typedef struct {
     bool  invert_y;     // mouse e analógico: para cima aponta o nariz para baixo
     float shake;        // intensidade do tremor de câmera, 0 a 1
     bool  fullscreen;   // tela cheia sem bordas
-    bool  vibration;    // vibração do controle
 } Settings;
 
 // Uma opção da tela, na ordem em que aparece.
 typedef enum {
-    SET_VOLUME, SET_SFX, SET_MUSIC, SET_MOUSE, SET_STICK, SET_INVERT_Y, SET_SHAKE, SET_FULLSCREEN, SET_VIBRATION,
+    SET_VOLUME, SET_SFX, SET_MUSIC, SET_MOUSE, SET_STICK, SET_INVERT_Y, SET_SHAKE, SET_FULLSCREEN,
     SET_COUNT
 } SettingId;
 

@@ -13,7 +13,6 @@ static void settings_round_trip(void)
     a.mouse = 2.25f;
     a.invert_y = true;
     a.fullscreen = true;
-    a.vibration = false;
 
     char text[1024];
     CHECK(settings_format(&a, text, sizeof text) > 0);
@@ -23,7 +22,7 @@ static void settings_round_trip(void)
     CHECK_NEAR(b.volume, 0.3f, 1e-4);
     CHECK_NEAR(b.music, 0.0f, 1e-4);
     CHECK_NEAR(b.mouse, 2.25f, 1e-4);
-    CHECK(b.invert_y && b.fullscreen && !b.vibration);
+    CHECK(b.invert_y && b.fullscreen);
 }
 
 static void settings_ignore_garbage_and_clamp(void)

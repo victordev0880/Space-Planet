@@ -950,6 +950,15 @@ static void play(Audio *a, const Tuning *t, SoundId id, const Vector3 *pos, Came
     PlaySound(s);
 }
 
+#define MUSIC_BUFFER 2048    // quadros por meio-buffer do stream (~46 ms)
+#define MUSIC_GAIN   0.55f   // a música fica embaixo dos efeitos
+
+// Chamada pela thread de áudio do raylib sempre que o stream pede mais amostras.
+static void music_callback(void *out, unsigned int frames)
+{
+    music_render((float *)out, (int)frames);
+}
+
 void audio_init(Audio *a, const World *w, const Tuning *t, bool muted)
 {
     memset(a, 0, sizeof *a);
@@ -967,6 +976,19 @@ void audio_init(Audio *a, const World *w, const Tuning *t, bool muted)
         for (int v = 0; v < DEFS[i].voices; v++) a->voices[i][v] = LoadSoundAlias(a->sounds[i]);
     }
     a->ready = true;
+
+    // A música só existe com som: no autoplay (mudo) ela nem começa, para não
+    // gastar processador nas medições.
+    if (!muted) {
+        music_reset();
+        SetAudioStreamBufferSizeDefault(MUSIC_BUFFER);
+        a->music_stream = LoadAudioStream(MUSIC_SAMPLE_RATE, 32, 2);
+        if (IsAudioStreamValid(a->music_stream)) {
+            SetAudioStreamCallback(a->music_stream, music_callback);
+            PlayAudioStream(a->music_stream);
+            a->music_on = true;
+        }
+    }
     audio_apply_tuning(a, t, muted);
 }
 
@@ -981,7 +1003,13 @@ void audio_set_levels(Audio *a, const Tuning *t, float volume, float sfx, float 
     a->volume = Clamp(volume, 0.0f, 1.0f);
     a->sfx = Clamp(sfx, 0.0f, 1.0f);
     a->music = Clamp(music, 0.0f, 1.0f);
+    if (a->music_on) SetAudioStreamVolume(a->music_stream, a->music * MUSIC_GAIN);
     audio_apply_tuning(a, t, a->muted);
+}
+
+void audio_music(Audio *a, MusicMood mood, bool danger, bool muffled)
+{
+    if (a->music_on) music_set(mood, danger, muffled);
 }
 
 void audio_play_ui(Audio *a, const Tuning *t, SoundId id)
@@ -1090,6 +1118,11 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
 void audio_shutdown(Audio *a)
 {
     if (!a->ready) return;
+    if (a->music_on) {
+        StopAudioStream(a->music_stream);
+        UnloadAudioStream(a->music_stream);
+        a->music_on = false;
+    }
     for (int i = 0; i < SND_COUNT; i++) {
         for (int v = 0; v < DEFS[i].voices; v++) UnloadSoundAlias(a->voices[i][v]);
         UnloadSound(a->sounds[i]);

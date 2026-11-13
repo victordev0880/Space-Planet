@@ -1,6 +1,7 @@
 # Telas fora da partida: título, opções e controles (a partir do título),
-# a partida, a pausa e as opções a partir dela, e a volta ao jogo.
-frames 460
+# a partida, a pausa e as opções a partir dela, a volta ao jogo e, por fim,
+# as dicas na tela com o controle em uso (pad on).
+frames 700
 seed 1234
 
 at 0   menu title
@@ -17,3 +18,15 @@ at 340 menu options
 at 370 shot menus_06_opcoes_na_pausa
 at 380 menu game
 at 459 shot menus_07_de_volta
+
+# Com o controle: dicas, cartas, loja e a tabela de controles.
+at 470 pad on
+at 471 ore 60
+at 520 shot menus_08_dicas_controle
+at 530 xp 60
+at 590 shot menus_09_cartas_controle
+at 600 press card1
+at 610 menu controls
+at 640 shot menus_10_tabela_controle
+at 650 menu game
+at 699 shot menus_11_loja_controle

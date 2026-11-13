@@ -128,7 +128,7 @@ static void draw_notice(const DebugOverlay *o, const World *w)
 
 // Linha de controles no pé da tela. Na partida, aparece só antes da primeira
 // horda (depois o jogador já sabe e ela só atrapalha) ou com o F1 aberto.
-static void draw_hint(const DebugOverlay *o, const World *w)
+static void draw_hint(const DebugOverlay *o, const World *w, const DebugInfo *info)
 {
     const char *hint = NULL;
     if (w->evo.choosing) return;   // as cartas de evolução têm as próprias instruções
@@ -140,6 +140,9 @@ static void draw_hint(const DebugOverlay *o, const World *w)
                    : "C cratera onde a nave mira   V tamanho   R restaura o planeta   F2 pausa   F3 wireframe   F5 recarrega";
     } else if (w->cam_mode == CAM_FREE) {
         hint = "WASD mover   mouse olhar   Shift rápido   F2 volta ao jogo   F1 debug";
+    } else if (w->cam_mode == CAM_SHIP && first_moments && info->gamepad) {
+        hint = "RT atira   analógico esquerdo voa   analógico direito mira   LB/RB rola   solto, a nave paira\n"
+               "L3 boost   A dash   B drift   X raio trator   Y chama a próxima horda   Start pausa";
     } else if (w->cam_mode == CAM_SHIP && first_moments) {
         hint = "clique atira   W acelera   S freia e dá ré   sem teclas a nave paira   A/D lado   Q/E rola\n"
                "Shift boost   Espaço dash   Ctrl drift   F raio trator   Enter chama a próxima horda";
@@ -151,7 +154,7 @@ static void draw_hint(const DebugOverlay *o, const World *w)
     // Uma ou duas linhas ('\n'), cada uma centralizada. Uma linha fica no pé
     // da tela, embaixo do painel da nave; duas não cabem ali sem cobrir o
     // painel, então sobem para logo acima dele.
-    char lines[2][160] = { "", "" };
+    char lines[2][224] = { "", "" };
     const char *split = strchr(hint, '\n');
     int count = 1;
     if (split != NULL) {
@@ -173,7 +176,7 @@ static void draw_hint(const DebugOverlay *o, const World *w)
 
 void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *info)
 {
-    if (!info->menu_open) draw_hint(o, w);
+    if (!info->menu_open) draw_hint(o, w, info);
     draw_notice(o, w);
     if (!o->visible) return;
 
