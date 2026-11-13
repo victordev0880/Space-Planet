@@ -1,0 +1,96 @@
+# Roteiro do marco 4 (voo): a nave parte de frente para o planeta, acelera,
+# usa boost, dash e drift, faz um voo rasante dentro da atmosfera, entra em um
+# túnel aberto por crateras, pega o estilingue da Lua, bate no chão, é
+# destruída e renasce.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/voo.txt"
+#
+# O Sol fica na direção (0.56, 0.21, 0.80). O planeta tem raio 57.6 e a
+# atmosfera vai até 6.3 acima dele.
+
+frames 1260
+seed 1
+
+# Só o voo: sem hordas.
+at 0    waves off
+
+# --- partida: acelera e levanta o nariz para passar por cima do planeta ------
+at 5    shot voo_01_partida
+at 10   hold forward
+at 10   look 0 -4
+at 60   look 0 0
+at 70   shot voo_02_acelerando
+at 80   hold boost
+at 130  shot voo_03_boost
+at 150  release boost
+
+# --- curva ------------------------------------------------------------------
+at 150  look 3 2
+at 210  look 0 0
+at 215  shot voo_04_curva
+
+# --- dash de lado e drift ----------------------------------------------------
+at 220  hold right
+at 222  press dash
+at 228  shot voo_05_dash
+at 240  release right
+at 250  hold drift
+at 250  look 6 0
+at 280  look 0 0
+at 285  shot voo_06_drift
+at 290  release drift
+at 290  release forward
+
+# --- voo rasante, dentro da atmosfera ----------------------------------------
+# A nave voa "reto" e contorna o planeta; a câmera fica dentro do ar.
+at 300  ship 17.1 11.4 58.0  26.5 11.4 55.2  30
+at 300  hold forward
+at 330  shot voo_07_rasante
+at 380  shot voo_08_rasante_longe
+at 385  hold boost
+at 420  shot voo_09_rasante_boost
+at 430  release boost
+at 430  release forward
+
+# --- túnel: crateras no mesmo ponto, e a nave entra por ele ------------------
+at 440  crater 0.56 0.21 0.80  8 9
+at 446  crater 0.56 0.21 0.80  8 9
+at 452  crater 0.56 0.21 0.80  8 9
+at 458  crater 0.56 0.21 0.80  8 9
+at 464  crater 0.56 0.21 0.80  8 9
+at 500  ship 42 15.8 60  0 0 0  16
+at 505  shot voo_10_sobre_o_tunel
+at 560  shot voo_11_boca_do_tunel
+at 630  shot voo_12_dentro_do_tunel
+at 710  shot voo_13_fundo_do_tunel
+
+# --- a nave vista de perto, de três lados ------------------------------------
+at 730  ship 30 35 110  60 35 100
+at 730  cam 27.8 33.0 113.0  30 35 110
+at 731  shot voo_14_nave_por_tras
+at 732  cam 33.4 37.3 109.4  30 35 110
+at 733  shot voo_15_nave_pela_frente
+at 734  cam 32.5 36.0 113.6  30 35 110
+at 735  shot voo_16_nave_de_lado
+
+# --- estilingue: passagem rente à Lua ----------------------------------------
+# No quadro 750 a Lua está em (72.8, 44.0, -226.5). A nave chega pelo lado
+# iluminado e passa a uns 8 de altura da superfície dela.
+at 750  ship 109.1 82.1 -174.7  53.1 61.1 -254.7  46
+at 750  hold forward
+at 775  shot voo_17_lua_chegando
+at 825  shot voo_18_lua_passando
+at 875  shot voo_19_estilingue
+at 900  release forward
+
+# --- batida: mergulho com boost contra o chão --------------------------------
+at 920  ship 20 60 85  0 0 0  40
+at 920  hold forward
+at 920  hold boost
+at 945  shot voo_20_mergulho
+at 970  shot voo_21_destruida
+at 980  release forward
+at 980  release boost
+at 1070 shot voo_22_esperando
+at 1160 shot voo_23_renasceu
+at 1259 shot voo_24_fim

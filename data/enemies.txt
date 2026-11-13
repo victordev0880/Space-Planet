@@ -1,0 +1,67 @@
+# ============================================================================
+#  TERRA FRATURADA - inimigos
+#
+#  Mesmo formato de data/tuning.txt, e também relido pela tecla F5.
+#  Referências de tamanho: o planeta tem raio 57.6; a nave do jogador mede
+#  3.3 de ponta a ponta e voa a 46 (97 com boost).
+#  Vida em tiros: a arma do jogador tira 1 por tiro e dá 9 tiros por segundo.
+# ============================================================================
+
+# --- todos ------------------------------------------------------------------
+enemies.spawn_distance = 3.3     # onde as hordas aparecem, em raios do planeta a partir do centro
+enemies.spawn_spread   = 12      # espalhamento de um grupo ao aparecer
+enemies.shot_life      = 3.5     # segundos de vida dos tiros inimigos
+
+# --- Enxame -----------------------------------------------------------------
+# Drones do tamanho da nave, que chegam em bando. Fazem passadas de ataque:
+# mergulham em direção ao solo atirando, sobem e voltam alguns graus adiante.
+# Frágeis, mas atiram na nave quando ela fica na frente deles.
+swarm.hp              = 3
+swarm.radius          = 1.6      # raio de colisão (um pouco maior que o modelo: ajuda a acertar)
+swarm.scale           = 1.3      # tamanho do modelo (1 = uns 2.6 de envergadura)
+swarm.speed           = 26
+swarm.accel           = 36
+swarm.points          = 100
+swarm.ram_damage      = 14       # dano na nave ao trombar com ela
+swarm.cruise_altitude = 24       # altura em que o bando viaja
+swarm.attack_altitude = 8        # altura em que sai do mergulho
+swarm.fire_rate       = 2.5      # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
+swarm.shot_speed      = 55
+swarm.shot_damage     = 6        # dano de um tiro na nave
+swarm.crater_radius   = 2.4
+swarm.crater_depth    = 1.6
+swarm.aggro_range     = 45       # com a nave até esta distância e na frente, atira nela
+swarm.aggro_rate      = 0.7      # tiros por segundo na nave
+swarm.spacing         = 5        # distância que cada drone mantém dos vizinhos
+swarm.dive_stagger    = 0.35     # segundos entre a passada de um drone e a do seguinte (o bando ataca em fila)
+swarm.drift           = 28       # graus que o alvo do bando anda a cada passada
+
+# --- Bombardeiro ------------------------------------------------------------
+# Lento e grande, orbita o planeta soltando bombas. É blindado: tiros na
+# frente e dos lados quase não fazem efeito; o ponto fraco é o motor, que
+# brilha atrás dele. Antes de cada bomba, o lugar onde ela vai cair é marcado
+# no solo, e a bomba pode ser derrubada no ar.
+bomber.hp              = 40
+bomber.radius          = 4.6
+bomber.scale           = 3.0     # 3 vezes o tamanho da nave
+bomber.speed           = 11
+bomber.accel           = 9
+bomber.points          = 1500
+bomber.ram_damage      = 35
+bomber.altitude        = 26      # altura da órbita
+bomber.bomb_interval   = 7       # segundos entre uma bomba e a seguinte
+bomber.bomb_warning    = 1.8     # segundos de aviso (alvo marcado no solo) antes de soltar
+bomber.bomb_speed      = 9       # velocidade com que a bomba sai
+bomber.bomb_accel      = 14      # ... e quanto ela acelera ao cair
+bomber.bomb_hp         = 2       # tiros para derrubar uma bomba
+bomber.bomb_radius     = 1.5     # raio de colisão da bomba
+bomber.bomb_points     = 150
+bomber.crater_radius   = 9
+bomber.crater_depth    = 7
+bomber.armor           = 0.25    # fração do dano que atravessa a blindagem
+bomber.weak_mult       = 2.5     # multiplicador do dano no ponto fraco (o motor)
+bomber.weak_radius     = 2.2     # tamanho do ponto fraco
+bomber.turret_range    = 55      # a torreta atira na nave até esta distância
+bomber.turret_interval = 3       # segundos entre rajadas
+bomber.turret_burst    = 3       # tiros por rajada
+bomber.turret_damage   = 6

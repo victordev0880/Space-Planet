@@ -9,6 +9,9 @@
 frames 600
 seed 1
 
+# Só o planeta: câmera de apresentação, com a nave fora de cena.
+at 0   view orbit
+
 # Primeira metade: câmera de apresentação, planeta inteiro na tela.
 at 0   press overlay
 

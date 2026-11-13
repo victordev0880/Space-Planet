@@ -154,8 +154,8 @@ recalculados na CPU a cada quadro (cerca de 1500 vértices). A primeira versão,
 uma esfera com brilho de borda mais um halo, parecia uma casca de vidro com o
 pico de brilho longe da superfície.
 
-Limitação: com a câmera dentro da atmosfera nada é desenhado. Fica para o
-marco 4, quando a nave puder voar baixo.
+*Atualização (marco 4): com a câmera dentro da atmosfera a mesma conta passa
+a valer para o céu inteiro em volta dela; ver "Atmosfera vista de dentro".*
 
 ### Luzes de cidades como uma malha de pontos
 Cinco mil quadradinhos brilhantes deitados no solo, em uma única malha com
@@ -310,6 +310,220 @@ fazem o mesmo de forma determinística.
 - Sem sombras de verdade: só a sombra do planeta inteiro e o escurecimento
   por profundidade.
 - A matéria arrancada some; fragmentos em órbita e mineração são do marco 9.
+
+## Marco 4: Voo (2026-11-12)
+
+### Orientação por quatérnion, voo em seis eixos
+A nave não tem "para cima" fixo: em volta de um planeta ela precisa poder
+apontar para qualquer lado sem travar nos polos, o que ângulos de guinada e
+arfagem não permitem. A orientação é um quatérnion; o mouse gira o nariz em
+relação à própria nave, e Q/E rolam. Perto do planeta ela se endireita sozinha
+(o topo volta a apontar para longe do chão), para o jogador não ficar de
+cabeça para baixo sem querer. As câmeras passaram a usar a mesma
+representação.
+
+### Aderência: virar a nave vira o voo
+A velocidade tem inércia, mas a cada passo o rumo gira um pouco em direção ao
+nariz, sem perder velocidade (`ship.grip`). É o que separa "arcade" de
+"simulador": no espaço de verdade, virar a nave não muda para onde ela vai. O
+drift (Ctrl) desliga a aderência: a nave segue reto enquanto o nariz gira,
+para atirar para trás.
+
+### Gravidade em uma velocidade separada, com sustentação
+A gravidade não entra na velocidade de voo. Se entrasse, a aderência a
+redirecionaria para a frente e uma nave parada sairia planando. Ela alimenta
+uma "velocidade de queda" própria, com freio, cujo teto é baixo
+(`ship.gravity / ship.fall_drag`, uns 4 por segundo). E some quando a nave voa
+rápido ao longo da superfície (`ship.lift_speed`), como a sustentação de um
+avião: quem voa não afunda, quem para afunda devagar.
+
+### Voo rasante: a nave acompanha a curvatura
+O planeta tem raio 57,6 e a nave voa a 46 por segundo. Em linha reta junto ao
+chão, ela sai pela tangente em um segundo, e o chão some da tela. Então,
+dentro da atmosfera, o giro que leva a vertical de onde a nave estava à
+vertical de onde ela está agora é aplicado também à orientação e à
+velocidade: voar nivelado contorna o planeta. Acima da atmosfera o efeito some
+aos poucos (`ship.hug_fade`) e o voo volta a ser livre, para mirar em alvos
+distantes sem o nariz baixar sozinho. Abaixo do nível do mar também some:
+dentro de túneis o voo é livre.
+
+No mesmo trecho a câmera inclina para o chão (`chase.ground_tilt`); sem isso o
+horizonte ficava no pé da tela e não se via o relevo passar.
+
+### Colisão por amostragem da densidade
+A nave confere a densidade em sete pontos (centro, nariz, cauda, pontas das
+asas, topo, fundo). Perto da superfície a densidade cresce em proporção à
+profundidade, então o próprio valor diz quanto o ponto entrou; a nave é
+empurrada para fora pela normal do campo. É o mesmo campo que as crateras
+alteram: voar dentro de uma cratera ou de um túnel funciona sem nenhum código
+a mais. Em alta velocidade o passo é subdividido para não atravessar paredes.
+
+O dano de uma batida depende só da velocidade **contra** a superfície: raspar
+no chão a toda custa pouco, bater de frente com boost destrói a nave.
+
+### Câmera em terceira pessoa
+Fica atrás e acima da nave e a segue com atraso; o atraso é o que dá a
+sensação de aceleração, e tem teto para a nave não sumir ao longe no boost. O
+campo de visão abre com o boost e com o estilingue. Ela olha para um ponto à
+frente da nave, não para a nave, e recua para perto dela se houver terreno (ou
+a Lua) no caminho. A mira é desenhada onde o nariz aponta, projetada na tela,
+porque com o atraso esse ponto nem sempre é o centro.
+
+### Nave montada em código
+O modelo são cerca de cem triângulos gerados por funções (fuselagem em fatias,
+cabine, asas com espessura, motores, derivas), só a metade direita, espelhada.
+Cada face é iluminada na CPU e desenhada dos dois lados, usando a normal
+virada para a câmera; isso dispensa cuidar da ordem dos vértices e resolve as
+peças finas. A primeira versão, com 17 triângulos, parecia um avião de papel.
+
+### Atmosfera vista de dentro
+Com a câmera dentro do ar, os anéis da malha passam a cobrir o céu todo: do
+ponto logo abaixo da câmera até o horizonte (névoa sobre o chão distante) e do
+horizonte ao zênite (a faixa azul que se apaga para cima). Os anéis do céu
+ficam a passos iguais de brilho, não de ângulo; com passos de ângulo aparecia
+uma borda dura onde o brilho zerava. A névoa sobre o chão é desenhada logo
+acima do relevo mais alto, para as montanhas não a furarem, e a atmosfera
+passou a ser desenhada antes da nave. Abaixo do nível do mar ela some.
+
+### Lua e estilingue
+A Lua é uma esfera lisa para a colisão e percorre uma órbita circular
+inclinada. Não gira sobre si mesma e o Sol não se mexe, então a luz de cada
+ponto dela nunca muda: a iluminação (com crateras sorteadas e "mares") é
+calculada uma vez, ao criar a malha, e guardada na cor dos vértices.
+
+O estilingue é uma regra de jogo, não física: um ganho real de velocidade
+seria apagado pelo limite de velocidade da nave. Passar perto da Lua acima de
+metade da velocidade máxima arma um bônus (`moon.sling_boost`) que vale
+enquanto a nave está perto e por mais alguns segundos. A Lua também puxa a
+nave de leve, pela mesma velocidade de queda da gravidade do planeta.
+
+### Ferramentas de roteiro novas
+`view ship|orbit` troca entre a câmera de jogo e a de apresentação (os
+roteiros antigos usam `view orbit` para fotografar só o planeta); `ship x y z
+tx ty tz [vel]` põe a nave em um ponto, apontada para um alvo. Um `cam` no
+mesmo quadro fotografa a nave de fora.
+
+### Medições (Vega 8, roteiro `voo.txt`)
+- Quadro: mediana de 4,5 a 5 ms sem vsync; em tempo real, 60 FPS sem nenhum
+  quadro acima do limite.
+- Simulação: 0,05 ms por quadro. A nave custa quase nada.
+- Com a tela inteira coberta pelo planeta (nave parada no fundo de um túnel):
+  mediana de 4,75 ms, pior quadro de 10,7 ms.
+- Os dois ou três quadros acima de 16,7 ms que o relatório lista vêm logo
+  depois de uma captura de tela com a tela cheia; acompanham a captura quando
+  ela muda de quadro, então são efeito da própria captura.
+
+### Limitações conhecidas do marco 4
+- Teclado e mouse de verdade só foram exercitados por quem joga; o autoplay
+  cobre a mesma lógica, mas não a sensação do mouse (`ship.mouse_sens`,
+  `ship.turn_smooth`).
+- A nave nasce de frente para o planeta: segurar W com boost sem desviar
+  termina em batida. É de propósito (a primeira imagem é o planeta inteiro),
+  mas pode pedir ajuste em `ship.spawn_pitch`.
+- De muito perto, as luzes de cidades viram manchas grandes.
+- Sem gamepad e sem som; ficam para o polimento.
+
+## Marco 5: Combate e fatia vertical (2026-11-12)
+
+Pedido do Victor ao aprovar o plano: inimigos de bom tamanho, com velocidades
+e mecânicas comedidas, vindo em hordas (nada de 300 de uma vez), e um design
+caprichado.
+
+### Hordas pequenas e legíveis
+A maior horda de `data/waves.txt` põe 2 Bombardeiros e 17 drones em cena,
+chegando em grupos ao longo de 20 segundos. Todos os inimigos são mais
+lentos que a nave (Enxame 26, Bombardeiro 11; a nave faz 46), então o
+jogador sempre alcança e sempre foge. O teste do tuning cobra isso.
+
+### Enxame: passadas rasantes, em fila
+Cada bando escolhe um ponto do planeta. Cada drone voa até um ponto de
+entrada antes desse alvo, desce apontando para ele, atira enquanto ele está
+na frente do nariz (cada tiro abre uma cratera pequena), passa por cima e
+sobe; o alvo do bando então anda alguns graus. Os pontos de entrada ficam
+escalonados, então o bando ataca em fila e não em bolo. A primeira versão
+mergulhava reto e quase não atirava: a janela entre "começar a atirar" e
+"sair do mergulho" era curta demais. Dentro do bando os drones mantêm
+distância uns dos outros ("boids"). Fora da passada, atiram na nave se ela
+fica na frente deles.
+
+### Bombardeiro: blindado na frente, frágil atrás, sempre avisando
+Tiros na frente e dos lados tiram só 25% do dano; o motor, atrás, brilha em
+magenta e leva 2,5 vezes. Dar a volta nele é a escolha que o jogo pede.
+Antes de cada bomba, o alvo aparece no solo como um anel vermelho, com um
+anel externo que se fecha durante os 1,8 s de aviso, e soa um alarme. A bomba
+cai exatamente na marca e pode ser derrubada no ar (2 tiros). Destruir o
+Bombardeiro enquanto ele arma cancela a bomba.
+
+### Os tiros do jogador não cavam o planeta
+Só os inimigos destroem o planeta. Se os tiros da nave cavassem, quem mais
+estragaria o planeta seria o próprio jogador, errando os alvos.
+
+### Ajuda de mira
+Inimigos (e bombas) até 4 graus do nariz, mais o tamanho aparente deles,
+puxam os tiros, já compensando o movimento do alvo. Sem isso, acertar um
+drone de 3 unidades a 100 de distância com o mouse controlando uma nave
+seria frustrante. O alvo travado ganha cantos na tela.
+
+### Hit-stop
+Destruir um Bombardeiro, ou levar um golpe forte, congela a partida por
+alguns passos (70 e 40 ms). O tempo de jogo continua correndo, então o
+tremor de câmera segue animado. O que o jogador faz nesse instante (mouse,
+teclas) é guardado e aplicado assim que a partida volta.
+
+### Eventos em vez de chamadas diretas
+A lógica anota o que aconteceu (tiro, acerto, abate, bomba armando, horda
+começando...) numa fila numerada, como já fazia com os impactos. Som,
+tremor de câmera e textos do HUD leem a fila; a lógica não sabe que eles
+existem. O HUD não guarda estado: a idade de cada evento diz quanto tempo um
+aviso ainda fica na tela.
+
+### Pool com handles
+Inimigos e projéteis moram em listas de tamanho fixo (64 e 256 vagas). Uma
+referência que precisa durar de um passo para outro é um handle (índice mais
+"geração" da vaga), que deixa de valer quando o objeto morre, em vez de
+apontar para o objeto que ocupou a vaga depois.
+
+### Sem grade espacial, por enquanto (desvio do CLAUDE.md)
+O CLAUDE.md pede uma grade espacial para colisões. Com hordas deste tamanho
+(até ~20 inimigos e ~100 projéteis), conferir todos contra todos custa
+microssegundos: a simulação inteira gasta 0,08 ms por quadro em média. A
+grade seria complexidade sem ganho. As colisões ficam todas em
+`game/combat.c`, então dá para pôr a grade lá se as hordas crescerem.
+
+### Áudio sintetizado, já neste marco
+Tiro sem som não tem impacto, então o áudio básico veio antes do marco 10.
+Os 22 efeitos são gerados em código na abertura (ondas, envelopes, filtros),
+sem arquivos e sem biblioteca nova. Volume cai com a distância e o lado vem
+do pan; avisos (bomba armando, horda chegando) têm volume mínimo. O
+autoplay é sempre mudo.
+
+### Piloto automático de teste
+Um roteiro de teclas não acerta inimigos que se movem. O comando
+`autopilot on` passa a nave para um piloto simples, que mira no inimigo mais
+urgente (bombas, depois Bombardeiros armando, depois o mais perto) usando a
+mesma camada de input do jogador. Com ele, `roteiros/onda1.txt` joga a
+partida inteira, e um teste confirma que uma horda pequena pode ser vencida.
+
+### Dados
+Inimigos em `data/enemies.txt` e hordas em `data/waves.txt`, ambos relidos
+pelo F5 (as hordas novas valem a partir da próxima partida). O leitor do
+tuning agora tem uma tabela por arquivo, e um erro diz em qual arquivo está.
+
+### Medições (Vega 8)
+- `onda1.txt` (as 4 hordas): mediana de 3,25 ms sem vsync; em tempo real,
+  60 FPS com p99 de 18 ms. Simulação: 0,08 ms em média, 2 ms no pior quadro.
+- Os poucos quadros lentos mudam de lugar entre execuções com o mesmo hash:
+  ruído da máquina.
+- O piloto automático vence as 4 hordas em cerca de 2 minutos e meio.
+
+### O problema da escala do HP (decisão pendente com o Victor)
+A maior horda, sem nenhuma defesa por 2 minutos, abre 886 crateras; o
+planeta fica visivelmente castigado, mas perde só 4,6% da massa. Com o
+colapso em 35% (o valor do CLAUDE.md), seria preciso mais de 20 minutos de
+ataque livre para perder. Quase todo o volume do planeta está no interior,
+e o que o jogador vê (a superfície) é uma parte pequena dele. Nesta fatia,
+portanto, não dá para perder pelo planeta. Ver as opções no relatório do
+marco 5.
 
 ## Respostas do Victor (2026-11-11)
 

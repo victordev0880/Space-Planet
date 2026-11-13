@@ -25,9 +25,20 @@
 #define DUST_TINT_AMOUNT 0.45f
 
 #define DUST_DRAG         1.6f    // fração da velocidade que a poeira perde por segundo
+#define TRAIL_DRAG        3.0f    // ... e o rastro dos motores
 #define EMBER_GRAVITY     0.35f   // brasas são leves: sentem só parte da gravidade
 #define LANDING_GRACE     0.15f   // segundos iniciais em que a partícula ainda não "pousa"
 #define HOT_FRACTION_MIN  0.02f   // parcela mínima de manto/núcleo arrancado para soltar brasas
+
+// Explosões no ar, em proporção ao tamanho de quem explodiu.
+#define EXPLOSION_FLASH      3.2f    // tamanho do clarão
+#define EXPLOSION_FLASH_LIFE 0.22f
+#define EXPLOSION_RING       4.5f    // tamanho final da onda de choque
+#define EXPLOSION_RING_LIFE  0.45f
+#define EXPLOSION_EMBERS     14.0f   // brasas por unidade de tamanho
+#define EXPLOSION_DEBRIS     6.0f    // destroços por unidade de tamanho
+#define EXPLOSION_SPEED      6.0f    // velocidade dos pedaços por unidade de tamanho
+#define EXPLOSION_INHERIT    0.4f    // fração da velocidade de quem explodiu que os pedaços levam
 
 bool particles_init(Particles *ps, Arena *arena)
 {
@@ -62,8 +73,9 @@ void particles_tick(Particles *ps, const Planet *planet, const Tuning *t, float 
         bool dead = p->age >= p->life;
 
         if (!dead && p->kind != PARTICLE_FLASH) {
-            if (p->kind == PARTICLE_DUST) {
-                float keep = 1.0f - DUST_DRAG * dt;
+            bool floats = (p->kind == PARTICLE_DUST || p->kind == PARTICLE_TRAIL || p->kind == PARTICLE_RING);
+            if (floats) {
+                float keep = 1.0f - ((p->kind == PARTICLE_DUST) ? DUST_DRAG : TRAIL_DRAG) * dt;
                 p->vel = Vector3Scale(p->vel, (keep > 0.0f) ? keep : 0.0f);
             } else {
                 // Gravidade: puxa para o centro do planeta (a origem).
@@ -76,8 +88,7 @@ void particles_tick(Particles *ps, const Planet *planet, const Tuning *t, float 
             p->pos = Vector3Add(p->pos, Vector3Scale(p->vel, dt));
 
             // Pedras e brasas somem ao bater no chão.
-            if (p->kind != PARTICLE_DUST && p->age > LANDING_GRACE
-                && planet_sample(planet, p->pos) >= VOXEL_ISO) {
+            if (!floats && p->age > LANDING_GRACE && planet_sample(planet, p->pos) >= VOXEL_ISO) {
                 dead = true;
             }
         }
@@ -94,6 +105,58 @@ void particles_tick(Particles *ps, const Planet *planet, const Tuning *t, float 
 static uint8_t to_byte(float v)
 {
     return (uint8_t)Clamp(v + 0.5f, 0.0f, 255.0f);
+}
+
+static Particle *spawn(Particles *ps, ParticleKind kind, Vector3 pos, Vector3 vel, float size, float life, Rgb8 c)
+{
+    Particle *p = particles_spawn(ps);
+    if (p == NULL) return NULL;
+    p->kind = (uint8_t)kind;
+    p->pos = pos;
+    p->vel = vel;
+    p->size = size;
+    p->life = life;
+    p->r = c.r;
+    p->g = c.g;
+    p->b = c.b;
+    return p;
+}
+
+void particles_explosion(Particles *ps, Rng *rng, Vector3 pos, Vector3 vel, float size, Rgb8 hot, Rgb8 glow,
+                         Rgb8 debris)
+{
+    float scale = sqrtf(size);   // pedaços de uma explosão grande são maiores, mas não em proporção direta
+    Vector3 drift = Vector3Scale(vel, EXPLOSION_INHERIT);
+    Vector3 still = { 0.0f, 0.0f, 0.0f };
+
+    spawn(ps, PARTICLE_FLASH, pos, still, size * EXPLOSION_FLASH, EXPLOSION_FLASH_LIFE, hot);
+    spawn(ps, PARTICLE_RING, pos, drift, size * EXPLOSION_RING, EXPLOSION_RING_LIFE, glow);
+
+    int embers = (int)(EXPLOSION_EMBERS * size);
+    for (int i = 0; i < embers; i++) {
+        Vector3 dir = rng_unit_vec3(rng);
+        Vector3 v = Vector3Add(drift, Vector3Scale(dir, size * EXPLOSION_SPEED * rng_range(rng, 0.25f, 1.0f)));
+        spawn(ps, PARTICLE_EMBER, pos, v, rng_range(rng, 0.18f, 0.42f) * scale, rng_range(rng, 0.35f, 1.0f),
+              (i % 3 == 0) ? glow : hot);
+    }
+
+    int pieces = (int)(EXPLOSION_DEBRIS * size);
+    for (int i = 0; i < pieces; i++) {
+        Vector3 dir = rng_unit_vec3(rng);
+        Vector3 v = Vector3Add(drift, Vector3Scale(dir, size * EXPLOSION_SPEED * rng_range(rng, 0.15f, 0.7f)));
+        float shade = rng_range(rng, 0.6f, 1.15f);
+        Rgb8 c = { to_byte(debris.r * shade), to_byte(debris.g * shade), to_byte(debris.b * shade) };
+        spawn(ps, PARTICLE_ROCK, pos, v, rng_range(rng, 0.25f, 0.55f) * scale, rng_range(rng, 2.0f, 3.5f), c);
+    }
+}
+
+void particles_sparks(Particles *ps, Rng *rng, Vector3 pos, Vector3 normal, int count, float speed, Rgb8 color)
+{
+    for (int i = 0; i < count; i++) {
+        Vector3 dir = Vector3Normalize(Vector3Add(normal, Vector3Scale(rng_unit_vec3(rng), 0.8f)));
+        spawn(ps, PARTICLE_EMBER, pos, Vector3Scale(dir, speed * rng_range(rng, 0.4f, 1.0f)),
+              rng_range(rng, 0.12f, 0.26f), rng_range(rng, 0.12f, 0.3f), color);
+    }
 }
 
 // Sorteia um dos materiais arrancados, com chance proporcional à quantidade.

@@ -8,18 +8,22 @@
 #include "game/world.h"
 #include "render/atmosphere.h"
 #include "render/city_lights.h"
+#include "render/moon_render.h"
 #include "render/planet_render.h"
 #include "render/stars.h"
 
 typedef struct {
     Stars        stars;
     PlanetRender planet;
+    MoonRender   moon;
     CityLights   cities;
     Atmosphere   atmosphere;
     bool         wireframe;   // F3: desenha só as arestas dos triângulos do planeta
 
     // Reação aos impactos no planeta.
     uint32_t     impacts_seen;   // até qual impacto do mundo já reagimos
+    uint32_t     jolts_seen;     // ... e até qual pancada na nave
+    uint32_t     events_seen;    // ... e até qual evento do jogo
     float        shake;          // tremor atual da câmera, de 0 a 1
     float        last_time;      // tempo de jogo do quadro anterior
 } Renderer;

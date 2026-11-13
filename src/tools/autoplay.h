@@ -28,6 +28,21 @@
 //                                 mesma direção cava cada vez mais fundo.
 //   at 70  barrage 20 3 2         20 crateras (boca 3, profundidade 2) em
 //                                 direções sorteadas, todas no mesmo quadro
+//   at 0   view orbit             câmera de apresentação, com a nave fora de
+//                                 cena (para fotografar só o planeta)
+//   at 0   view ship              câmera de jogo, atrás da nave (o padrão)
+//   at 80  ship 0 70 0 0 0 0      põe a nave em (x y z), de nariz para o ponto
+//                                 (x y z) seguinte, e passa à câmera de jogo
+//   at 80  ship 0 70 0 0 0 0 30   ... já voando a 30 unidades por segundo
+//   at 0   waves off              desliga as hordas (on recomeça a sequência)
+//   at 90  spawn swarm 6 0 90 40  põe um grupo de inimigos em (x y z)
+//   at 100 autopilot on           um piloto automático simples assume a nave:
+//                                 persegue o inimigo mais urgente e atira
+//                                 (off devolve o controle ao roteiro)
+//
+// Em um mesmo quadro a ordem é: view, ship, cam, waves, spawn, crateras. Um
+// "cam" depois de um "ship" fotografa a nave de fora (na câmera livre a
+// partida fica congelada).
 //
 // Os nomes das ações são os de core/input.c (forward, boost, freecam...).
 #ifndef TOOLS_AUTOPLAY_H
@@ -38,6 +53,7 @@
 
 #include "core/input.h"
 #include "core/vmath.h"
+#include "game/enemy_types.h"
 #include "game/tuning.h"
 #include "game/world.h"
 
@@ -46,17 +62,22 @@
 #define AUTOPLAY_ERROR_LEN   160
 #define AUTOPLAY_MAX_CRATERS 16     // comandos "crater" em um mesmo quadro
 #define AUTOPLAY_MAX_BARRAGE 500    // crateras de um único "barrage"
+#define AUTOPLAY_MAX_SPAWNS  8      // comandos "spawn" em um mesmo quadro
 
-typedef enum { AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE } AutoplayCmd;
+typedef enum {
+    AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT
+} AutoplayCmd;
 
 typedef struct {
     int         frame;
     AutoplayCmd cmd;
-    int         action;                    // HOLD, RELEASE, PRESS
-    int         count;                     // BARRAGE
+    int         action;                    // HOLD, RELEASE, PRESS; em SPAWN, o tipo de inimigo
+    int         count;                     // BARRAGE, SPAWN; em VIEW, o modo de câmera; em WAVES e AUTOPILOT, 1 = on
     float       dx, dy;                    // LOOK
     float       rim_radius, depth;         // CRATER, BARRAGE
-    Vector3     pos, target;               // CAM; em CRATER, pos é a direção
+    float       speed;                     // SHIP
+    Vector3     pos, target;               // CAM, SHIP; em CRATER, pos é a direção
     char        name[AUTOPLAY_NAME_LEN];   // SHOT
 } AutoplayEvent;
 
@@ -66,6 +87,12 @@ typedef struct {
     float   depth;
 } AutoplayCrater;
 
+typedef struct {
+    EnemyType type;
+    int       count;
+    Vector3   center;
+} AutoplaySpawn;
+
 // O que o roteiro manda fazer em um quadro.
 typedef struct {
     InputSample input;
@@ -73,6 +100,18 @@ typedef struct {
     bool        has_cam;      // true = reposicionar a câmera livre
     Vector3     cam_pos;
     Vector3     cam_target;
+    bool        has_view;     // true = trocar de câmera
+    CamMode     view;
+    bool        has_ship;     // true = reposicionar a nave
+    Vector3     ship_pos;
+    Vector3     ship_target;
+    float       ship_speed;
+    bool        has_waves;    // true = ligar ou desligar as hordas
+    bool        waves_on;
+    bool        autopilot;    // o piloto automático está no comando neste quadro
+
+    AutoplaySpawn spawns[AUTOPLAY_MAX_SPAWNS];
+    int           spawn_count;
 
     AutoplayCrater craters[AUTOPLAY_MAX_CRATERS];
     int            crater_count;
@@ -95,6 +134,7 @@ typedef struct {
     uint32_t held;
     float    look_dx;
     float    look_dy;
+    bool     autopilot;
 } Autoplay;
 
 // Substituem o conteúdo de `ap`. Em caso de erro retornam false e ap->error
@@ -106,8 +146,9 @@ bool autoplay_load_file(Autoplay *ap, const char *path);
 // preenche o que o roteiro pede para ele.
 void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out);
 
-// Executa no mundo os comandos do quadro que não são input: posicionar a
-// câmera e abrir crateras. Chamar antes dos passos de lógica do quadro.
+// Executa no mundo os comandos do quadro que não são input: trocar de câmera,
+// posicionar a nave e a câmera e abrir crateras. Chamar antes dos passos de
+// lógica do quadro.
 void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t);
 
 // --- medições ---------------------------------------------------------------
@@ -178,6 +219,16 @@ typedef struct {
     int         remeshed_max_frame;    // máximo em um único quadro
     int         remesh_backlog_max;    // maior fila de chunks à espera
     double      remesh_ms_max;         // quadro que mais gastou remalhando
+
+    // A partida ao fim do roteiro.
+    bool        waves_on;          // as hordas estavam ligadas
+    int64_t     score;
+    int         kills;
+    int         wave;              // horda alcançada (1 = a primeira)
+    int         waves_total;
+    const char *game_state;        // "jogando", "vitoria" ou "derrota"
+    int         enemies_alive;
+
     int         warnings;         // avisos e erros emitidos durante a execução
     int         errors;
     const char *first_problem;    // texto do primeiro aviso/erro, ou NULL

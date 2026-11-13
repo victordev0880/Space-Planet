@@ -6,6 +6,9 @@
 frames 420
 seed 1
 
+# Só o cenário: câmera de apresentação, com a nave fora de cena.
+at 0    view orbit
+
 at 0    press overlay           # F1: liga o overlay de debug
 at 60   shot fundacao_01_orbita
 

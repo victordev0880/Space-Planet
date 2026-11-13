@@ -6,7 +6,9 @@
 #include <math.h>
 
 #include "core/vmath.h"
+#include "render/enemies_render.h"
 #include "render/particles_render.h"
+#include "render/ship_render.h"
 
 static const Color SPACE_COLOR = { 2, 3, 8, 255 };   // quase preto, puxando para o azul
 
@@ -20,6 +22,11 @@ static const Color SPACE_COLOR = { 2, 3, 8, 255 };   // quase preto, puxando par
 // horizonte incomoda mais do que balançar a mira.
 #define SHAKE_ROLL_FACTOR 0.5f
 
+// Tremor das explosões de inimigos, em "raios de cratera" por unidade de
+// tamanho do inimigo (o Bombardeiro, grande, sacode como uma cratera grande).
+#define KILL_SHAKE      2.4f
+#define KILL_SHAKE_BOMB 1.0f
+
 bool render_init(Renderer *r, const World *w, const Tuning *t, bool use_shaders)
 {
     *r = (Renderer){ 0 };
@@ -27,7 +34,10 @@ bool render_init(Renderer *r, const World *w, const Tuning *t, bool use_shaders)
     if (!planet_render_init(&r->planet, &w->planet, t, use_shaders)) return false;
     city_lights_build(&r->cities, &w->planet, t, stars_glow_texture(&r->stars));
     atmosphere_init(&r->atmosphere);
+    moon_render_build(&r->moon, t);
     r->impacts_seen = w->impact_count;
+    r->jolts_seen = w->jolt_count;
+    r->events_seen = w->events.count;
     return true;
 }
 
@@ -37,7 +47,10 @@ void render_apply_tuning(Renderer *r, const World *w, const Tuning *t)
     planet_render_reload_shader(&r->planet);   // o F5 também relê os arquivos de shader
     planet_render_rebuild(&r->planet, &w->planet, t);
     city_lights_build(&r->cities, &w->planet, t, stars_glow_texture(&r->stars));
+    moon_render_build(&r->moon, t);
     r->impacts_seen = w->impact_count;
+    r->jolts_seen = w->jolt_count;
+    r->events_seen = w->events.count;
     r->shake = 0.0f;
 }
 
@@ -45,11 +58,12 @@ Camera3D render_camera(const World *w, const Tuning *t, float alpha)
 {
     CamPose pose = world_view(w, alpha);
 
+    (void)t;
     Camera3D camera = { 0 };
     camera.position = pose.pos;
     camera.target = Vector3Add(pose.pos, cam_forward(pose));
-    camera.up = (Vector3){ 0.0f, 1.0f, 0.0f };
-    camera.fovy = t->camera_fov;
+    camera.up = cam_up(pose);
+    camera.fovy = pose.fov;
     camera.projection = CAMERA_PERSPECTIVE;
     return camera;
 }
@@ -70,6 +84,24 @@ static void react_to_impacts(Renderer *r, const World *w, const Tuning *t, Vecto
         city_lights_impact(&r->cities, &w->planet, impact->pos, impact->radius);
     }
     r->impacts_seen = w->impact_count;
+
+    // Pancadas na própria nave (batidas no terreno, dano, destruição).
+    if (w->jolt_count != r->jolts_seen) {
+        r->shake += t->shake_jolt * w->jolt_strength;
+        r->jolts_seen = w->jolt_count;
+    }
+
+    // Explosões de inimigos: tremem conforme o tamanho e a distância, como
+    // os impactos no planeta.
+    if (w->events.count < r->events_seen) r->events_seen = w->events.count;
+    for (uint32_t id = r->events_seen + 1; id <= w->events.count; id++) {
+        const GameEvent *e = events_find(&w->events, id);
+        if (e == NULL || (e->type != EV_KILL && e->type != EV_CRASH && e->type != EV_BOMB_DOWN)) continue;
+        float size = (e->type == EV_BOMB_DOWN) ? KILL_SHAKE_BOMB : t->enemy[e->sub].scale;
+        float distance = Vector3Distance(camera_pos, e->pos);
+        r->shake += t->shake_strength * size * KILL_SHAKE / (1.0f + distance / t->shake_falloff);
+    }
+    r->events_seen = w->events.count;
     if (r->shake > 1.0f) r->shake = 1.0f;
 }
 
@@ -129,9 +161,18 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     stars_draw_sun(&r->stars, camera, t, sky);
 
     planet_render_draw(&r->planet, t, camera.position, time, r->wireframe);
+    moon_render_draw(&r->moon, &w->moon, t, w->planet.params.radius, alpha);
     city_lights_draw(&r->cities);
-    particles_draw(&w->particles, camera, stars_glow_texture(&r->stars), t, alpha);
     atmosphere_draw(&r->atmosphere, t, w->planet.params.radius, camera.position, planet_hp(&w->planet));
+
+    // Durante o hit-stop nada se move: as partículas não podem ser
+    // "adiantadas" pela interpolação.
+    Texture2D glow = stars_glow_texture(&r->stars);
+    float moving = (w->hitstop > 0) ? 1.0f : alpha;
+    enemies_draw(w, t, alpha, glow, camera);
+    if (w->ship_active) ship_draw(&w->ship, &w->planet, t, alpha, glow, camera);
+    projectiles_draw(w, t, alpha, glow, camera);
+    particles_draw(&w->particles, camera, glow, t, moving);
 
     if (debug) {
         float len = w->planet.params.radius * AXIS_LENGTH;
@@ -146,6 +187,8 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
 
 void render_shutdown(Renderer *r)
 {
+    particles_render_unload();
+    moon_render_unload(&r->moon);
     atmosphere_unload(&r->atmosphere);
     city_lights_unload(&r->cities);
     planet_render_unload(&r->planet);

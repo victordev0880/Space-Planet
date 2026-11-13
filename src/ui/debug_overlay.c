@@ -24,6 +24,8 @@ static const Color DIM_COLOR   = { 130, 140, 160, 255 };
 static const Color GOOD_COLOR  = { 90, 210, 120, 255 };
 static const Color WARN_COLOR  = { 235, 200, 80, 255 };
 static const Color BAD_COLOR   = { 240, 90, 80, 255 };
+static const Color HINT_COLOR  = { 190, 198, 214, 255 };
+static const Color HINT_SHADOW = { 0, 0, 0, 200 };
 
 void debug_overlay_init(DebugOverlay *o)
 {
@@ -123,18 +125,36 @@ static void draw_notice(const DebugOverlay *o, const World *w)
     DrawText(o->notice, x, y, FONT_SIZE, color);
 }
 
-static void draw_hint(const World *w)
+// Linha de controles no pé da tela. Na partida, aparece só antes da primeira
+// horda (depois o jogador já sabe e ela só atrapalha) ou com o F1 aberto.
+static void draw_hint(const DebugOverlay *o, const World *w)
 {
-    const char *hint = (w->cam_mode == CAM_FREE)
-        ? "WASD mover   mouse olhar   Shift rápido   clique: cratera   botão direito: tamanho   F2 voltar"
-        : "clique: cratera   botão direito: tamanho   R restaurar   F2 câmera livre   F1 debug   F3 wireframe";
+    const char *hint = NULL;
+    bool first_moments = w->director.phase == DIRECTOR_OFF
+                      || (w->director.phase == DIRECTOR_PAUSE && w->director.wave == 0);
+    if (o->visible) {
+        hint = (w->cam_mode == CAM_FREE)
+                   ? "WASD mover   mouse olhar   Shift rápido   C cratera   V tamanho   R restaura   F2 voltar"
+                   : "C cratera onde a nave mira   V tamanho   R restaura o planeta   F2 pausa   F3 wireframe   F5 recarrega";
+    } else if (w->cam_mode == CAM_FREE) {
+        hint = "WASD mover   mouse olhar   Shift rápido   F2 volta ao jogo   F1 debug";
+    } else if (w->cam_mode == CAM_SHIP && first_moments) {
+        hint = "clique atira   W acelera   S freia   A/D lado   Q/E rola   Shift boost   Espaço dash   Ctrl drift";
+    } else if (w->cam_mode == CAM_ORBIT) {
+        hint = "F1 debug   F2 câmera livre   F3 wireframe";
+    }
+    if (hint == NULL) return;
     int width = MeasureText(hint, FONT_SIZE);
-    DrawText(hint, (GetScreenWidth() - width) / 2, GetScreenHeight() - 36, FONT_SIZE, DIM_COLOR);
+    int x = (GetScreenWidth() - width) / 2;
+    int y = GetScreenHeight() - 36;
+    // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
+    DrawText(hint, x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
+    DrawText(hint, x, y, FONT_SIZE, HINT_COLOR);
 }
 
 void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *info)
 {
-    draw_hint(w);
+    draw_hint(o, w);
     draw_notice(o, w);
     if (!o->visible) return;
 
@@ -150,7 +170,7 @@ void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *
     }
     float fps = (typical > 0.0f) ? 1000.0f / typical : 0.0f;
 
-    int lines = (info->autoplay_script != NULL) ? 9 : 8;
+    int lines = (info->autoplay_script != NULL) ? 10 : 9;
     int panel_height = PADDING * 2 + lines * LINE_HEIGHT + GRAPH_HEIGHT + 8;
     DrawRectangle(MARGIN, MARGIN, PANEL_WIDTH, panel_height, PANEL_COLOR);
 
@@ -168,19 +188,28 @@ void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *
     y += LINE_HEIGHT;
 
     CamPose pose = w->view;
-    DrawText(TextFormat("camera %s   pos %.1f %.1f %.1f",
-                        (w->cam_mode == CAM_FREE) ? "livre" : "orbita",
-                        pose.pos.x, pose.pos.y, pose.pos.z),
+    const char *mode = (w->cam_mode == CAM_FREE) ? "livre" : (w->cam_mode == CAM_SHIP) ? "nave" : "orbita";
+    DrawText(TextFormat("camera %s   pos %.1f %.1f %.1f   fov %.0f", mode, pose.pos.x, pose.pos.y, pose.pos.z,
+                        (double)pose.fov),
              x, y, FONT_SIZE, TEXT_COLOR);
     y += LINE_HEIGHT;
 
-    DrawText(TextFormat("yaw %.1f   pitch %.1f   vel %.1f",
-                        pose.yaw * RAD2DEG, pose.pitch * RAD2DEG, Vector3Length(w->free_vel)),
-             x, y, FONT_SIZE, TEXT_COLOR);
+    const Ship *s = &w->ship;
+    DrawText(TextFormat("nave vel %.1f   alt %.1f   casco %.0f   escudo %.0f   energia %.0f",
+                        (double)Vector3Length(Vector3Add(s->vel, s->fall)), (double)s->altitude, (double)s->hull,
+                        (double)s->shield, (double)s->energy),
+             x, y, FONT_SIZE, w->ship_active ? TEXT_COLOR : DIM_COLOR);
     y += LINE_HEIGHT;
 
     DrawText(TextFormat("planeta %.2f%% de massa   volume %lld",
                         (double)planet_hp(&w->planet) * 100.0, (long long)w->planet.volume),
+             x, y, FONT_SIZE, TEXT_COLOR);
+    y += LINE_HEIGHT;
+
+    static const char *const PHASES[] = { "sem hordas", "calmaria", "em curso", "vencidas" };
+    DrawText(TextFormat("inimigos %d   tiros %d   horda %d %s   congelado %d",
+                        enemies_alive(&w->enemies), w->shots.pool.live, w->director.wave + 1,
+                        PHASES[w->director.phase], w->hitstop),
              x, y, FONT_SIZE, TEXT_COLOR);
     y += LINE_HEIGHT;
 

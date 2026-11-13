@@ -1,0 +1,36 @@
+# ============================================================================
+#  TERRA FRATURADA - hordas da partida (fatia vertical do marco 5)
+#
+#  wave.N.pause   = segundos de calmaria antes da horda N
+#  wave.N.group.M = tipo quantidade atraso azimute elevacao
+#     tipo:      swarm (Enxame) ou bomber (Bombardeiro)
+#     atraso:    segundos depois do começo da horda em que o grupo aparece
+#     azimute e elevação: de onde o grupo vem, em graus (mesma convenção do
+#     Sol em tuning.txt). A nave começa olhando para o planeta a partir do
+#     azimute 11, elevação 19; o Sol está no azimute 35, elevação 12.
+#
+#  A próxima horda só vem depois que a atual é destruída por inteiro.
+#  F5 relê este arquivo; a mudança vale a partir da próxima partida.
+# ============================================================================
+
+# Horda 1: um bando, de frente. Para aprender a atirar.
+wave.1.pause   = 6
+wave.1.group.1 = swarm 6 0 30 12
+
+# Horda 2: dois bandos, por lados opostos. Para aprender a escolher.
+wave.2.pause   = 7
+wave.2.group.1 = swarm 6 0 -40 20
+wave.2.group.2 = swarm 6 6 80 -15
+
+# Horda 3: o primeiro Bombardeiro, escoltado.
+wave.3.pause   = 8
+wave.3.group.1 = bomber 1 0 20 30
+wave.3.group.2 = swarm 5 4 -10 35
+
+# Horda 4: tudo junto. Dois Bombardeiros por lados diferentes e três bandos.
+wave.4.pause   = 9
+wave.4.group.1 = bomber 1 0 60 10
+wave.4.group.2 = swarm 6 2 -60 0
+wave.4.group.3 = bomber 1 10 -120 25
+wave.4.group.4 = swarm 6 14 150 -20
+wave.4.group.5 = swarm 5 22 10 50

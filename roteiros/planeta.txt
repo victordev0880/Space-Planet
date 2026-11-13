@@ -9,6 +9,9 @@
 frames 120
 seed 1
 
+# Só o planeta: câmera de apresentação, com a nave fora de cena.
+at 0   view orbit
+
 # Lado do dia, com e sem o overlay de debug.
 at 0   press overlay
 at 0   cam 104 38 148

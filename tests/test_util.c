@@ -34,7 +34,7 @@ Tuning test_tuning(void)
     Tuning t;
     char err[160];
     memset(&t, 0, sizeof t);
-    if (!tuning_load(&t, "data/tuning.txt", err, sizeof err)) test_fail(__FILE__, __LINE__, err);
+    if (!tuning_load(&t, "data", err, sizeof err)) test_fail(__FILE__, __LINE__, err);
 
     t.planet_grid = TEST_GRID;
     t.planet_chunk = 16;

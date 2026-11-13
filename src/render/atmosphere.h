@@ -13,8 +13,11 @@
 // recalculadas na CPU a cada quadro (cerca de 1500 vértices, custo desprezível).
 // Só o lado iluminado pelo Sol brilha.
 //
-// Limitação conhecida: com a câmera DENTRO da atmosfera nada é desenhado.
-// Será tratado no marco 4, quando a nave puder voar baixo.
+// Com a câmera DENTRO da atmosfera (voo rasante) a conta é a mesma, mas os
+// anéis passam a cobrir o céu inteiro em volta da câmera: olhando para o
+// horizonte a linha de visão cruza muito ar e aparece uma faixa de névoa azul;
+// olhando para cima o ar acaba logo e se vê o espaço. Abaixo do nível do mar
+// (dentro de crateras e túneis) a névoa some.
 #ifndef RENDER_ATMOSPHERE_H
 #define RENDER_ATMOSPHERE_H
 
@@ -30,7 +33,8 @@ typedef struct {
 
 void atmosphere_init(Atmosphere *a);
 
-// Chamar dentro de BeginMode3D, depois do planeta e das luzes de cidades.
+// Chamar dentro de BeginMode3D, depois do planeta e das luzes de cidades e
+// antes da nave e das partículas (que ficam por cima da névoa).
 // hp: fração de massa restante do planeta (1 = intacto). Conforme cai, a
 // atmosfera fica mais fina e avermelhada.
 void atmosphere_draw(Atmosphere *a, const Tuning *t, float planet_radius, Vector3 camera_pos, float hp);

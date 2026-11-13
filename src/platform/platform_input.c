@@ -22,6 +22,8 @@ static const KeyBinding KEYS[] = {
     { KEY_F3,           ACT_WIREFRAME },
     { KEY_F5,           ACT_RELOAD },
     { KEY_R,            ACT_RESET },
+    { KEY_C,            ACT_DEBUG_CRATER },
+    { KEY_V,            ACT_DEBUG_SIZE },
 };
 
 InputSample platform_poll_input(bool use_mouse_look)

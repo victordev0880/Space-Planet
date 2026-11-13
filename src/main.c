@@ -13,13 +13,17 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "audio/audio.h"
 #include "core/arena.h"
 #include "core/input.h"
 #include "core/loop.h"
+#include "game/score.h"
 #include "game/tuning.h"
+#include "game/waves.h"
 #include "game/world.h"
 #include "platform/platform_input.h"
 #include "render/render.h"
+#include "tools/autopilot.h"
 #include "tools/autoplay.h"
 #include "ui/debug_overlay.h"
 #include "ui/hud.h"
@@ -27,7 +31,11 @@
 static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media", "grande", "enorme" };
 
 #define WINDOW_TITLE  "Terra Fraturada"
-#define TUNING_PATH   "data/tuning.txt"
+#define DATA_DIR      "data"
+#define TUNING_PATH   DATA_DIR "/" TUNING_FILE
+#define WAVES_PATH    DATA_DIR "/waves.txt"
+#define SAVE_DIR      "save"
+#define BEST_PATH     SAVE_DIR "/highscore.dat"
 #define CAPTURES_DIR  "captures"
 #define REPORT_PATH   CAPTURES_DIR "/report.txt"
 
@@ -44,6 +52,7 @@ typedef struct {
     bool        realtime;        // autoplay com relógio real e vsync
     bool        no_shaders;      // desenha sem shaders próprios
     bool        verbose;
+    bool        mute;            // sem som (o autoplay é sempre mudo)
 } Options;
 
 // ---------------------------------------------------------------------------
@@ -83,6 +92,7 @@ static void print_usage(void)
            "  --realtime             com --autoplay: usa o relogio real e o vsync, como\n"
            "                         no jogo normal (o padrao e um passo por quadro)\n"
            "  --no-shaders           desenha sem os shaders de assets/shaders (mais simples)\n"
+           "  --mute                 sem som\n"
            "  --verbose              mostra as mensagens informativas do raylib\n"
            "  --help                 mostra esta ajuda\n");
 }
@@ -93,6 +103,7 @@ static bool parse_options(int argc, char **argv, Options *opt)
     opt->realtime = false;
     opt->no_shaders = false;
     opt->verbose = false;
+    opt->mute = false;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--autoplay") == 0 && i + 1 < argc) {
@@ -101,6 +112,8 @@ static bool parse_options(int argc, char **argv, Options *opt)
             opt->realtime = true;
         } else if (strcmp(argv[i], "--no-shaders") == 0) {
             opt->no_shaders = true;
+        } else if (strcmp(argv[i], "--mute") == 0) {
+            opt->mute = true;
         } else if (strcmp(argv[i], "--verbose") == 0) {
             opt->verbose = true;
         } else if (strcmp(argv[i], "--help") == 0) {
@@ -137,24 +150,33 @@ static bool save_screenshot(const char *name)
     return ok;
 }
 
-// F5: relê data/tuning.txt. Se o arquivo estiver errado, mantém os valores
-// antigos e mostra o motivo na tela. Se a receita do planeta mudou, ele é
-// gerado de novo (o que desfaz qualquer destruição: é uma tecla de debug).
-static void reload_tuning(Tuning *tuning, FixedLoop *loop, World *world, Renderer *renderer,
-                          DebugOverlay *overlay)
+// F5: relê data/tuning.txt, data/enemies.txt e data/waves.txt. Se algum
+// estiver errado, mantém os valores antigos e mostra o motivo na tela. Se a
+// receita do planeta mudou, ele é gerado de novo (o que desfaz qualquer
+// destruição: é uma tecla de debug). As hordas novas valem na próxima partida.
+static void reload_data(Tuning *tuning, WavePlan *plan, FixedLoop *loop, World *world, Renderer *renderer,
+                        Audio *audio, bool muted, DebugOverlay *overlay)
 {
     char err[160];
-    if (!tuning_load(tuning, TUNING_PATH, err, sizeof err)) {
-        TraceLog(LOG_ERROR, "%s: %s", TUNING_PATH, err);
-        debug_overlay_error(overlay, TextFormat("tuning.txt: %s", err));
+    static WavePlan fresh;
+    if (!tuning_load(tuning, DATA_DIR, err, sizeof err)) {
+        TraceLog(LOG_ERROR, "%s", err);
+        debug_overlay_error(overlay, err);
         return;
     }
+    if (!waves_load(&fresh, WAVES_PATH, err, sizeof err)) {
+        TraceLog(LOG_ERROR, "%s: %s", WAVES_PATH, err);
+        debug_overlay_error(overlay, TextFormat("waves.txt: %s", err));
+        return;
+    }
+    *plan = fresh;
     loop->dt = 1.0 / (double)tuning->sim_hz;
     loop->max_steps = tuning->sim_max_steps;
     bool regenerated = world_apply_tuning(world, tuning);
     render_apply_tuning(renderer, world, tuning);
+    audio_apply_tuning(audio, tuning, muted);
     debug_overlay_clear_error(overlay);
-    debug_overlay_notify(overlay, regenerated ? "tuning recarregado, planeta gerado de novo" : "tuning recarregado",
+    debug_overlay_notify(overlay, regenerated ? "dados recarregados, planeta gerado de novo" : "dados recarregados",
                          world->tick + (uint64_t)(tuning->sim_hz * 2));
 }
 
@@ -179,9 +201,14 @@ int main(int argc, char **argv)
     if (!FileExists(TUNING_PATH)) ChangeDirectory(GetApplicationDirectory());
 
     static Tuning tuning;
+    static WavePlan plan;
     char err[160];
-    if (!tuning_load(&tuning, TUNING_PATH, err, sizeof err)) {
-        fprintf(stderr, "ERRO em %s: %s\n", TUNING_PATH, err);
+    if (!tuning_load(&tuning, DATA_DIR, err, sizeof err)) {
+        fprintf(stderr, "ERRO em %s/%s\n", DATA_DIR, err);
+        return EXIT_USAGE;
+    }
+    if (!waves_load(&plan, WAVES_PATH, err, sizeof err)) {
+        fprintf(stderr, "ERRO em %s: %s\n", WAVES_PATH, err);
         return EXIT_USAGE;
     }
 
@@ -210,6 +237,7 @@ int main(int argc, char **argv)
     static World world;
     static Renderer renderer;
     static DebugOverlay overlay;
+    static Audio audio;
     static Arena world_arena;
     FixedLoop loop;
     InputTracker tracker;
@@ -234,13 +262,21 @@ int main(int argc, char **argv)
     }
     TraceLog(LOG_INFO, "inicio: mundo em %.0f ms, renderizacao em %.0f ms", world_init_ms, render_init_ms);
     double planet_mesh_ms = renderer.planet.rebuild_ms;
+    world_set_plan(&world, &plan);
+    bool muted = autoplay || opt.mute;   // o autoplay é mudo: não atrapalha quem está usando o computador
+    audio_init(&audio, &world, &tuning, muted);
     debug_overlay_init(&overlay);
     fixed_loop_init(&loop, tuning.sim_hz, tuning.sim_max_steps);
     input_init(&tracker);
 
+    // O recorde só é gravado em partidas de verdade, nunca no autoplay.
+    int64_t best_score = autoplay ? 0 : score_load_best(BEST_PATH);
+    bool new_best = false;
+    GameState last_state = world.state;
+
     bool cursor_captured = false;
     int skip_mouse_frames = 0;
-    int crater_size = 1;   // tamanho da cratera do clique de debug (começa na média)
+    int crater_size = 1;   // tamanho da cratera de debug (começa na média)
     int frame = 0;
     int screenshots = 0;
     double last_start = GetTime();
@@ -259,7 +295,8 @@ int main(int argc, char **argv)
             autoplay_step(&script, frame, &step);
             sample = step.input;
             shot = step.shot;
-            autoplay_apply(&step, &world, &tuning);   // câmera e crateras pedidas pelo roteiro
+            autoplay_apply(&step, &world, &tuning);   // câmera, nave, inimigos e crateras pedidos pelo roteiro
+            if (step.autopilot) autopilot_drive(&world, &tuning, &sample);
         } else {
             sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0);
             if (skip_mouse_frames > 0) skip_mouse_frames--;
@@ -280,16 +317,39 @@ int main(int argc, char **argv)
         // 3. ações do aplicativo (não fazem parte da simulação)
         if (pressed & ACT_BIT(ACT_OVERLAY)) overlay.visible = !overlay.visible;
         if (pressed & ACT_BIT(ACT_WIREFRAME)) renderer.wireframe = !renderer.wireframe;
-        if (pressed & ACT_BIT(ACT_RELOAD)) reload_tuning(&tuning, &loop, &world, &renderer, &overlay);
+        if (pressed & ACT_BIT(ACT_RELOAD)) {
+            reload_data(&tuning, &plan, &loop, &world, &renderer, &audio, muted, &overlay);
+        }
 
-        // Ferramentas de debug do planeta destrutível.
+        // Fim da partida: guarda o recorde; R começa outra.
+        if (world.state != last_state && world.state != GAME_PLAYING) {
+            new_best = world.score.points > best_score;
+            if (new_best && !autoplay) {
+                best_score = world.score.points;
+                MakeDirectory(SAVE_DIR);
+                if (!score_save_best(BEST_PATH, best_score)) TraceLog(LOG_WARNING, "nao consegui gravar %s", BEST_PATH);
+            }
+        }
+        last_state = world.state;
         uint64_t notice_until = world.tick + (uint64_t)(tuning.sim_hz * 2);
-        if (pressed & ACT_BIT(ACT_RESET)) {
+        if ((pressed & ACT_BIT(ACT_RESET)) && world.state != GAME_PLAYING) {
+            world.plan = plan;   // hordas relidas com F5 valem a partir daqui
+            world_restart(&world, &tuning);
+            render_apply_tuning(&renderer, &world, &tuning);
+            new_best = false;
+            last_state = world.state;
+            pressed &= ~ACT_BIT(ACT_RESET);
+        }
+
+        // Ferramentas de debug do planeta destrutível: só com o F1 aberto,
+        // para nenhuma tecla de teste disparar no meio de uma partida.
+        bool debug_tools = overlay.visible && !autoplay;
+        if (debug_tools && (pressed & ACT_BIT(ACT_RESET))) {
             world_reset_planet(&world, &tuning);
             render_apply_tuning(&renderer, &world, &tuning);
             debug_overlay_notify(&overlay, "planeta restaurado", notice_until);
         }
-        if (!autoplay && (pressed & ACT_BIT(ACT_ALT_FIRE))) {
+        if (debug_tools && (pressed & ACT_BIT(ACT_DEBUG_SIZE))) {
             crater_size = (crater_size + 1) % CRATER_SIZE_COUNT;
             debug_overlay_notify(&overlay,
                                  TextFormat("cratera %s: boca %.1f, profundidade %.1f", CRATER_NAMES[crater_size],
@@ -297,18 +357,29 @@ int main(int argc, char **argv)
                                             (double)tuning.crater_depth[crater_size]),
                                  notice_until);
         }
-        if (!autoplay && (pressed & ACT_BIT(ACT_FIRE))) {
-            // O impacto sai da câmera, na direção do ponto clicado. Com o
-            // cursor preso (câmera livre), vale o centro da tela.
-            Vector2 point = GetMousePosition();
-            if (cursor_captured) point = (Vector2){ (float)GetScreenWidth() * 0.5f, (float)GetScreenHeight() * 0.5f };
-            Ray ray = GetScreenToWorldRay(point, render_camera(&world, &tuning, alpha));
-            world_impact(&world, &tuning, ray.position, ray.direction, tuning.crater_radius[crater_size],
+        if (debug_tools && (pressed & ACT_BIT(ACT_DEBUG_CRATER))) {
+            // Na câmera de jogo o impacto sai da nave, para onde o nariz
+            // aponta (a mira). Nas outras, sai da câmera na direção do ponto
+            // sob o cursor, ou do centro da tela se o cursor está preso.
+            Vector3 origin, dir;
+            if (world.cam_mode == CAM_SHIP && world.ship_active) {
+                origin = world.ship.pos;
+                dir = ship_forward(&world.ship);
+            } else {
+                Vector2 point = GetMousePosition();
+                if (cursor_captured) {
+                    point = (Vector2){ (float)GetScreenWidth() * 0.5f, (float)GetScreenHeight() * 0.5f };
+                }
+                Ray ray = GetScreenToWorldRay(point, render_camera(&world, &tuning, alpha));
+                origin = ray.position;
+                dir = ray.direction;
+            }
+            world_impact(&world, &tuning, origin, dir, tuning.crater_radius[crater_size],
                          tuning.crater_depth[crater_size]);
         }
 
-        // O mouse só fica preso à janela enquanto controla a câmera livre.
-        bool want_capture = !autoplay && world.cam_mode == CAM_FREE;
+        // O mouse fica preso à janela enquanto pilota a nave ou a câmera livre.
+        bool want_capture = !autoplay && world.cam_mode != CAM_ORBIT;
         if (want_capture != cursor_captured) {
             if (want_capture) DisableCursor();
             else              EnableCursor();
@@ -342,10 +413,15 @@ int main(int argc, char **argv)
         info.shaded = renderer.planet.shaded;
 
         // Com o overlay aberto, o HUD se desloca para a direita dele.
-        int hud_center = GetScreenWidth() / 2;
-        if (overlay.visible) hud_center = (DEBUG_OVERLAY_RIGHT + GetScreenWidth()) / 2;
-        hud_draw(&world, &tuning, hud_center, world.cam_mode == CAM_FREE);
+        HudContext hud = { 0 };
+        hud.center_x = GetScreenWidth() / 2;
+        if (overlay.visible) hud.center_x = (DEBUG_OVERLAY_RIGHT + GetScreenWidth()) / 2;
+        hud.camera = render_camera(&world, &tuning, alpha);
+        hud.best_score = best_score;
+        hud.new_best = new_best;
+        hud_draw(&world, &tuning, &hud);
         debug_overlay_draw(&overlay, &world, &info);
+        audio_update(&audio, &world, &tuning, hud.camera);
         rlDrawRenderBatchActive();
         double cpu_ms = (GetTime() - start) * 1000.0;
 
@@ -400,6 +476,13 @@ int main(int argc, char **argv)
         report.remesh_backlog_max = renderer.planet.backlog_max;
         report.remesh_ms_max = renderer.planet.remesh_ms_max;
         report.shaded = renderer.planet.shaded;
+        report.score = world.score.points;
+        report.kills = world.score.kills;
+        report.wave = (world.director.phase == DIRECTOR_DONE) ? world.plan.count : world.director.wave + 1;
+        report.waves_total = world.plan.count;
+        report.waves_on = world.director.phase != DIRECTOR_OFF;
+        report.game_state = (world.state == GAME_WON) ? "vitoria" : (world.state == GAME_LOST) ? "derrota" : "jogando";
+        report.enemies_alive = enemies_alive(&world.enemies);
         report.warnings = log_warnings;
         report.errors = log_errors;
         report.first_problem = log_first_problem;
@@ -413,6 +496,7 @@ int main(int argc, char **argv)
         if (log_errors > 0) exit_code = EXIT_PROBLEMS;
     }
 
+    audio_shutdown(&audio);
     render_shutdown(&renderer);
     CloseWindow();
     arena_free(&world_arena);

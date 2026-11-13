@@ -7,9 +7,17 @@ static Tuning tun;
 static Arena  arena;
 
 // Cada teste começa com a arena vazia; ela comporta vários mundos de teste.
-static void make_world(World *w, uint64_t seed)
+// Mundo como o jogo começa: câmera de jogo, nave pronta.
+static void make_ship_world(World *w, uint64_t seed)
 {
     if (!world_init(w, &tun, seed, &arena)) test_fail(__FILE__, __LINE__, "world_init falhou");
+}
+
+// Mundo na câmera de apresentação, com a nave fora de cena.
+static void make_world(World *w, uint64_t seed)
+{
+    make_ship_world(w, seed);
+    world_set_view(w, &tun, CAM_ORBIT);
 }
 
 static InputState state(uint32_t held, uint32_t pressed, float dx, float dy)
@@ -146,18 +154,22 @@ static void world_freecam_mouse_look(void)
     make_world(&w, 1u);
     run_ticks(&w, state(0u, ACT_BIT(ACT_FREECAM), 0.0f, 0.0f), 1);
 
-    float yaw0 = w.view.yaw;
-    float pitch0 = w.view.pitch;
+    float yaw0 = w.free_yaw;
+    float pitch0 = w.free_pitch;
+    Vector3 right0 = cam_right(w.view);
     run_ticks(&w, state(0u, 0u, 10.0f, 0.0f), 1);
-    CHECK_NEAR(w.view.yaw - yaw0, 10.0f * tun.freecam_mouse_sens * DEG2RAD, 1e-5);
-    CHECK_NEAR(w.view.pitch, pitch0, 1e-6);
+    CHECK_NEAR(w.free_yaw - yaw0, 10.0f * tun.freecam_mouse_sens * DEG2RAD, 1e-5);
+    CHECK_NEAR(w.free_pitch, pitch0, 1e-6);
+    CHECK(Vector3DotProduct(cam_forward(w.view), right0) > 0.0f);   // mouse para a direita olha para a direita
 
     // Mouse para cima (dy negativo) olha para cima, e o pitch para antes de virar.
     run_ticks(&w, state(0u, 0u, 0.0f, -100000.0f), 1);
-    CHECK(w.view.pitch > pitch0);
-    CHECK(w.view.pitch < 90.0f * DEG2RAD);
+    CHECK(w.free_pitch > pitch0);
+    CHECK(w.free_pitch < 90.0f * DEG2RAD);
+    CHECK(cam_forward(w.view).y > 0.9f);
     run_ticks(&w, state(0u, 0u, 0.0f, 100000.0f), 1);
-    CHECK(w.view.pitch > -90.0f * DEG2RAD && w.view.pitch < 0.0f);
+    CHECK(w.free_pitch > -90.0f * DEG2RAD && w.free_pitch < 0.0f);
+    CHECK(cam_forward(w.view).y < -0.9f);
 }
 
 static void world_orbit_ignores_mouse(void)
@@ -184,9 +196,15 @@ static void world_view_interpolates_between_ticks(void)
     CamPose mid = world_view(&w, 0.5f);
     CHECK_NEAR(Vector3Distance(p0.pos, w.view_prev.pos), 0.0f, 1e-6);
     CHECK_NEAR(Vector3Distance(p1.pos, w.view.pos), 0.0f, 1e-6);
-    CHECK_NEAR(mid.yaw, 0.5f * (w.view_prev.yaw + w.view.yaw), 1e-6);
     CHECK_NEAR(Vector3Distance(mid.pos, Vector3Lerp(w.view_prev.pos, w.view.pos, 0.5f)), 0.0f, 1e-5);
     CHECK(Vector3Distance(p0.pos, p1.pos) > 0.0f);
+
+    // A orientação do meio fica entre as duas, à mesma distância de cada uma.
+    Vector3 f0 = cam_forward(p0), f1 = cam_forward(p1), fm = cam_forward(mid);
+    CHECK(Vector3DotProduct(f0, f1) < 0.99999f);   // a câmera girou de um passo para o outro
+    CHECK_NEAR(Vector3DotProduct(fm, f0), Vector3DotProduct(fm, f1), 1e-4);
+    CHECK(Vector3DotProduct(fm, f0) > Vector3DotProduct(f0, f1));
+    CHECK_NEAR(mid.fov, tun.camera_fov, 1e-4);
 }
 
 static void world_returning_to_orbit_does_not_interpolate_the_jump(void)
@@ -200,7 +218,7 @@ static void world_returning_to_orbit_does_not_interpolate_the_jump(void)
 
     CHECK(w.cam_mode == CAM_ORBIT);
     CHECK_NEAR(Vector3Distance(w.view.pos, w.view_prev.pos), 0.0f, 1e-6);
-    CHECK_NEAR(w.view.yaw, w.view_prev.yaw, 1e-6);
+    CHECK_NEAR(Vector3DotProduct(cam_forward(w.view), cam_forward(w.view_prev)), 1.0f, 1e-6);
 }
 
 static void world_place_camera_looks_at_the_target(void)
@@ -226,7 +244,8 @@ static void world_place_camera_looks_at_the_target(void)
 
     // Posição igual ao alvo não gera direção inválida.
     world_place_camera(&w, positions[0], positions[0]);
-    CHECK(w.view.yaw == w.view.yaw && w.view.pitch == w.view.pitch);   // não é NaN
+    CHECK(w.free_yaw == w.free_yaw && w.free_pitch == w.free_pitch);   // não é NaN
+    CHECK_NEAR(Vector3Length(cam_forward(w.view)), 1.0f, 1e-4);
 }
 
 static void world_apply_tuning_regenerates_only_when_the_recipe_changes(void)
@@ -407,6 +426,127 @@ static void world_collapses_when_the_core_is_destroyed(void)
     CHECK(planet_hp(&w.planet) > tun.defeat_planet_hp);   // ainda sobrava massa de sobra
 }
 
+static void world_starts_flying_the_ship(void)
+{
+    arena_reset(&arena);
+    World w;
+    make_ship_world(&w, 1u);
+    CHECK(w.cam_mode == CAM_SHIP && w.ship_active && w.ship.alive);
+
+    // A câmera fica atrás e acima da nave, olhando na direção em que ela aponta.
+    Vector3 to_ship = Vector3Subtract(w.ship.pos, w.view.pos);
+    CHECK(Vector3DotProduct(to_ship, ship_forward(&w.ship)) > 0.0f);
+    CHECK(Vector3DotProduct(to_ship, ship_up(&w.ship)) < 0.0f);
+    float expected = sqrtf(tun.chase_distance * tun.chase_distance + tun.chase_height * tun.chase_height);
+    CHECK_NEAR(Vector3Length(to_ship), expected, 0.01f);
+    CHECK(Vector3DotProduct(cam_forward(w.view), ship_forward(&w.ship)) > 0.9f);
+    CHECK_NEAR(w.view.fov, tun.camera_fov, 1e-4);
+}
+
+static void world_ship_flies_and_the_camera_follows(void)
+{
+    arena_reset(&arena);
+    World w;
+    make_ship_world(&w, 1u);
+    Vector3 start = w.ship.pos;
+    float longest = tun.chase_distance * 3.2f;   // teto do atraso, com folga para a altura
+
+    bool lost = false;
+    InputState fly = state(ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BOOST), 0u, 3.0f, -1.0f);
+    for (int i = 0; i < tun.sim_hz * 3; i++) {
+        world_tick(&w, &fly, &tun);
+        if (Vector3Distance(w.view.pos, w.ship.pos) > longest) lost = true;
+    }
+    CHECK(Vector3Distance(w.ship.pos, start) > 20.0f);   // a nave voou
+    CHECK(!lost);                                        // e a câmera nunca a perdeu
+    CHECK(w.view.fov > tun.camera_fov + 1.0f);           // o campo de visão abriu com o boost
+    CHECK(w.particles.count > 0);                        // rastro dos motores
+    // A nave continua no campo de visão: está na frente da câmera.
+    CHECK(Vector3DotProduct(Vector3Subtract(w.ship.pos, w.view.pos), cam_forward(w.view)) > 0.0f);
+}
+
+static void world_other_cameras_park_the_ship(void)
+{
+    arena_reset(&arena);
+    World w;
+    make_ship_world(&w, 1u);
+    InputState fly = state(ACT_BIT(ACT_FORWARD), 0u, 0.0f, 0.0f);
+    run_ticks(&w, fly, 30);
+
+    // F2: câmera livre. WASD agora move a câmera, e a nave fica parada.
+    run_ticks(&w, state(0u, ACT_BIT(ACT_FREECAM), 0.0f, 0.0f), 1);
+    CHECK(w.cam_mode == CAM_FREE && w.cam_return == CAM_SHIP);
+    Vector3 parked = w.ship.pos;
+    Vector3 camera = w.view.pos;
+    run_ticks(&w, fly, 60);
+    CHECK_NEAR(Vector3Distance(w.ship.pos, parked), 0.0f, 1e-6);
+    CHECK_NEAR(Vector3Distance(w.ship.pos, w.ship.pos_prev), 0.0f, 1e-6);
+    CHECK(Vector3Distance(w.view.pos, camera) > 1.0f);
+
+    // F2 de novo: volta para a nave, sem interpolar o salto da câmera.
+    run_ticks(&w, state(0u, ACT_BIT(ACT_FREECAM), 0.0f, 0.0f), 1);
+    CHECK(w.cam_mode == CAM_SHIP);
+    CHECK_NEAR(Vector3Distance(w.view.pos, w.view_prev.pos), 0.0f, 1e-6);
+    CHECK(Vector3Distance(w.view.pos, w.ship.pos) < tun.chase_distance * 2.0f);
+
+    // Câmera de apresentação: nave fora de cena e parada.
+    world_set_view(&w, &tun, CAM_ORBIT);
+    CHECK(!w.ship_active);
+    parked = w.ship.pos;
+    run_ticks(&w, fly, 60);
+    CHECK_NEAR(Vector3Distance(w.ship.pos, parked), 0.0f, 1e-6);
+
+    world_set_view(&w, &tun, CAM_SHIP);
+    CHECK(w.ship_active && w.cam_mode == CAM_SHIP);
+    run_ticks(&w, fly, 30);
+    CHECK(Vector3Distance(w.ship.pos, parked) > 0.5f);
+}
+
+static void world_chase_camera_stays_out_of_the_ground(void)
+{
+    arena_reset(&arena);
+    World w;
+    make_ship_world(&w, 1u);
+    float radius = w.planet.params.radius;
+
+    // Nave logo acima do solo, de nariz para cima: o lugar "atrás" dela fica
+    // dentro do planeta, e a câmera precisa recuar para perto da nave.
+    w.ship.pos = (Vector3){ 0.0f, radius + 4.0f, 0.0f };
+    w.ship.vel = (Vector3){ 0.0f, 0.0f, 0.0f };
+    w.ship.fall = (Vector3){ 0.0f, 0.0f, 0.0f };
+    w.ship.rot = quat_look((Vector3){ 0.0f, 1.0f, 0.0f }, (Vector3){ 0.0f, 0.0f, 1.0f });
+    world_set_view(&w, &tun, CAM_SHIP);
+    CHECK(planet_sample(&w.planet, w.view.pos) < VOXEL_ISO);
+    CHECK(Vector3Length(w.view.pos) > radius);
+
+    bool buried = false;
+    for (int i = 0; i < 90; i++) {
+        run_ticks(&w, state(0u, 0u, 0.0f, 0.0f), 1);
+        if (planet_sample(&w.planet, w.view.pos) >= VOXEL_ISO) buried = true;
+    }
+    CHECK(!buried);
+}
+
+static void world_crash_jolts_and_sparks(void)
+{
+    arena_reset(&arena);
+    World w;
+    make_ship_world(&w, 1u);
+    float radius = w.planet.params.radius;
+
+    // Mergulho direto contra o planeta.
+    w.ship.pos = (Vector3){ 0.0f, radius + 20.0f, 0.0f };
+    w.ship.rot = quat_look((Vector3){ 0.0f, -1.0f, 0.0f }, (Vector3){ 0.0f, 0.0f, 1.0f });
+    world_set_view(&w, &tun, CAM_SHIP);
+    CHECK(w.jolt_count == 0u);
+
+    run_ticks(&w, state(ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BOOST), 0u, 0.0f, 0.0f), tun.sim_hz * 3);
+    CHECK(w.jolt_count > 0u);
+    CHECK(w.jolt_strength > 0.0f);
+    CHECK(!w.ship.alive || w.ship.hull < tun.ship_hull_max || w.ship.shield < tun.ship_shield_max);
+    CHECK(planet_sample(&w.planet, w.ship.pos) < VOXEL_ISO);
+}
+
 void suite_world(void)
 {
     tun = test_tuning();
@@ -429,5 +569,10 @@ void suite_world(void)
     RUN(world_particles_never_overflow);
     RUN(world_collapses_when_the_planet_loses_too_much_mass);
     RUN(world_collapses_when_the_core_is_destroyed);
+    RUN(world_starts_flying_the_ship);
+    RUN(world_ship_flies_and_the_camera_follows);
+    RUN(world_other_cameras_park_the_ship);
+    RUN(world_chase_camera_stays_out_of_the_ground);
+    RUN(world_crash_jolts_and_sparks);
     arena_free(&arena);
 }

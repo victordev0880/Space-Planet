@@ -11,7 +11,7 @@
 
 #include <stdbool.h>
 
-#define CONFIG_MAX_ENTRIES 256
+#define CONFIG_MAX_ENTRIES 512
 #define CONFIG_KEY_LEN     48
 #define CONFIG_VALUE_LEN   64
 #define CONFIG_ERROR_LEN   160

@@ -1,0 +1,55 @@
+# Roteiro do marco 5 (combate), em cenas montadas: os modelos de perto, uma
+# passada de ataque do Enxame, a nave atacando o bando, o aviso de bomba do
+# Bombardeiro e a bomba caindo. Sem hordas: os inimigos são postos à mão.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/combate.txt"
+#
+# O Sol fica na direção (0.56, 0.21, 0.80); o planeta tem raio 57.6.
+# Com a câmera livre ("cam") a partida fica congelada: é assim que os modelos
+# são fotografados parados.
+
+frames 1500
+seed 3
+
+at 0    waves off
+
+# --- os modelos, de perto ----------------------------------------------------
+at 5    spawn swarm 1  37.6 50.1 125.2
+at 5    cam 36.8 50.7 133.0  37.6 50.1 125.2
+at 6    shot combate_01_enxame
+at 10   spawn bomber 1  -28.2 42.3 141.1
+at 10   cam -41.4 39.1 156.4  -28.2 42.3 141.1
+at 11   shot combate_02_bombardeiro
+
+# --- passada de ataque do Enxame ---------------------------------------------
+# O bando chega pelo lado do dia; a nave assiste de longe, parada.
+at 30   ship -9.0 42.1 133.2  26.0 20.2 47.3
+at 30   spawn swarm 6  85.6 66.6 156.0
+at 300  shot combate_03_bando_chegando
+at 360  shot combate_04_passada
+at 400  shot combate_05_passada_tiros
+at 450  shot combate_06_crateras
+
+# --- a nave ataca o bando ----------------------------------------------------
+at 480  autopilot on
+at 540  shot combate_07_atacando
+at 600  shot combate_08_combate
+at 660  shot combate_09_combate
+at 720  shot combate_10_combate
+at 840  autopilot off
+
+# --- o Bombardeiro: aviso, bomba e cratera -----------------------------------
+at 900  ship 25.6 12.3 147.3  40.5 5.8 40.5
+at 900  spawn bomber 1  58.8 8.4 58.8
+at 1090 shot combate_11_bombardeiro_orbitando
+at 1140 shot combate_12_alvo_marcado
+at 1190 shot combate_13_armando
+at 1240 shot combate_14_bomba_caindo
+at 1290 shot combate_15_bomba_perto
+at 1330 shot combate_16_impacto
+
+# --- a nave ataca o Bombardeiro ----------------------------------------------
+at 1340 autopilot on
+at 1400 shot combate_17_contra_o_bombardeiro
+at 1460 shot combate_18_contra_o_bombardeiro
+at 1499 shot combate_19_fim

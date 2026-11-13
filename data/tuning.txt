@@ -175,10 +175,116 @@ particles.flash_life  = 0.22
 
 # --- tremor de câmera -------------------------------------------------------
 shake.strength  = 0.07         # tremor por unidade de raio da cratera
+shake.jolt      = 0.022        # tremor por unidade de velocidade quando a nave bate
 shake.falloff   = 150          # distância em que o tremor cai pela metade
 shake.max_angle = 1.8          # balanço máximo da câmera, em graus
 shake.decay     = 1.8          # quanto do tremor some por segundo
 shake.frequency = 22           # rapidez do balanço
+
+# --- nave: movimento --------------------------------------------------------
+# Velocidades em unidades por segundo (1 unidade = 1 voxel; o planeta tem raio 57.6).
+ship.thrust        = 44      # aceleração para a frente (W)
+ship.strafe        = 30      # aceleração lateral (A/D)
+ship.speed_max     = 46      # velocidade máxima sem boost
+ship.brake         = 2.4     # freio (S): fração da velocidade perdida por segundo
+ship.drag          = 0.30    # arrasto: sem acelerar, a nave perde velocidade aos poucos
+ship.grip          = 2.8     # quão rápido o rumo acompanha o nariz (0 = desliza para sempre)
+ship.drift_drag    = 0.04    # arrasto durante o drift (Ctrl): quase nenhum
+ship.boost_mult    = 2.1     # boost (Shift): multiplica aceleração e velocidade máxima
+ship.boost_cost    = 24      # energia gasta por segundo de boost
+ship.dash_speed    = 58      # impulso do dash (Espaço)
+ship.dash_time     = 0.28    # duração do dash, com invulnerabilidade
+ship.dash_cost     = 30      # energia gasta por dash
+ship.dash_cooldown = 0.55    # intervalo mínimo entre dois dashes
+ship.mouse_sens    = 0.11    # graus de giro por pixel de mouse
+ship.turn_rate     = 190     # giro máximo, em graus por segundo
+ship.turn_smooth   = 16      # maior = o giro responde mais rápido ao mouse
+ship.roll_rate     = 150     # rolagem (Q/E), em graus por segundo
+ship.auto_level    = 1.3     # quão rápido a nave se endireita em relação ao planeta (0 = nunca)
+ship.gravity       = 5       # puxão do planeta, junto à superfície
+ship.gravity_range = 2.2     # até onde a gravidade alcança, em raios do planeta
+ship.fall_drag     = 1.2     # freio da queda: sem motor, a nave afunda a no máximo gravity / fall_drag
+ship.lift_speed    = 20      # sustentação: voando ao longo da superfície a esta velocidade ou mais, a nave não afunda
+
+# Voo rasante: dentro da atmosfera a nave acompanha a curvatura do planeta, ou
+# seja, voar "reto" mantém a altitude em vez de sair pela tangente. Acima da
+# atmosfera o efeito some aos poucos e o voo volta a ser livre.
+ship.hug           = 1.0     # 0 = desligado; 1 = acompanha a curvatura por inteiro
+ship.hug_fade      = 3.0     # some a esta altura acima do topo da atmosfera, em espessuras da atmosfera
+
+# --- nave: colisão e recursos -----------------------------------------------
+ship.radius         = 1.1    # raio de colisão
+ship.bounce         = 0.35   # quanto da velocidade volta ao bater (0 = nada, 1 = tudo)
+ship.crash_min      = 9      # batidas mais lentas que isto não causam dano
+ship.crash_damage   = 2.2    # dano por unidade de velocidade acima do mínimo
+ship.hull_max       = 100
+ship.shield_max     = 60
+ship.shield_regen   = 14     # escudo recuperado por segundo
+ship.shield_delay   = 2.5    # segundos sem levar dano até o escudo voltar a carregar
+ship.energy_max     = 100
+ship.energy_regen   = 20     # energia recuperada por segundo
+ship.respawn_time   = 3      # segundos até renascer depois de destruída
+ship.spawn_distance = 2.3    # onde a nave nasce, em raios do planeta
+ship.spawn_pitch    = 13     # nasce de frente para o planeta, com o nariz este tanto (graus) acima do centro dele
+
+# --- câmera em terceira pessoa ----------------------------------------------
+chase.distance   = 7.5       # distância atrás da nave
+chase.height     = 2.2       # altura acima da nave
+chase.look_ahead = 16        # a câmera mira este tanto à frente da nave
+chase.pos_smooth = 14        # maior = a câmera gruda mais na nave
+chase.rot_smooth = 9
+chase.fov_boost  = 14        # graus a mais de campo de visão no boost
+chase.clearance  = 0.8       # folga mínima entre a câmera e o terreno
+chase.ground_tilt = 14       # no voo rasante a câmera inclina este tanto (graus) para o chão
+
+# --- Lua --------------------------------------------------------------------
+moon.radius       = 0.27     # raio da Lua, em raios do planeta
+moon.orbit_radius = 4.2      # distância entre a Lua e o centro do planeta, em raios do planeta
+moon.orbit_period = 360      # segundos para dar uma volta
+moon.orbit_tilt   = 11       # inclinação da órbita, em graus
+moon.start_angle  = 150      # onde a Lua começa na órbita, em graus (150 = à direita do planeta, vista da partida)
+moon.seed         = 5        # muda o desenho das crateras
+moon.craters      = 90
+moon.color        = 156 154 160
+
+# Estilingue: passar perto da Lua em velocidade dá um ganho de velocidade
+# máxima, que dura alguns segundos depois de se afastar dela.
+moon.gravity      = 9        # puxão da Lua junto à superfície dela
+moon.sling_range  = 3.2      # até onde o estilingue alcança, em raios da Lua a partir do centro dela
+moon.sling_boost  = 1.6      # multiplicador da velocidade máxima durante o estilingue
+moon.sling_time   = 5        # segundos que o ganho dura depois de sair de perto da Lua
+moon.sling_speed  = 0.5      # velocidade mínima para o estilingue armar, em frações da velocidade máxima
+
+# --- arma principal (botão esquerdo) ----------------------------------------
+# Os tiros saem alternados dos dois canhões, nas raízes das asas.
+weapon.rate          = 9       # tiros por segundo
+weapon.speed         = 260     # velocidade do tiro
+weapon.range         = 230     # alcance; depois disso o tiro some
+weapon.damage        = 1       # dano de cada tiro (inimigos em data/enemies.txt contam em tiros)
+weapon.graze_rate    = 1.35    # no voo rasante a cadência é multiplicada por isto
+weapon.assist_angle  = 4       # ajuda de mira: inimigos até este ângulo (graus) do nariz puxam o tiro
+weapon.assist_range  = 200     # ... e até esta distância
+ship.graze_shield    = 2.0     # no voo rasante o escudo recarrega este tanto mais rápido
+
+# --- combate ----------------------------------------------------------------
+# "Hit-stop": o jogo congela por um instante nos golpes mais fortes, para
+# eles terem peso. Curto demais não se nota; longo demais parece travamento.
+combat.hitstop_big      = 0.07   # segundos, ao destruir um inimigo grande
+combat.hitstop_player   = 0.04   # segundos, quando a nave leva um golpe forte
+combat.marker_distance  = 70     # inimigos mais longe que isto ganham um marcador na tela
+
+# --- pontuação --------------------------------------------------------------
+# Abates seguidos, cada um a menos de combo_window segundos do anterior,
+# aumentam o multiplicador de pontos.
+score.combo_window    = 2.5
+score.combo_step      = 0.25    # quanto cada abate seguido soma ao multiplicador
+score.combo_max       = 4       # teto do multiplicador
+score.planet_bonus    = 1000    # bônus ao vencer uma horda com o planeta acima de...
+score.planet_bonus_hp = 0.9     # ... esta fração da massa
+
+# --- áudio ------------------------------------------------------------------
+audio.volume  = 0.7             # volume geral (0 a 1)
+audio.falloff = 140             # distância em que um som cai pela metade
 
 # --- autoplay ---------------------------------------------------------------
 autoplay.warmup_frames = 10    # quadros iniciais ignorados nas medições de tempo

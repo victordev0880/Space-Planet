@@ -27,6 +27,8 @@ typedef enum {
     PARTICLE_DUST,    // nuvem de poeira: freia, cresce e some
     PARTICLE_EMBER,   // brasa: brilha por conta própria
     PARTICLE_FLASH,   // clarão da explosão: grande, parado, dura um instante
+    PARTICLE_TRAIL,   // rastro de motor: brilha, freia e encolhe, sem cair
+    PARTICLE_RING,    // onda de choque: um anel que cresce e some, sempre de frente para a câmera
 } ParticleKind;
 
 typedef struct {
@@ -60,5 +62,14 @@ void particles_tick(Particles *ps, const Planet *planet, const Tuning *t, float 
 // `carve` diz quanto de cada material foi arrancado (define as cores).
 void particles_impact(Particles *ps, Rng *rng, const Tuning *t, Vector3 ground, Vector3 normal,
                       float rim_radius, const CarveResult *carve);
+
+// Explosão no ar (uma nave destruída): clarão, onda de choque, brasas e
+// destroços que caem no planeta. `size` é o tamanho de quem explodiu; `vel`,
+// a velocidade dele (os pedaços continuam indo para o mesmo lado).
+void particles_explosion(Particles *ps, Rng *rng, Vector3 pos, Vector3 vel, float size, Rgb8 hot, Rgb8 glow,
+                         Rgb8 debris);
+
+// Faíscas de um tiro que acertou alguma coisa, saindo em volta de `normal`.
+void particles_sparks(Particles *ps, Rng *rng, Vector3 pos, Vector3 normal, int count, float speed, Rgb8 color);
 
 #endif

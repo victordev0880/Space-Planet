@@ -4,6 +4,7 @@
 #include <stdio.h>
 
 #include "game/world.h"
+#include "tools/autopilot.h"
 #include "tools/autoplay.h"
 
 static Autoplay ap;   // static: a struct é grande demais para a pilha
@@ -159,6 +160,118 @@ static void autoplay_apply_digs_the_planet(void)
     }
 }
 
+// "view" troca entre a câmera de jogo e a de apresentação.
+static void autoplay_view_command_switches_cameras(void)
+{
+    static Arena arena;
+    if (arena.base == NULL) CHECK(arena_init(&arena, 2u * 1024u * 1024u));
+    arena_reset(&arena);
+
+    Tuning t = test_tuning();
+    World w;
+    CHECK(world_init(&w, &t, 1u, &arena));
+    CHECK(w.cam_mode == CAM_SHIP);
+
+    bool ok = autoplay_parse(&ap, "frames 10\nat 2 view orbit\nat 6 view ship\n");
+    if (!ok) test_fail(__FILE__, __LINE__, ap.error);
+    CHECK(ok);
+    for (int frame = 0; frame < ap.frames; frame++) {
+        AutoplayFrame f;
+        autoplay_step(&ap, frame, &f);
+        CHECK(f.has_view == (frame == 2 || frame == 6));   // vale só no quadro pedido
+        autoplay_apply(&f, &w, &t);
+        if (frame < 2)               CHECK(w.cam_mode == CAM_SHIP && w.ship_active);
+        if (frame >= 2 && frame < 6) CHECK(w.cam_mode == CAM_ORBIT && !w.ship_active);
+        if (frame >= 6)              CHECK(w.cam_mode == CAM_SHIP && w.ship_active);
+    }
+}
+
+// "ship" põe a nave onde o roteiro manda, apontada para o alvo.
+static void autoplay_ship_command_places_the_ship(void)
+{
+    static Arena arena;
+    if (arena.base == NULL) CHECK(arena_init(&arena, 2u * 1024u * 1024u));
+    arena_reset(&arena);
+
+    Tuning t = test_tuning();
+    World w;
+    CHECK(world_init(&w, &t, 1u, &arena));
+    world_set_view(&w, &t, CAM_ORBIT);
+    w.ship.hull = 1.0f;
+
+    bool ok = autoplay_parse(&ap, "frames 6\nat 2 ship 0 60 0 0 60 -10\nat 4 ship 0 0 70 0 0 0 25\nat 4 cam 0 5 80\n");
+    if (!ok) test_fail(__FILE__, __LINE__, ap.error);
+    CHECK(ok);
+    for (int frame = 0; frame < ap.frames; frame++) {
+        AutoplayFrame f;
+        autoplay_step(&ap, frame, &f);
+        CHECK(f.has_ship == (frame == 2 || frame == 4));   // vale só no quadro pedido
+        autoplay_apply(&f, &w, &t);
+
+        if (frame == 2) {
+            // Na posição, inteira, parada, de nariz para o alvo e de topo para
+            // longe do planeta; e a câmera de jogo assumiu.
+            CHECK(w.cam_mode == CAM_SHIP && w.ship_active);
+            CHECK_NEAR(Vector3Distance(w.ship.pos, (Vector3){ 0.0f, 60.0f, 0.0f }), 0.0f, 1e-5);
+            CHECK(ship_forward(&w.ship).z < -0.999f);
+            CHECK(ship_up(&w.ship).y > 0.999f);
+            CHECK_NEAR(Vector3Length(w.ship.vel), 0.0f, 1e-6);
+            CHECK_NEAR(w.ship.hull, t.ship_hull_max, 1e-6);
+            CHECK(Vector3Distance(w.view.pos, w.ship.pos) < t.chase_distance * 2.0f);
+        }
+        if (frame == 4) {
+            // Com velocidade, e com um "cam" no mesmo quadro: a nave fica
+            // posta e a câmera livre a fotografa de fora.
+            CHECK(w.cam_mode == CAM_FREE && w.cam_return == CAM_SHIP && w.ship_active);
+            CHECK(ship_forward(&w.ship).z < -0.999f);
+            CHECK_NEAR(Vector3DotProduct(w.ship.vel, ship_forward(&w.ship)), 25.0f, 1e-3);
+            CHECK(w.view.pos.z == 80.0f);
+        }
+    }
+}
+
+// "waves", "spawn" e "autopilot".
+static void autoplay_combat_commands(void)
+{
+    static Arena arena;
+    if (arena.base == NULL) CHECK(arena_init(&arena, 2u * 1024u * 1024u));
+    arena_reset(&arena);
+
+    Tuning t = test_tuning();
+    static World w;
+    CHECK(world_init(&w, &t, 1u, &arena));
+    static WavePlan plan;
+    plan.count = 1;
+    plan.waves[0].pause = 1.0f;
+    plan.waves[0].group_count = 1;
+    plan.waves[0].groups[0] = (WaveGroup){ ENEMY_SWARM, 2, 0.0f, 0.0f, 0.0f };
+    world_set_plan(&w, &plan);
+    CHECK(w.director.phase == DIRECTOR_PAUSE);
+
+    bool ok = autoplay_parse(&ap,
+                             "frames 8\n"
+                             "at 1 waves off\n"
+                             "at 2 spawn swarm 3 0 60 0\n"
+                             "at 2 spawn bomber 1 60 0 0\n"
+                             "at 3 autopilot on\n"
+                             "at 5 autopilot off\n"
+                             "at 6 waves on\n");
+    if (!ok) test_fail(__FILE__, __LINE__, ap.error);
+    CHECK(ok);
+    for (int frame = 0; frame < ap.frames; frame++) {
+        AutoplayFrame f;
+        autoplay_step(&ap, frame, &f);
+        CHECK(f.autopilot == (frame >= 3 && frame < 5));   // vale até ser desligado
+        CHECK(f.spawn_count == ((frame == 2) ? 2 : 0));
+        autoplay_apply(&f, &w, &t);
+        if (frame == 1) CHECK(w.director.phase == DIRECTOR_OFF);
+        if (frame == 2) {
+            CHECK(w.enemies.alive_by_type[ENEMY_SWARM] == 3 && w.enemies.alive_by_type[ENEMY_BOMBER] == 1);
+        }
+        if (frame == 6) CHECK(w.director.phase == DIRECTOR_PAUSE && w.director.wave == 0);   // recomeçou
+    }
+}
+
 static void expect_error(const char *text, const char *fragment)
 {
     CHECK(!autoplay_parse(&ap, text));
@@ -183,7 +296,11 @@ static void autoplay_rejects_bad_scripts(void)
     expect_error("frames 10\nat 1 cam 1 2\n", "cam");
     expect_error("frames 10\nat 1 cam 1 2 3 4\n", "cam");
     expect_error("frames 10\nat 1 cam 1 dois 3\n", "cam");
-    expect_error("frames 10\nat 1 cam 1 2 3 4 5 6 7\n", "palavras demais");
+    expect_error("frames 10\nat 1 cam 1 2 3 4 5 6 7\n", "cam");
+    expect_error("frames 10\nat 1 cam 1 2 3 4 5 6 7 8\n", "palavras demais");
+    expect_error("frames 10\nat 1 ship 1 2 3\n", "ship");
+    expect_error("frames 10\nat 1 ship 1 2 3 1 2 3\n", "alvo");
+    expect_error("frames 10\nat 1 ship 1 2 3 0 0 0 -5\n", "negativa");
     expect_error("frames 10\nat 1 crater 0 1 0 5\n", "crater");
     expect_error("frames 10\nat 1 crater 0 0 0 5 3\n", "direcao");
     expect_error("frames 10\nat 1 crater 0 1 0 -5 3\n", "positivos");
@@ -191,6 +308,15 @@ static void autoplay_rejects_bad_scripts(void)
     expect_error("frames 10\nat 1 barrage 0 3 2\n", "quantidade");
     expect_error("frames 10\nat 1 barrage 99999 3 2\n", "quantidade");
     expect_error("frames 10\nat 1 barrage 5 3\n", "barrage");
+    expect_error("frames 10\nat 1 waves talvez\n", "waves");
+    expect_error("frames 10\nat 1 autopilot\n", "autopilot");
+    expect_error("frames 10\nat 1 spawn dragao 2 0 60 0\n", "dragao");
+    expect_error("frames 10\nat 1 spawn swarm 0 0 60 0\n", "quantidade");
+    expect_error("frames 10\nat 1 spawn swarm 2 0 0 0\n", "centro");
+    expect_error("frames 10\nat 1 spawn swarm 2 0 60\n", "spawn");
+    expect_error("frames 10\nat 1 view\n", "view");
+    expect_error("frames 10\nat 1 view livre\n", "view");
+    expect_error("frames 10\nat 1 view ship orbit\n", "view");
 }
 
 static void autoplay_skips_utf8_bom(void)
@@ -219,14 +345,24 @@ static uint64_t play(const char *path, const Tuning *t)
     if (arena.base == NULL && !arena_init(&arena, 2u * 1024u * 1024u)) return 0u;
     arena_reset(&arena);
 
-    World w;
+    // Como no jogo: com as hordas de data/waves.txt.
+    static WavePlan plan;
+    char err[160];
+    if (!waves_load(&plan, "data/waves.txt", err, sizeof err)) {
+        test_fail(__FILE__, __LINE__, err);
+        return 0u;
+    }
+
+    static World w;
     InputTracker tracker;
     if (!world_init(&w, t, script.has_seed ? script.seed : 1u, &arena)) return 0u;
+    world_set_plan(&w, &plan);
     input_init(&tracker);
     for (int frame = 0; frame < script.frames; frame++) {
         AutoplayFrame f;
         autoplay_step(&script, frame, &f);
         autoplay_apply(&f, &w, t);
+        if (f.autopilot) autopilot_drive(&w, t, &f.input);
         input_feed(&tracker, &f.input);
         InputState st = input_tick(&tracker);
         world_tick(&w, &st, t);
@@ -240,6 +376,7 @@ static void autoplay_shipped_scripts_are_deterministic(void)
 {
     static const char *const SCRIPTS[] = {
         "roteiros/fundacao.txt", "roteiros/planeta.txt", "roteiros/desempenho.txt", "roteiros/cratera.txt",
+        "roteiros/voo.txt",      "roteiros/combate.txt", "roteiros/onda1.txt",
     };
     Tuning t = test_tuning();
 
@@ -355,6 +492,9 @@ void suite_autoplay(void)
     RUN(autoplay_cam_command_places_the_camera);
     RUN(autoplay_crater_commands);
     RUN(autoplay_apply_digs_the_planet);
+    RUN(autoplay_view_command_switches_cameras);
+    RUN(autoplay_ship_command_places_the_ship);
+    RUN(autoplay_combat_commands);
     RUN(autoplay_rejects_bad_scripts);
     RUN(autoplay_skips_utf8_bom);
     RUN(autoplay_missing_file_is_an_error);

@@ -32,6 +32,11 @@ static const float OUTER_RINGS[] = { 0.0f, 0.05f, 0.12f, 0.22f, 0.35f, 0.50f, 0.
 static const Color DYING_COLOR = { 255, 96, 60, 255 };
 #define DYING_THINNING 0.6f
 
+// --- câmera dentro da atmosfera ---
+#define NEAR_SHEET   0.3f   // distância mínima entre a câmera e a "folha" de névoa
+#define RELIEF_COVER 0.5f   // a névoa sobre o chão fica esta altura acima das montanhas mais altas
+#define BURIED_FADE  3.0f   // abaixo do nível do mar a névoa some ao longo desta profundidade
+
 static float smoothstep(float edge0, float edge1, float x)
 {
     float t = Clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
@@ -87,7 +92,17 @@ void atmosphere_draw(Atmosphere *a, const Tuning *t, float planet_radius, Vector
     float height = t->atmo_height * (1.0f - DYING_THINNING * damage);
     float top = planet_radius * (1.0f + height);        // raio do topo da atmosfera
     float distance = Vector3Length(camera_pos);
-    if (distance <= top * 1.001f) return;               // câmera dentro da atmosfera: ver o cabeçalho
+    if (distance < 1e-3f) return;                       // no centro do planeta não há "para baixo"
+
+    // Dentro da atmosfera a conta muda (ver o cabeçalho). Abaixo do nível do
+    // mar, em crateras e túneis, a névoa vai sumindo.
+    bool inside = distance <= top;
+    float fade = inside ? Clamp(1.0f + (distance - planet_radius) / BURIED_FADE, 0.0f, 1.0f) : 1.0f;
+    if (fade <= 0.0f) return;
+    // Para as contas, a câmera nunca está abaixo do chão.
+    float d = inside ? fmaxf(distance, planet_radius * 1.0005f) : distance;
+    float horizon = asinf(Clamp(planet_radius / d, 0.0f, 1.0f));   // ângulo entre "para baixo" e o horizonte
+    float shell = planet_radius + t->planet_land_height + RELIEF_COVER;
 
     Vector3 sun = tuning_sun_direction(t);
     Color tint = {
@@ -110,38 +125,89 @@ void atmosphere_draw(Atmosphere *a, const Tuning *t, float planet_radius, Vector
     Mesh *mesh = &a->mesh;
     for (int ring = 0; ring < RING_COUNT; ring++) {
         bool over_planet = ring < INNER_COUNT;
-        // `miss`: a que distância do centro do planeta esta linha de visão passa.
-        float miss = over_planet ? INNER_RINGS[ring] * planet_radius
-                                 : planet_radius + OUTER_RINGS[ring - INNER_COUNT] * (top - planet_radius);
-        if (miss > top) miss = top;
 
-        float sin_a = miss / distance;                        // ângulo entre a linha e o eixo de visão
-        float cos_a = sqrtf(1.0f - sin_a * sin_a);
-        float to_closest = distance * cos_a;                  // da câmera ao ponto da linha mais perto do centro
-        float half_in_air = sqrtf(fmaxf(top * top - miss * miss, 0.0f));
-        float to_entry = to_closest - half_in_air;            // da câmera até entrar na atmosfera
+        // Cada anel é um cone de linhas de visão em volta do eixo que vai da
+        // câmera ao centro do planeta. De cada um saem quatro números:
+        float sin_a, cos_a;  // o ângulo entre as linhas e esse eixo
+        float strength;      // o brilho, antes de considerar o Sol
+        float to_vertex;     // a que distância da câmera fica o vértice
+        float to_lit_point;  // o ponto da linha usado para decidir se é dia ou noite
 
-        float strength;      // brilho deste anel, antes de considerar o Sol
-        float to_lit_point;  // ponto da linha usado para decidir se é dia ou noite
         if (over_planet) {
-            // A linha bate no chão: o caminho pelo ar vai da entrada até o solo.
+            // A linha bate no chão. `miss` é a distância a que ela passaria do
+            // centro do planeta, se o atravessasse.
+            float miss = INNER_RINGS[ring] * planet_radius;
+            sin_a = miss / d;
+            cos_a = sqrtf(1.0f - sin_a * sin_a);
             float half_in_ground = sqrtf(fmaxf(planet_radius * planet_radius - miss * miss, 0.0f));
-            float path = half_in_air - half_in_ground;
+            float half_in_air = sqrtf(fmaxf(top * top - miss * miss, 0.0f));
+            float to_ground = d * cos_a - half_in_ground;
+            float to_entry = d * cos_a - half_in_air;         // da câmera até entrar na atmosfera
+
+            // O caminho pelo ar vai da entrada na atmosfera (ou da câmera, se
+            // ela já está dentro) até o solo.
+            float path = inside ? to_ground : to_ground - to_entry;
             strength = t->atmo_haze + t->atmo_strength * (path / longest);
-            to_lit_point = to_closest - half_in_ground;       // o ponto do solo atingido
+            to_lit_point = to_ground;
+
+            if (!inside) {
+                to_vertex = to_entry;
+            } else {
+                // A folha de névoa fica logo acima do relevo, para as
+                // montanhas não a furarem; se a câmera está mais baixa que
+                // isso, fica colada na frente dela.
+                float half_in_shell = sqrtf(fmaxf(shell * shell - miss * miss, 0.0f));
+                to_vertex = (d > shell) ? fmaxf(d * cos_a - half_in_shell, NEAR_SHEET) : NEAR_SHEET;
+            }
+        } else if (!inside) {
+            // De fora, passando por cima do planeta: a linha atravessa a
+            // atmosfera inteira.
+            float miss = fminf(planet_radius + OUTER_RINGS[ring - INNER_COUNT] * (top - planet_radius), top);
+            sin_a = miss / d;
+            cos_a = sqrtf(1.0f - sin_a * sin_a);
+            float half_in_air = sqrtf(fmaxf(top * top - miss * miss, 0.0f));
+            strength = t->atmo_strength * powf(2.0f * half_in_air / longest, t->atmo_falloff);
+            to_lit_point = d * cos_a;                         // o ponto da linha mais perto do centro
+            to_vertex = d * cos_a - half_in_air;
         } else {
-            // A linha passa por cima do planeta: atravessa a atmosfera inteira.
-            float path = 2.0f * half_in_air;
-            strength = t->atmo_strength * powf(path / longest, t->atmo_falloff);
-            to_lit_point = to_closest;                        // o ponto mais perto do centro
+            // De dentro, olhando acima do horizonte: os anéis vão do horizonte
+            // até o zênite, e o caminho pelo ar vai da câmera até a linha
+            // sair pelo topo da atmosfera. Esse caminho é o mais longo no
+            // horizonte e o mais curto olhando reto para cima.
+            int step = ring - INNER_COUNT;
+            float longest_here = d * cosf(horizon) + sqrtf(fmaxf(top * top - planet_radius * planet_radius, 0.0f));
+            float shortest_here = top - d;
+
+            // Os anéis ficam a passos iguais de brilho, e não de ângulo: o
+            // brilho cai depressa logo acima do horizonte e devagar no resto
+            // do céu, e anéis mal distribuídos deixariam uma borda visível.
+            float glow = 1.0f - (float)step / (float)(OUTER_COUNT - 1);
+            float to_exit = shortest_here
+                          + (longest_here - shortest_here) * powf(glow, 1.0f / fmaxf(t->atmo_falloff, 0.1f));
+
+            // Ângulo da linha que percorre exatamente `to_exit` até o topo
+            // (lei dos cossenos no triângulo centro, câmera, ponto de saída).
+            float angle = PI;
+            if (step == 0) {
+                angle = horizon;
+            } else if (step < OUTER_COUNT - 1 && to_exit > 1e-3f) {
+                float cos_up = (top * top - d * d - to_exit * to_exit) / (2.0f * d * to_exit);
+                angle = PI - acosf(Clamp(cos_up, -1.0f, 1.0f));
+            }
+            sin_a = sinf(angle);
+            cos_a = cosf(angle);
+            strength = t->atmo_strength * powf(Clamp(to_exit / longest, 0.0f, 1.0f), t->atmo_falloff);
+            to_lit_point = fmaxf(d * cos_a, 0.0f);            // olhando para cima, a própria câmera
+            to_vertex = fmaxf(to_exit, NEAR_SHEET);
         }
+        strength *= fade;
 
         for (int seg = 0; seg < SEGMENTS; seg++) {
             float angle = 2.0f * PI * (float)seg / SEGMENTS;
             Vector3 radial = Vector3Add(Vector3Scale(right, cosf(angle)), Vector3Scale(up, sinf(angle)));
             Vector3 dir = Vector3Add(Vector3Scale(forward, cos_a), Vector3Scale(radial, sin_a));
 
-            Vector3 pos = Vector3Add(camera_pos, Vector3Scale(dir, to_entry));
+            Vector3 pos = Vector3Add(camera_pos, Vector3Scale(dir, to_vertex));
             Vector3 lit_point = Vector3Add(camera_pos, Vector3Scale(dir, to_lit_point));
             float day = smoothstep(TWILIGHT_START, TWILIGHT_END,
                                    Vector3DotProduct(Vector3Normalize(lit_point), sun));

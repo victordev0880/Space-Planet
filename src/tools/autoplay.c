@@ -7,7 +7,7 @@
 #include <string.h>
 
 #define LINE_MAX_LEN 256
-#define MAX_TOKENS   9         // a instrução mais longa: at <quadro> cam x y z tx ty tz
+#define MAX_TOKENS   10        // a instrução mais longa: at <quadro> ship x y z tx ty tz velocidade
 #define MAX_FRAMES   1000000
 
 static bool fail(Autoplay *ap, int line, const char *fmt, ...)
@@ -149,6 +149,49 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         }
         e.count = (int)n;
         e.cmd = AP_BARRAGE;
+    } else if (strcmp(cmd, "view") == 0) {
+        if (count == 4 && strcmp(tokens[3], "ship") == 0)       e.count = (int)CAM_SHIP;
+        else if (count == 4 && strcmp(tokens[3], "orbit") == 0) e.count = (int)CAM_ORBIT;
+        else return fail(ap, line_no, "esperado: at <quadro> view ship|orbit");
+        e.cmd = AP_VIEW;
+    } else if (strcmp(cmd, "ship") == 0) {
+        // Posição e alvo obrigatórios; a velocidade é opcional.
+        bool ok = (count == 9 || count == 10)
+               && parse_float(tokens[3], &e.pos.x) && parse_float(tokens[4], &e.pos.y)
+               && parse_float(tokens[5], &e.pos.z)
+               && parse_float(tokens[6], &e.target.x) && parse_float(tokens[7], &e.target.y)
+               && parse_float(tokens[8], &e.target.z);
+        if (ok && count == 10) ok = parse_float(tokens[9], &e.speed);
+        if (!ok) {
+            return fail(ap, line_no, "esperado: at <quadro> ship <x> <y> <z> <alvo x> <alvo y> <alvo z> [<velocidade>]");
+        }
+        if (Vector3Distance(e.pos, e.target) < 1e-4f) return fail(ap, line_no, "ship: o alvo nao pode ser a posicao");
+        if (e.speed < 0.0f) return fail(ap, line_no, "ship: a velocidade nao pode ser negativa");
+        e.cmd = AP_SHIP;
+    } else if (strcmp(cmd, "waves") == 0 || strcmp(cmd, "autopilot") == 0) {
+        if (count == 4 && strcmp(tokens[3], "on") == 0)       e.count = 1;
+        else if (count == 4 && strcmp(tokens[3], "off") == 0) e.count = 0;
+        else return fail(ap, line_no, "esperado: at <quadro> %s on|off", cmd);
+        e.cmd = (cmd[0] == 'w') ? AP_WAVES : AP_AUTOPILOT;
+    } else if (strcmp(cmd, "spawn") == 0) {
+        long long n = 0;
+        bool ok = (count == 8) && parse_int(tokens[4], &n)
+               && parse_float(tokens[5], &e.pos.x) && parse_float(tokens[6], &e.pos.y)
+               && parse_float(tokens[7], &e.pos.z);
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> spawn <tipo> <quantidade> <x> <y> <z>");
+        e.action = enemy_type_from_name(tokens[3]);
+        if (e.action < 0) return fail(ap, line_no, "spawn: tipo de inimigo desconhecido: \"%s\"", tokens[3]);
+        if (n < 1 || n > WAVE_GROUP_MAX_COUNT) return fail(ap, line_no, "spawn: quantidade de 1 a %d", WAVE_GROUP_MAX_COUNT);
+        if (Vector3Length(e.pos) < 1e-3f) return fail(ap, line_no, "spawn: a posicao nao pode ser o centro do planeta");
+        int same_frame = 0;
+        for (int i = 0; i < ap->event_count; i++) {
+            if (ap->events[i].cmd == AP_SPAWN && ap->events[i].frame == e.frame) same_frame++;
+        }
+        if (same_frame >= AUTOPLAY_MAX_SPAWNS) {
+            return fail(ap, line_no, "no maximo %d comandos spawn no mesmo quadro", AUTOPLAY_MAX_SPAWNS);
+        }
+        e.count = (int)n;
+        e.cmd = AP_SPAWN;
     } else {
         return fail(ap, line_no, "comando desconhecido: \"%s\"", cmd);
     }
@@ -267,6 +310,10 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     uint32_t pulse = 0u;   // ações de "press": valem só neste quadro
     out->shot = NULL;
     out->has_cam = false;
+    out->has_view = false;
+    out->has_ship = false;
+    out->has_waves = false;
+    out->spawn_count = 0;
     out->crater_count = 0;
     out->barrage_count = 0;
 
@@ -296,9 +343,35 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
             out->barrage_rim_radius = e->rim_radius;
             out->barrage_depth = e->depth;
             break;
+        case AP_VIEW:
+            out->has_view = true;
+            out->view = (CamMode)e->count;
+            break;
+        case AP_SHIP:
+            out->has_ship = true;
+            out->ship_pos = e->pos;
+            out->ship_target = e->target;
+            out->ship_speed = e->speed;
+            break;
+        case AP_WAVES:
+            out->has_waves = true;
+            out->waves_on = (e->count != 0);
+            break;
+        case AP_AUTOPILOT:
+            ap->autopilot = (e->count != 0);
+            break;
+        case AP_SPAWN:
+            if (out->spawn_count < AUTOPLAY_MAX_SPAWNS) {
+                AutoplaySpawn *s = &out->spawns[out->spawn_count++];
+                s->type = (EnemyType)e->action;
+                s->count = e->count;
+                s->center = e->pos;
+            }
+            break;
         }
     }
 
+    out->autopilot = ap->autopilot;
     out->input.held = ap->held | pulse;
     out->input.look_dx = ap->look_dx;
     out->input.look_dy = ap->look_dy;
@@ -306,7 +379,14 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
 
 void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
 {
+    // A troca de câmera e a nave vêm antes: um "cam" no mesmo quadro parte delas.
+    if (frame->has_view) world_set_view(w, t, frame->view);
+    if (frame->has_ship) world_place_ship(w, t, frame->ship_pos, frame->ship_target, frame->ship_speed);
     if (frame->has_cam) world_place_camera(w, frame->cam_pos, frame->cam_target);
+    if (frame->has_waves) world_set_waves(w, frame->waves_on);
+    for (int i = 0; i < frame->spawn_count; i++) {
+        world_spawn(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center);
+    }
 
     // Os impactos vêm de longe, apontados para o centro do planeta.
     float far = w->planet.params.radius * 4.0f;
@@ -446,6 +526,14 @@ bool autoplay_write_report(const char *path, const AutoplayReport *r)
     fprintf(f, "remesh_backlog_max = %d\n", r->remesh_backlog_max);
     fprintf(f, "remesh_ms_max = %.3f\n", r->remesh_ms_max);
     fprintf(f, "\n");
+    if (r->waves_on) {
+        fprintf(f, "game_state = %s\n", (r->game_state != NULL) ? r->game_state : "?");
+        fprintf(f, "wave = %d / %d\n", r->wave, r->waves_total);
+        fprintf(f, "score = %lld\n", (long long)r->score);
+        fprintf(f, "kills = %d\n", r->kills);
+        fprintf(f, "enemies_alive = %d\n", r->enemies_alive);
+        fprintf(f, "\n");
+    }
     fprintf(f, "warnings = %d\n", r->warnings);
     fprintf(f, "errors = %d\n", r->errors);
     if (r->first_problem != NULL && r->first_problem[0] != '\0') {

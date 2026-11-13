@@ -1,10 +1,13 @@
-// Constantes de ajuste do jogo, lidas de data/tuning.txt.
+// Constantes de ajuste do jogo, lidas de dois arquivos:
+//   data/tuning.txt    o jogo em geral (planeta, nave, câmera, arma, pontos...)
+//   data/enemies.txt   os inimigos
 //
 // O código nunca usa números soltos: lê os campos desta struct. Para criar
 // uma constante nova são três passos:
 //   1. um campo aqui;
-//   2. uma linha na tabela FIELDS de tuning.c (com a faixa de valores válida);
-//   3. uma linha em data/tuning.txt.
+//   2. uma linha na tabela do arquivo certo em tuning.c (FIELDS ou
+//      ENEMY_FIELDS), com a faixa de valores válida;
+//   3. uma linha no arquivo de dados.
 #ifndef GAME_TUNING_H
 #define GAME_TUNING_H
 
@@ -14,8 +17,12 @@
 #include "core/color.h"
 #include "core/config.h"
 #include "core/vmath.h"
+#include "game/enemy_types.h"
 #include "voxel/mesher.h"
 #include "voxel/planet.h"
+
+#define TUNING_FILE  "tuning.txt"
+#define ENEMIES_FILE "enemies.txt"
 
 typedef struct {
     // janela
@@ -164,24 +171,160 @@ typedef struct {
 
     // tremor de câmera
     float shake_strength;
+    float shake_jolt;
     float shake_falloff;
     float shake_max_angle;
     float shake_decay;
     float shake_frequency;
 
+    // nave: movimento
+    float ship_thrust;
+    float ship_strafe;
+    float ship_speed_max;
+    float ship_brake;
+    float ship_drag;
+    float ship_grip;
+    float ship_drift_drag;
+    float ship_boost_mult;
+    float ship_boost_cost;
+    float ship_dash_speed;
+    float ship_dash_time;
+    float ship_dash_cost;
+    float ship_dash_cooldown;
+    float ship_mouse_sens;
+    float ship_turn_rate;
+    float ship_turn_smooth;
+    float ship_roll_rate;
+    float ship_auto_level;
+    float ship_gravity;
+    float ship_gravity_range;
+    float ship_fall_drag;
+    float ship_lift_speed;
+    float ship_hug;
+    float ship_hug_fade;
+    float ship_spawn_pitch;
+
+    // nave: colisão e recursos
+    float ship_radius;
+    float ship_bounce;
+    float ship_crash_min;
+    float ship_crash_damage;
+    float ship_hull_max;
+    float ship_shield_max;
+    float ship_shield_regen;
+    float ship_shield_delay;
+    float ship_energy_max;
+    float ship_energy_regen;
+    float ship_respawn_time;
+    float ship_spawn_distance;
+
+    // câmera em terceira pessoa
+    float chase_distance;
+    float chase_height;
+    float chase_look_ahead;
+    float chase_pos_smooth;
+    float chase_rot_smooth;
+    float chase_fov_boost;
+    float chase_clearance;
+    float chase_ground_tilt;
+
+    // Lua
+    float moon_radius;
+    float moon_orbit_radius;
+    float moon_orbit_period;
+    float moon_orbit_tilt;
+    float moon_start_angle;
+    int   moon_seed;
+    int   moon_craters;
+    Rgb8  moon_color;
+    float moon_gravity;
+    float moon_sling_range;
+    float moon_sling_boost;
+    float moon_sling_time;
+    float moon_sling_speed;
+
+    // arma principal do jogador
+    float weapon_rate;
+    float weapon_speed;
+    float weapon_range;
+    float weapon_damage;
+    float weapon_graze_rate;
+    float weapon_assist_angle;
+    float weapon_assist_range;
+    float ship_graze_shield;
+
+    // combate
+    float combat_hitstop_big;
+    float combat_hitstop_player;
+    float combat_marker_distance;
+
+    // pontuação
+    float score_combo_window;
+    float score_combo_step;
+    float score_combo_max;
+    float score_planet_bonus;
+    float score_planet_bonus_hp;
+
+    // áudio
+    float audio_volume;
+    float audio_falloff;
+
     // autoplay
     int   autoplay_warmup_frames;
+
+    // --- data/enemies.txt ----------------------------------------------------
+    EnemyStats enemy[ENEMY_TYPE_COUNT];   // o que todos os tipos têm
+
+    float enemies_spawn_distance;
+    float enemies_spawn_spread;
+    float enemies_shot_life;
+
+    // Enxame
+    float swarm_cruise_altitude;
+    float swarm_attack_altitude;
+    float swarm_fire_rate;
+    float swarm_shot_speed;
+    float swarm_shot_damage;
+    float swarm_crater_radius;
+    float swarm_crater_depth;
+    float swarm_aggro_range;
+    float swarm_aggro_rate;
+    float swarm_spacing;
+    float swarm_dive_stagger;
+    float swarm_drift;
+
+    // Bombardeiro
+    float bomber_altitude;
+    float bomber_bomb_interval;
+    float bomber_bomb_warning;
+    float bomber_bomb_speed;
+    float bomber_bomb_accel;
+    float bomber_bomb_hp;
+    float bomber_bomb_radius;
+    float bomber_bomb_points;
+    float bomber_crater_radius;
+    float bomber_crater_depth;
+    float bomber_armor;
+    float bomber_weak_mult;
+    float bomber_weak_radius;
+    float bomber_turret_range;
+    float bomber_turret_interval;
+    int   bomber_turret_burst;
+    float bomber_turret_damage;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4
 
-// Preenche `out` a partir de um Config já lido. Se algo estiver errado (chave
-// ausente, desconhecida, valor inválido ou fora da faixa), retorna false,
-// escreve o motivo em `err` e NÃO altera `out`.
-bool tuning_from_config(Tuning *out, const Config *c, char *err, size_t err_len);
+// Preenche `out` a partir dos dois arquivos já lidos. Se algo estiver errado
+// (chave ausente, desconhecida, valor inválido ou fora da faixa), retorna
+// false, escreve o motivo em `err` (começando pelo nome do arquivo) e NÃO
+// altera `out`.
+bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *enemies_cfg, char *err,
+                        size_t err_len);
 
-// Lê o arquivo e preenche `out`. Mesmas garantias de tuning_from_config.
-bool tuning_load(Tuning *out, const char *path, char *err, size_t err_len);
+// Lê data_dir/tuning.txt e data_dir/enemies.txt e preenche `out`. Mesmas
+// garantias de tuning_from_config.
+bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len);
 
 // Traduções do tuning para as estruturas que os sistemas usam.
 PlanetParams tuning_planet_params(const Tuning *t);

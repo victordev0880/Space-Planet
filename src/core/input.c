@@ -19,6 +19,8 @@ static const char *const ACTION_NAMES[ACT_COUNT] = {
     [ACT_WIREFRAME]  = "wireframe",
     [ACT_RELOAD]     = "reload",
     [ACT_RESET]      = "reset",
+    [ACT_DEBUG_CRATER] = "debug_crater",
+    [ACT_DEBUG_SIZE]   = "debug_size",
 };
 
 void input_init(InputTracker *t)

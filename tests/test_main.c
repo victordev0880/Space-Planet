@@ -37,11 +37,16 @@ int main(void)
     suite_planet();
     suite_mesher();
     suite_damage();
+    suite_ship();
+    suite_moon();
     suite_config();
     suite_loop();
     suite_input();
     suite_tuning();
     suite_world();
+    suite_pool();
+    suite_waves();
+    suite_combat();
     suite_autoplay();
     finish_current();
 

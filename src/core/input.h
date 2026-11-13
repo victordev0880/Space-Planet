@@ -30,7 +30,9 @@ typedef enum {
     ACT_FREECAM,     // F2
     ACT_WIREFRAME,   // F3
     ACT_RELOAD,      // F5
-    ACT_RESET,       // R: debug, restaura o planeta
+    ACT_RESET,       // R: nova partida depois do fim; com o F1 aberto, restaura o planeta
+    ACT_DEBUG_CRATER,  // C (com o F1 aberto): abre uma cratera onde a nave mira
+    ACT_DEBUG_SIZE,    // V (com o F1 aberto): troca o tamanho dessa cratera
     ACT_COUNT
 } Action;
 

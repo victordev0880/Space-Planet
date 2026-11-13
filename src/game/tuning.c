@@ -158,24 +158,170 @@ static const TuneField FIELDS[] = {
     F("particles.flash_life",   particles_flash_life,   0.01,   5),
 
     F("shake.strength",         shake_strength,         0,      5),
+    F("shake.jolt",             shake_jolt,             0,      5),
     F("shake.falloff",          shake_falloff,          1,      10000),
     F("shake.max_angle",        shake_max_angle,        0,      30),
     F("shake.decay",            shake_decay,            0.05,   50),
     F("shake.frequency",        shake_frequency,        0.1,    200),
 
+    F("ship.thrust",            ship_thrust,            0,      1000),
+    F("ship.strafe",            ship_strafe,            0,      1000),
+    F("ship.speed_max",         ship_speed_max,         1,      1000),
+    F("ship.brake",             ship_brake,             0,      50),
+    F("ship.drag",              ship_drag,              0,      50),
+    F("ship.grip",              ship_grip,              0,      50),
+    F("ship.drift_drag",        ship_drift_drag,        0,      50),
+    F("ship.boost_mult",        ship_boost_mult,        1,      10),
+    F("ship.boost_cost",        ship_boost_cost,        0,      1000),
+    F("ship.dash_speed",        ship_dash_speed,        0,      1000),
+    F("ship.dash_time",         ship_dash_time,         0.01,   5),
+    F("ship.dash_cost",         ship_dash_cost,         0,      1000),
+    F("ship.dash_cooldown",     ship_dash_cooldown,     0,      30),
+    F("ship.mouse_sens",        ship_mouse_sens,        0.001,  5),
+    F("ship.turn_rate",         ship_turn_rate,         1,      2000),
+    F("ship.turn_smooth",       ship_turn_smooth,       0.1,    200),
+    F("ship.roll_rate",         ship_roll_rate,         0,      2000),
+    F("ship.auto_level",        ship_auto_level,        0,      50),
+    F("ship.gravity",           ship_gravity,           0,      200),
+    F("ship.gravity_range",     ship_gravity_range,     1.01,   50),
+    F("ship.fall_drag",         ship_fall_drag,         0.05,   50),
+    F("ship.lift_speed",        ship_lift_speed,        0.1,    1000),
+    F("ship.hug",               ship_hug,               0,      1),
+    F("ship.hug_fade",          ship_hug_fade,          0.1,    100),
+    F("ship.spawn_pitch",       ship_spawn_pitch,       -80,    80),
+
+    F("ship.radius",            ship_radius,            0.1,    20),
+    F("ship.bounce",            ship_bounce,            0,      1),
+    F("ship.crash_min",         ship_crash_min,         0,      1000),
+    F("ship.crash_damage",      ship_crash_damage,      0,      100),
+    F("ship.hull_max",          ship_hull_max,          1,      100000),
+    F("ship.shield_max",        ship_shield_max,        0,      100000),
+    F("ship.shield_regen",      ship_shield_regen,      0,      100000),
+    F("ship.shield_delay",      ship_shield_delay,      0,      60),
+    F("ship.energy_max",        ship_energy_max,        1,      100000),
+    F("ship.energy_regen",      ship_energy_regen,      0,      100000),
+    F("ship.respawn_time",      ship_respawn_time,      0.1,    60),
+    F("ship.spawn_distance",    ship_spawn_distance,    1.1,    20),
+
+    F("chase.distance",         chase_distance,         0.5,    200),
+    F("chase.height",           chase_height,           -50,    50),
+    F("chase.look_ahead",       chase_look_ahead,       0,      500),
+    F("chase.pos_smooth",       chase_pos_smooth,       0.1,    200),
+    F("chase.rot_smooth",       chase_rot_smooth,       0.1,    200),
+    F("chase.fov_boost",        chase_fov_boost,        0,      60),
+    F("chase.clearance",        chase_clearance,        0,      10),
+    F("chase.ground_tilt",      chase_ground_tilt,      0,      60),
+
+    F("moon.radius",            moon_radius,            0.02,   1),
+    F("moon.orbit_radius",      moon_orbit_radius,      1.5,    50),
+    F("moon.orbit_period",      moon_orbit_period,      5,      100000),
+    F("moon.orbit_tilt",        moon_orbit_tilt,        -89,    89),
+    F("moon.start_angle",       moon_start_angle,       -360,   360),
+    I("moon.seed",              moon_seed,              0,      2000000000),
+    I("moon.craters",           moon_craters,           0,      400),
+    C("moon.color",             moon_color),
+    F("moon.gravity",           moon_gravity,           0,      200),
+    F("moon.sling_range",       moon_sling_range,       1.05,   20),
+    F("moon.sling_boost",       moon_sling_boost,       1,      10),
+    F("moon.sling_time",        moon_sling_time,        0,      120),
+    F("moon.sling_speed",       moon_sling_speed,       0,      10),
+
+    F("weapon.rate",            weapon_rate,            0.5,    60),
+    F("weapon.speed",           weapon_speed,           10,     2000),
+    F("weapon.range",           weapon_range,           10,     2000),
+    F("weapon.damage",          weapon_damage,          0.1,    1000),
+    F("weapon.graze_rate",      weapon_graze_rate,      1,      5),
+    F("weapon.assist_angle",    weapon_assist_angle,    0,      45),
+    F("weapon.assist_range",    weapon_assist_range,    0,      2000),
+    F("ship.graze_shield",      ship_graze_shield,      1,      10),
+
+    F("combat.hitstop_big",     combat_hitstop_big,     0,      0.5),
+    F("combat.hitstop_player",  combat_hitstop_player,  0,      0.5),
+    F("combat.marker_distance", combat_marker_distance, 0,      5000),
+
+    F("score.combo_window",     score_combo_window,     0.1,    30),
+    F("score.combo_step",       score_combo_step,       0,      5),
+    F("score.combo_max",        score_combo_max,        1,      50),
+    F("score.planet_bonus",     score_planet_bonus,     0,      1000000),
+    F("score.planet_bonus_hp",  score_planet_bonus_hp,  0,      1),
+
+    F("audio.volume",           audio_volume,           0,      1),
+    F("audio.falloff",          audio_falloff,          1,      10000),
+
     I("autoplay.warmup_frames", autoplay_warmup_frames, 0,      1000),
+};
+
+// data/enemies.txt
+static const TuneField ENEMY_FIELDS[] = {
+    F("enemies.spawn_distance", enemies_spawn_distance, 1.5,    20),
+    F("enemies.spawn_spread",   enemies_spawn_spread,   0,      200),
+    F("enemies.shot_life",      enemies_shot_life,      0.1,    30),
+
+    F("swarm.hp",               enemy[ENEMY_SWARM].hp,          0.1,  10000),
+    F("swarm.radius",           enemy[ENEMY_SWARM].radius,      0.1,  50),
+    F("swarm.scale",            enemy[ENEMY_SWARM].scale,       0.1,  50),
+    F("swarm.speed",            enemy[ENEMY_SWARM].speed,       0.1,  500),
+    F("swarm.accel",            enemy[ENEMY_SWARM].accel,       0.1,  1000),
+    F("swarm.points",           enemy[ENEMY_SWARM].points,      0,    1000000),
+    F("swarm.ram_damage",       enemy[ENEMY_SWARM].ram_damage,  0,    10000),
+    F("swarm.cruise_altitude",  swarm_cruise_altitude,  1,      500),
+    F("swarm.attack_altitude",  swarm_attack_altitude,  0.5,    500),
+    F("swarm.fire_rate",        swarm_fire_rate,        0,      60),
+    F("swarm.shot_speed",       swarm_shot_speed,       1,      2000),
+    F("swarm.shot_damage",      swarm_shot_damage,      0,      10000),
+    F("swarm.crater_radius",    swarm_crater_radius,    0.2,    60),
+    F("swarm.crater_depth",     swarm_crater_depth,     0.2,    60),
+    F("swarm.aggro_range",      swarm_aggro_range,      0,      2000),
+    F("swarm.aggro_rate",       swarm_aggro_rate,       0,      60),
+    F("swarm.spacing",          swarm_spacing,          0,      100),
+    F("swarm.dive_stagger",     swarm_dive_stagger,     0,      30),
+    F("swarm.drift",            swarm_drift,            0,      180),
+
+    F("bomber.hp",              enemy[ENEMY_BOMBER].hp,         0.1,  10000),
+    F("bomber.radius",          enemy[ENEMY_BOMBER].radius,     0.1,  50),
+    F("bomber.scale",           enemy[ENEMY_BOMBER].scale,      0.1,  50),
+    F("bomber.speed",           enemy[ENEMY_BOMBER].speed,      0.1,  500),
+    F("bomber.accel",           enemy[ENEMY_BOMBER].accel,      0.1,  1000),
+    F("bomber.points",          enemy[ENEMY_BOMBER].points,     0,    1000000),
+    F("bomber.ram_damage",      enemy[ENEMY_BOMBER].ram_damage, 0,    10000),
+    F("bomber.altitude",        bomber_altitude,        1,      500),
+    F("bomber.bomb_interval",   bomber_bomb_interval,   0.5,    600),
+    F("bomber.bomb_warning",    bomber_bomb_warning,    0,      60),
+    F("bomber.bomb_speed",      bomber_bomb_speed,      0.1,    500),
+    F("bomber.bomb_accel",      bomber_bomb_accel,      0,      500),
+    F("bomber.bomb_hp",         bomber_bomb_hp,         0.1,    1000),
+    F("bomber.bomb_radius",     bomber_bomb_radius,     0.1,    50),
+    F("bomber.bomb_points",     bomber_bomb_points,     0,      1000000),
+    F("bomber.crater_radius",   bomber_crater_radius,   0.2,    60),
+    F("bomber.crater_depth",    bomber_crater_depth,    0.2,    60),
+    F("bomber.armor",           bomber_armor,           0,      1),
+    F("bomber.weak_mult",       bomber_weak_mult,       0,      100),
+    F("bomber.weak_radius",     bomber_weak_radius,     0,      50),
+    F("bomber.turret_range",    bomber_turret_range,    0,      2000),
+    F("bomber.turret_interval", bomber_turret_interval, 0.1,    600),
+    I("bomber.turret_burst",    bomber_turret_burst,    0,      50),
+    F("bomber.turret_damage",   bomber_turret_damage,   0,      10000),
 };
 
 #undef I
 #undef F
 #undef C
 
-#define FIELD_COUNT ((int)(sizeof FIELDS / sizeof FIELDS[0]))
+typedef struct {
+    const char      *file;     // nome do arquivo, para as mensagens de erro
+    const TuneField *fields;
+    int              count;
+} TuneTable;
 
-static bool is_known_key(const char *key)
+static const TuneTable TABLES[2] = {
+    { TUNING_FILE,  FIELDS,       (int)(sizeof FIELDS / sizeof FIELDS[0]) },
+    { ENEMIES_FILE, ENEMY_FIELDS, (int)(sizeof ENEMY_FIELDS / sizeof ENEMY_FIELDS[0]) },
+};
+
+static bool is_known_key(const TuneTable *table, const char *key)
 {
-    for (int i = 0; i < FIELD_COUNT; i++) {
-        if (strcmp(FIELDS[i].key, key) == 0) return true;
+    for (int i = 0; i < table->count; i++) {
+        if (strcmp(table->fields[i].key, key) == 0) return true;
     }
     return false;
 }
@@ -193,24 +339,25 @@ static bool parse_color(const char *text, Rgb8 *out)
     return true;
 }
 
-bool tuning_from_config(Tuning *out, const Config *c, char *err, size_t err_len)
+// Copia para `t` os campos de uma tabela, lidos do arquivo `c`, conferindo
+// cada valor; e recusa chaves do arquivo que a tabela não conhece.
+static bool apply_table(Tuning *t, const TuneTable *table, const Config *c, char *err, size_t err_len)
 {
-    Tuning t = *out;   // trabalha em uma cópia: `out` só muda se tudo der certo
-
-    for (int i = 0; i < FIELD_COUNT; i++) {
-        const TuneField *f = &FIELDS[i];
+    for (int i = 0; i < table->count; i++) {
+        const TuneField *f = &table->fields[i];
         const ConfigEntry *e = config_find(c, f->key);
         if (e == NULL) {
-            snprintf(err, err_len, "chave ausente: %s", f->key);
+            snprintf(err, err_len, "%s: chave ausente: %s", table->file, f->key);
             return false;
         }
 
-        char *dst = (char *)&t + f->offset;
+        char *dst = (char *)t + f->offset;
 
         if (f->kind == TUNE_COLOR) {
             Rgb8 color;
             if (!parse_color(e->text, &color)) {
-                snprintf(err, err_len, "%s = \"%s\": esperado \"r g b\" de 0 a 255", f->key, e->text);
+                snprintf(err, err_len, "%s: %s = \"%s\": esperado \"r g b\" de 0 a 255", table->file, f->key,
+                         e->text);
                 return false;
             }
             memcpy(dst, &color, sizeof color);
@@ -218,17 +365,18 @@ bool tuning_from_config(Tuning *out, const Config *c, char *err, size_t err_len)
         }
 
         if (!e->is_number) {
-            snprintf(err, err_len, "%s = \"%s\" nao e um numero", f->key, e->text);
+            snprintf(err, err_len, "%s: %s = \"%s\" nao e um numero", table->file, f->key, e->text);
             return false;
         }
         if (!(e->number >= f->min && e->number <= f->max)) {   // também rejeita NaN
-            snprintf(err, err_len, "%s = %s fora da faixa [%g, %g]", f->key, e->text, f->min, f->max);
+            snprintf(err, err_len, "%s: %s = %s fora da faixa [%g, %g]", table->file, f->key, e->text, f->min,
+                     f->max);
             return false;
         }
 
         if (f->kind == TUNE_INT) {
             if (e->number != floor(e->number)) {
-                snprintf(err, err_len, "%s = %s precisa ser inteiro", f->key, e->text);
+                snprintf(err, err_len, "%s: %s = %s precisa ser inteiro", table->file, f->key, e->text);
                 return false;
             }
             int v = (int)e->number;
@@ -240,11 +388,20 @@ bool tuning_from_config(Tuning *out, const Config *c, char *err, size_t err_len)
     }
 
     for (int i = 0; i < c->count; i++) {
-        if (!is_known_key(c->entries[i].key)) {
-            snprintf(err, err_len, "chave desconhecida: %s", c->entries[i].key);
+        if (!is_known_key(table, c->entries[i].key)) {
+            snprintf(err, err_len, "%s: chave desconhecida: %s", table->file, c->entries[i].key);
             return false;
         }
     }
+    return true;
+}
+
+bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *enemies_cfg, char *err,
+                        size_t err_len)
+{
+    Tuning t = *out;   // trabalha em uma cópia: `out` só muda se tudo der certo
+    if (!apply_table(&t, &TABLES[0], tuning_cfg, err, err_len)) return false;
+    if (!apply_table(&t, &TABLES[1], enemies_cfg, err, err_len)) return false;
 
     // Regras que envolvem mais de um campo.
     if (t.stars_size_max < t.stars_size_min) {
@@ -268,21 +425,33 @@ bool tuning_from_config(Tuning *out, const Config *c, char *err, size_t err_len)
         snprintf(err, err_len, "o planeta nao cabe na grade: diminua planet.radius_frac ou planet.land_height");
         return false;
     }
+    if (t.swarm_attack_altitude >= t.swarm_cruise_altitude) {
+        snprintf(err, err_len, "swarm.attack_altitude precisa ser menor que swarm.cruise_altitude");
+        return false;
+    }
 
     *out = t;
     if (err_len > 0) err[0] = '\0';
     return true;
 }
 
-bool tuning_load(Tuning *out, const char *path, char *err, size_t err_len)
+bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len)
 {
     // static: a struct Config é grande (dezenas de KB) e não precisa ficar na pilha.
-    static Config config;
-    if (!config_load_file(&config, path)) {
-        snprintf(err, err_len, "%s", config.error);
+    static Config tuning_cfg, enemies_cfg;
+    char path[256];
+
+    snprintf(path, sizeof path, "%s/%s", data_dir, TUNING_FILE);
+    if (!config_load_file(&tuning_cfg, path)) {
+        snprintf(err, err_len, "%s: %s", TUNING_FILE, tuning_cfg.error);
         return false;
     }
-    return tuning_from_config(out, &config, err, err_len);
+    snprintf(path, sizeof path, "%s/%s", data_dir, ENEMIES_FILE);
+    if (!config_load_file(&enemies_cfg, path)) {
+        snprintf(err, err_len, "%s: %s", ENEMIES_FILE, enemies_cfg.error);
+        return false;
+    }
+    return tuning_from_config(out, &tuning_cfg, &enemies_cfg, err, err_len);
 }
 
 PlanetParams tuning_planet_params(const Tuning *t)

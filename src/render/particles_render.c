@@ -3,12 +3,52 @@
 
 #include "render/particles_render.h"
 
+#include <math.h>
+
 #include "core/vmath.h"
 
 #define DUST_OPACITY   0.26f   // transparência máxima de uma nuvem de poeira
 #define DUST_GROWTH    1.6f    // quanto a nuvem cresce ao longo da vida
 #define DUST_FADE_IN   0.12f   // fração da vida que a poeira leva para aparecer
 #define NIGHT_SHADE    0.10f   // brilho mínimo de pedras e poeira no lado da noite
+#define TRAIL_SHRINK   0.6f    // quanto o rastro de motor encolhe até sumir
+#define TRAIL_OPACITY  0.40f   // brilho de cada ponto do rastro
+#define RING_SIZE      64      // lado da textura do anel, em pixels
+#define RING_PEAK      0.82f   // raio do anel na textura (1 = borda)
+#define RING_WIDTH     0.10f   // espessura do anel na textura
+
+static Texture2D ring_texture;
+static bool      ring_ready;
+
+// Anel de borda suave: brilho máximo em RING_PEAK, apagando para os dois lados.
+Texture2D particles_ring_texture(void)
+{
+    if (ring_ready) return ring_texture;
+    unsigned char *pixels = MemAlloc(RING_SIZE * RING_SIZE * 4);
+    for (int y = 0; y < RING_SIZE; y++) {
+        for (int x = 0; x < RING_SIZE; x++) {
+            float dx = ((float)x + 0.5f) / RING_SIZE * 2.0f - 1.0f;
+            float dy = ((float)y + 0.5f) / RING_SIZE * 2.0f - 1.0f;
+            float off = (sqrtf(dx * dx + dy * dy) - RING_PEAK) / RING_WIDTH;
+            float a = expf(-off * off);
+            unsigned char *px = &pixels[(y * RING_SIZE + x) * 4];
+            px[0] = px[1] = px[2] = 255;
+            px[3] = (unsigned char)(a * 255.0f);
+        }
+    }
+    Image image = { pixels, RING_SIZE, RING_SIZE, 1, PIXELFORMAT_UNCOMPRESSED_R8G8B8A8 };
+    ring_texture = LoadTextureFromImage(image);
+    UnloadImage(image);
+    SetTextureFilter(ring_texture, TEXTURE_FILTER_BILINEAR);
+    ring_ready = true;
+    return ring_texture;
+}
+
+void particles_render_unload(void)
+{
+    if (ring_ready) UnloadTexture(ring_texture);
+    ring_ready = false;
+}
 
 typedef struct {
     Vector3 right;   // eixos da tela, no mundo
@@ -96,7 +136,28 @@ void particles_draw(const Particles *ps, Camera3D camera, Texture2D glow, const 
             float fade = (1.0f - life) * (1.0f - life);
             Color color = { p->r, p->g, p->b, (unsigned char)(fade * 255.0f) };
             emit_quad(&ctx, p, p->size * (0.55f + 0.45f * life), color);
+        } else if (p->kind == PARTICLE_TRAIL) {
+            // Rastro de motor: apaga e encolhe ao longo da vida. Os pontos se
+            // sobrepõem e somam luz, então cada um é fraco.
+            Color color = { p->r, p->g, p->b, (unsigned char)((1.0f - life) * TRAIL_OPACITY * 255.0f) };
+            emit_quad(&ctx, p, p->size * (1.0f - TRAIL_SHRINK * life), color);
         }
+    }
+    rlEnd();
+    rlSetTexture(0);
+
+    // Terceira passada: ondas de choque, com a textura de anel. Crescem
+    // depressa no começo e vão apagando.
+    rlDrawRenderBatchActive();
+    rlSetTexture(particles_ring_texture().id);
+    rlBegin(RL_QUADS);
+    for (int i = 0; i < ps->count; i++) {
+        const Particle *p = &ps->items[i];
+        if (p->kind != PARTICLE_RING) continue;
+        float life = p->age / p->life;
+        float grow = 1.0f - (1.0f - life) * (1.0f - life);
+        float fade = (1.0f - life) * (1.0f - life);
+        emit_quad(&ctx, p, p->size * (0.2f + 0.8f * grow), (Color){ p->r, p->g, p->b, (unsigned char)(fade * 255.0f) });
     }
     rlEnd();
     rlSetTexture(0);
