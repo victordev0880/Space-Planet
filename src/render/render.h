@@ -26,6 +26,10 @@ typedef struct {
     uint32_t     events_seen;    // ... e até qual evento do jogo
     float        shake;          // tremor atual da câmera, de 0 a 1
     float        last_time;      // tempo de jogo do quadro anterior
+
+    // Preferências e enquadramento (não afetam a simulação).
+    float        shake_scale;    // intensidade do tremor escolhida nas opções (0 a 1)
+    float        yaw_offset;     // graus: vira a câmera de lado (no título, o planeta fica à direita)
 } Renderer;
 
 // Retorna false se faltar memória para as malhas. use_shaders = false é o

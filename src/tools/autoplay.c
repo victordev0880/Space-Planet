@@ -232,6 +232,14 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
             return fail(ap, line_no, "no maximo %d comandos rock no mesmo quadro", AUTOPLAY_MAX_ROCKS);
         }
         e.cmd = AP_ROCK;
+    } else if (strcmp(cmd, "menu") == 0) {
+        static const char *const SCREENS[AP_SCREEN_COUNT] = { "game", "title", "pause", "options", "controls" };
+        e.count = -1;
+        for (int i = 0; i < AP_SCREEN_COUNT && count == 4; i++) {
+            if (strcmp(tokens[3], SCREENS[i]) == 0) e.count = i;
+        }
+        if (e.count < 0) return fail(ap, line_no, "esperado: at <quadro> menu game|title|pause|options|controls");
+        e.cmd = AP_MENU;
     } else if (strcmp(cmd, "ore") == 0) {
         long long amount = 0;
         if (count != 4 || !parse_int(tokens[3], &amount) || amount < 0 || amount > 100000) {
@@ -386,6 +394,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->boss_hp = -1.0f;
     out->rock_count = 0;
     out->ore = 0;
+    out->screen = AP_SCREEN_KEEP;
     out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
@@ -451,6 +460,9 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
             break;
         case AP_ORE:
             out->ore += e->count;
+            break;
+        case AP_MENU:
+            out->screen = e->count;
             break;
         case AP_ROCK:
             if (out->rock_count < AUTOPLAY_MAX_ROCKS) {

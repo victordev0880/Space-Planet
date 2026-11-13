@@ -7,6 +7,7 @@
 
 #include "core/vmath.h"
 #include "game/combat.h"
+#include "ui/font.h"
 
 #define BAR_WIDTH    400
 #define BAR_HEIGHT   14
@@ -95,13 +96,13 @@ void hud_type_list(const int counts[ENEMY_TYPE_COUNT], bool count_first, int cx,
         if (count_first) snprintf(items[n], sizeof items[n], "%d %s", counts[type], ENEMY_NAMES[type]);
         else             snprintf(items[n], sizeof items[n], "%s x%d", ENEMY_NAMES[type], counts[type]);
         types[n] = type;
-        width += MeasureText(items[n], size) + (n > 0 ? gap : 0);
+        width += ui_measure_text(items[n], size) + (n > 0 ? gap : 0);
         n++;
     }
     int x = cx - width / 2;
     for (int k = 0; k < n; k++) {
         text(items[k], x, y, size, with_alpha(ENEMY_COLORS[types[k]], alpha));
-        x += MeasureText(items[k], size) + gap;
+        x += ui_measure_text(items[k], size) + gap;
     }
 }
 
@@ -150,13 +151,13 @@ static void draw_bar(int x, int y, int width, int height, float fill, Color colo
 // Texto com sombra: legível sobre o planeta claro e sobre o espaço escuro.
 static void text(const char *s, int x, int y, int size, Color color)
 {
-    DrawText(s, x + 2, y + 2, size, with_alpha((Color){ 0, 0, 0, 200 }, (float)color.a / 255.0f));
-    DrawText(s, x, y, size, color);
+    ui_draw_text(s, x + 2, y + 2, size, with_alpha((Color){ 0, 0, 0, 200 }, (float)color.a / 255.0f));
+    ui_draw_text(s, x, y, size, color);
 }
 
 static void text_centered(const char *s, int cx, int y, int size, Color color)
 {
-    text(s, cx - MeasureText(s, size) / 2, y, size, color);
+    text(s, cx - ui_measure_text(s, size) / 2, y, size, color);
 }
 
 // 12450 -> "12.450"
@@ -235,8 +236,8 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
     int y = BAR_TOP;
     const char *people = TextFormat("%s de habitantes", format_population(hp * t->planet_population));
     DrawRectangle(x - 10, y - 8, BAR_WIDTH + 20, LABEL_SIZE + BAR_HEIGHT + 34, FRAME_COLOR);
-    DrawText("PLANETA", x, y, LABEL_SIZE, TEXT_COLOR);
-    DrawText(people, x + BAR_WIDTH - MeasureText(people, LABEL_SIZE), y, LABEL_SIZE, color);
+    ui_draw_text("PLANETA", x, y, LABEL_SIZE, TEXT_COLOR);
+    ui_draw_text(people, x + BAR_WIDTH - ui_measure_text(people, LABEL_SIZE), y, LABEL_SIZE, color);
 
     int bar_y = y + LABEL_SIZE + 6;
     draw_bar(x, bar_y, BAR_WIDTH, BAR_HEIGHT, hp, color);
@@ -244,7 +245,7 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
     // Marca do ponto de extinção.
     int marker_x = x + (int)((float)BAR_WIDTH * t->defeat_planet_hp);
     DrawRectangle(marker_x - 1, bar_y - 4, 2, BAR_HEIGHT + 8, MARKER_COLOR);
-    DrawText("extinção", marker_x - MeasureText("extinção", SMALL_SIZE) / 2, bar_y + BAR_HEIGHT + 5, SMALL_SIZE,
+    ui_draw_text("extinção", marker_x - ui_measure_text("extinção", SMALL_SIZE) / 2, bar_y + BAR_HEIGHT + 5, SMALL_SIZE,
              DIM_COLOR);
 
     // Núcleo (só depois de atingido).
@@ -252,7 +253,7 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
         int core_y = bar_y + BAR_HEIGHT + 28;
         const char *core_text = TextFormat("NÚCLEO %.0f%%", (double)core * 100.0);
         DrawRectangle(x - 10, core_y - 6, BAR_WIDTH + 20, LABEL_SIZE + 12, FRAME_COLOR);
-        DrawText(core_text, x, core_y, LABEL_SIZE, CORE_COLOR);
+        ui_draw_text(core_text, x, core_y, LABEL_SIZE, CORE_COLOR);
         int core_x = x + BAR_WIDTH - CORE_WIDTH;
         int core_bar_y = core_y + (LABEL_SIZE - CORE_HEIGHT) / 2;
         draw_bar(core_x, core_bar_y, CORE_WIDTH, CORE_HEIGHT, core, CORE_COLOR);
@@ -285,7 +286,7 @@ static const Color XP_COLOR     = { 255, 214, 110, 255 };
 
 static void ship_bar(int x, int y, const char *label, float value, float max, Color color)
 {
-    DrawText(label, x, y - 5, LABEL_SIZE, color);
+    ui_draw_text(label, x, y - 5, LABEL_SIZE, color);
     draw_bar(x + 96, y, SHIP_BAR_WIDTH, SHIP_BAR_HEIGHT, (max > 0.0f) ? value / max : 0.0f, color);
 }
 
@@ -364,9 +365,9 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
 
     if (!s->alive) {
         const char *msg = TextFormat("NAVE DESTRUÍDA   renascendo em %.1f s", (double)fmaxf(s->respawn_left, 0.0f));
-        int width = MeasureText(msg, LABEL_SIZE);
+        int width = ui_measure_text(msg, LABEL_SIZE);
         DrawRectangle((screen_w - width) / 2 - 14, screen_h / 2 + 90, width + 28, LABEL_SIZE + 16, FRAME_COLOR);
-        DrawText(msg, (screen_w - width) / 2, screen_h / 2 + 98, LABEL_SIZE, DYING);
+        ui_draw_text(msg, (screen_w - width) / 2, screen_h / 2 + 98, LABEL_SIZE, DYING);
         const char *warn = "o planeta está sem defesa";
         text_centered(warn, screen_w / 2, screen_h / 2 + 130, LABEL_SIZE, with_alpha(DIM_COLOR, 0.9f));
         return;
@@ -389,12 +390,12 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
     if (ab->owned) {
         int ay = y - 44;
         DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
-        DrawText("RAIO", x, ay, LABEL_SIZE - 2, ABILITY_COLOR);
+        ui_draw_text("RAIO", x, ay, LABEL_SIZE - 2, ABILITY_COLOR);
         float ready = 1.0f - ab->cooldown / fmaxf(t->ability_cooldown, 1e-3f);
         Color c = (ab->cooldown <= 0.0f) ? ABILITY_COLOR : with_alpha(ABILITY_COLOR, 0.45f);
         draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, (ab->charge > 0.0f) ? ab->charge / t->ability_charge : ready, c);
         if (ab->cooldown <= 0.0f && ab->charge <= 0.0f) {
-            DrawText("botão direito", x + 96 + SHIP_BAR_WIDTH - MeasureText("botão direito", SMALL_SIZE + 2), ay - 12,
+            ui_draw_text("botão direito", x + 96 + SHIP_BAR_WIDTH - ui_measure_text("botão direito", SMALL_SIZE + 2), ay - 12,
                      SMALL_SIZE + 2, DIM_COLOR);
         }
     }
@@ -402,15 +403,15 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
     // Velocidade e altitude, ao lado das barras.
     int info_x = x + 96 + SHIP_BAR_WIDTH + 28;
     float speed = Vector3Length(Vector3Add(s->vel, s->fall));
-    DrawText(TextFormat("vel %3.0f", (double)speed), info_x, y - 5, LABEL_SIZE, TEXT_COLOR);
-    DrawText(TextFormat("alt %3.0f", (double)s->altitude), info_x, y - 5 + SHIP_ROW, LABEL_SIZE, TEXT_COLOR);
+    ui_draw_text(TextFormat("vel %3.0f", (double)speed), info_x, y - 5, LABEL_SIZE, TEXT_COLOR);
+    ui_draw_text(TextFormat("alt %3.0f", (double)s->altitude), info_x, y - 5 + SHIP_ROW, LABEL_SIZE, TEXT_COLOR);
     // Uma palavra para o que a nave está fazendo de especial.
     int status_y = y - 5 + SHIP_ROW * 2;
-    if (s->sling > 0.0f)       DrawText("ESTILINGUE", info_x, status_y, LABEL_SIZE, SLING_COLOR);
-    else if (s->drifting)      DrawText("DRIFT", info_x, status_y, LABEL_SIZE, ENERGY_COLOR);
-    else if (s->reversing)     DrawText("RÉ", info_x, status_y, LABEL_SIZE, HULL_COLOR);
-    else if (s->hover > 0.6f)  DrawText("PAIRANDO", info_x, status_y, LABEL_SIZE, DIM_COLOR);
-    else if (s->in_atmosphere) DrawText("RASANTE", info_x, status_y, LABEL_SIZE, GRAZE_COLOR);
+    if (s->sling > 0.0f)       ui_draw_text("ESTILINGUE", info_x, status_y, LABEL_SIZE, SLING_COLOR);
+    else if (s->drifting)      ui_draw_text("DRIFT", info_x, status_y, LABEL_SIZE, ENERGY_COLOR);
+    else if (s->reversing)     ui_draw_text("RÉ", info_x, status_y, LABEL_SIZE, HULL_COLOR);
+    else if (s->hover > 0.6f)  ui_draw_text("PAIRANDO", info_x, status_y, LABEL_SIZE, DIM_COLOR);
+    else if (s->in_atmosphere) ui_draw_text("RASANTE", info_x, status_y, LABEL_SIZE, GRAZE_COLOR);
 
     // Mira: onde os canhões se cruzam. Como a câmera vem atrás com atraso,
     // esse ponto nem sempre é o centro da tela.
@@ -491,9 +492,9 @@ static void draw_score(const World *w, const Tuning *t, const HudContext *ctx)
     int sw = GetScreenWidth();
     int right = sw - SCORE_RIGHT;
     const char *points = format_points(sc->points);
-    int width = MeasureText(points, SCORE_SIZE);
+    int width = ui_measure_text(points, SCORE_SIZE);
     DrawRectangle(right - 250, SCORE_TOP - 6, 260, 84, FRAME_COLOR);
-    DrawText("PONTOS", right - 240, SCORE_TOP, LABEL_SIZE, DIM_COLOR);
+    ui_draw_text("PONTOS", right - 240, SCORE_TOP, LABEL_SIZE, DIM_COLOR);
     text(points, right - width, SCORE_TOP + 20, SCORE_SIZE, TEXT_COLOR);
 
     // Combo: multiplicador e o tempo que falta para ele acabar.
@@ -501,11 +502,11 @@ static void draw_score(const World *w, const Tuning *t, const HudContext *ctx)
         float left = Clamp(sc->chain_left / t->score_combo_window, 0.0f, 1.0f);
         const char *mult = TextFormat("x%.2g", (double)sc->multiplier);
         Color c = mix_color(TEXT_COLOR, PRIZE_COLOR, (sc->multiplier - 1.0f) / fmaxf(t->score_combo_max - 1.0f, 1e-3f));
-        DrawText(mult, right - 240, SCORE_TOP + 26, LABEL_SIZE + 6, c);
+        ui_draw_text(mult, right - 240, SCORE_TOP + 26, LABEL_SIZE + 6, c);
         DrawRectangle(right - 240, SCORE_TOP + 60, (int)(80.0f * left), 4, c);
     }
     const char *best = TextFormat("recorde %s", format_points(ctx->best_score > sc->points ? ctx->best_score : sc->points));
-    DrawText(best, right - MeasureText(best, SMALL_SIZE + 4), SCORE_TOP + 62, SMALL_SIZE + 4, DIM_COLOR);
+    ui_draw_text(best, right - ui_measure_text(best, SMALL_SIZE + 4), SCORE_TOP + 62, SMALL_SIZE + 4, DIM_COLOR);
 }
 
 static int enemies_of(const World *w, EnemyType type)
@@ -530,11 +531,11 @@ static void draw_wave_info(const World *w, const Tuning *t)
     bool boss = boss_active(&w->boss);
     const char *boss_item = boss ? boss_name((BossType)w->boss.type) : NULL;
     if (d->phase == DIRECTOR_ACTIVE) {
-        if (boss) line_x = MeasureText(boss_item, WAVE_ITEM_SIZE) + 14;
+        if (boss) line_x = ui_measure_text(boss_item, WAVE_ITEM_SIZE) + 14;
         for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
             int count = enemies_of(w, (EnemyType)type);
             if (count == 0) continue;
-            int width = MeasureText(TextFormat("%s %d", ENEMY_NAMES[type], count), WAVE_ITEM_SIZE);
+            int width = ui_measure_text(TextFormat("%s %d", ENEMY_NAMES[type], count), WAVE_ITEM_SIZE);
             if (line_x > 0 && line_x + width > WAVE_PANEL_WIDTH - 20) {
                 lines++;
                 line_x = 0;
@@ -545,37 +546,37 @@ static void draw_wave_info(const World *w, const Tuning *t)
         lines = 2;
     }
     DrawRectangle(x - 10, y - 6, WAVE_PANEL_WIDTH, 40 + lines * WAVE_LINE + 4, FRAME_COLOR);
-    DrawText("HORDA", x, y, LABEL_SIZE, DIM_COLOR);
-    DrawText(TextFormat("%d / %d", shown, w->plan.count), x + 80, y - 2, LABEL_SIZE + 4, TEXT_COLOR);
+    ui_draw_text("HORDA", x, y, LABEL_SIZE, DIM_COLOR);
+    ui_draw_text(TextFormat("%d / %d", shown, w->plan.count), x + 80, y - 2, LABEL_SIZE + 4, TEXT_COLOR);
 
     int row_y = y + 30;
     if (d->phase == DIRECTOR_PAUSE) {
-        DrawText(TextFormat("próxima horda em %.0f s", (double)ceilf(d->timer)), x, row_y, LABEL_SIZE - 2, PRIZE_COLOR);
+        ui_draw_text(TextFormat("próxima horda em %.0f s", (double)ceilf(d->timer)), x, row_y, LABEL_SIZE - 2, PRIZE_COLOR);
         // A calmaria pode ser encurtada: quem já está pronto chama a horda.
         float blink = 0.65f + 0.35f * sinf(seconds(w, t) * 3.0f);
-        DrawText("Enter: chamar agora", x, row_y + WAVE_LINE + 2, WAVE_ITEM_SIZE, with_alpha(DIM_COLOR, blink));
+        ui_draw_text("Enter: chamar agora", x, row_y + WAVE_LINE + 2, WAVE_ITEM_SIZE, with_alpha(DIM_COLOR, blink));
     } else if (d->phase == DIRECTOR_ACTIVE) {
         line_x = x;
         bool any = false;
         if (boss) {
-            DrawText(boss_item, line_x, row_y, WAVE_ITEM_SIZE, BOSS_COLOR);
-            line_x += MeasureText(boss_item, WAVE_ITEM_SIZE) + 14;
+            ui_draw_text(boss_item, line_x, row_y, WAVE_ITEM_SIZE, BOSS_COLOR);
+            line_x += ui_measure_text(boss_item, WAVE_ITEM_SIZE) + 14;
             any = true;
         }
         for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
             int count = enemies_of(w, (EnemyType)type);
             if (count == 0) continue;
             const char *item = TextFormat("%s %d", ENEMY_NAMES[type], count);
-            int width = MeasureText(item, WAVE_ITEM_SIZE);
+            int width = ui_measure_text(item, WAVE_ITEM_SIZE);
             if (line_x > x && line_x + width > x + WAVE_PANEL_WIDTH - 20) {
                 row_y += WAVE_LINE;
                 line_x = x;
             }
-            DrawText(item, line_x, row_y, WAVE_ITEM_SIZE, ENEMY_COLORS[type]);
+            ui_draw_text(item, line_x, row_y, WAVE_ITEM_SIZE, ENEMY_COLORS[type]);
             line_x += width + 14;
             any = true;
         }
-        if (!any) DrawText("chegando...", x, row_y, WAVE_ITEM_SIZE, DIM_COLOR);
+        if (!any) ui_draw_text("chegando...", x, row_y, WAVE_ITEM_SIZE, DIM_COLOR);
     }
 }
 
@@ -948,7 +949,7 @@ static int evolution_list(const World *w, int cx, int y, int size, float alpha)
         // Quantos cabem nesta linha.
         int width = 0, end = start;
         while (end < n) {
-            int item = MeasureText(items[end], size) + (end > start ? gap : 0);
+            int item = ui_measure_text(items[end], size) + (end > start ? gap : 0);
             if (end > start && width + item > max_width) break;
             width += item;
             end++;
@@ -957,7 +958,7 @@ static int evolution_list(const World *w, int cx, int y, int size, float alpha)
         for (int k = start; k < end; k++) {
             Color c = ENEMY_COLORS[evolution_info((EvolutionId)ids[k])->line];
             text(items[k], x, y + height, size, with_alpha(c, alpha));
-            x += MeasureText(items[k], size) + gap;
+            x += ui_measure_text(items[k], size) + gap;
         }
         height += size + 6;
         start = end;
@@ -1028,7 +1029,8 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
         y += evolution_list(w, sw / 2, y, LABEL_SIZE - 4, panel);
     }
     float blink = 0.6f + 0.4f * sinf(since * 4.0f);
-    text_centered("R para jogar de novo", sw / 2, y + 16, LABEL_SIZE + 2, with_alpha(PRIZE_COLOR, panel * blink));
+    text_centered("R joga de novo      Esc volta ao menu", sw / 2, y + 16, LABEL_SIZE + 2,
+                  with_alpha(PRIZE_COLOR, panel * blink));
 }
 
 // ---------------------------------------------------------------------------
@@ -1051,9 +1053,9 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
     int top = below_planet(w);
     int x = sw / 2 - BOSS_BAR_WIDTH / 2, y = top + 30;
     DrawRectangle(x - 12, top, BOSS_BAR_WIDTH + 24, BOSS_PANEL_HEIGHT, FRAME_COLOR);
-    DrawText(boss_name((BossType)b->type), x, top + 6, LABEL_SIZE, BOSS_COLOR);
+    ui_draw_text(boss_name((BossType)b->type), x, top + 6, LABEL_SIZE, BOSS_COLOR);
     const char *phase = TextFormat("FASE %d", b->phase);
-    DrawText(phase, x + BOSS_BAR_WIDTH - MeasureText(phase, LABEL_SIZE), top + 6, LABEL_SIZE, TEXT_COLOR);
+    ui_draw_text(phase, x + BOSS_BAR_WIDTH - ui_measure_text(phase, LABEL_SIZE), top + 6, LABEL_SIZE, TEXT_COLOR);
     // Na entrada, a barra enche (e ele ainda é invulnerável).
     float fill = b->hp / fmaxf(b->hp_max, 1e-3f);
     if (b->state == BOSS_ENTER) fill *= 1.0f - Clamp(b->timer / t->breaker_enter_time, 0.0f, 1.0f);
@@ -1283,13 +1285,13 @@ static void draw_shop(const World *w, const Tuning *t)
     DrawRectangle(x - 10, y - 8, SHOP_WIDTH + 20, SHOP_ROW * 4 + 14, FRAME_COLOR);
     // A confirmação (ou a recusa) da compra aparece no lugar do título, por um instante.
     if (note != NULL && note_alpha > 0.0f) {
-        DrawText(note, x, y + 2, LABEL_SIZE - 4, with_alpha(note_color, fminf(note_alpha * 2.0f, 1.0f)));
+        ui_draw_text(note, x, y + 2, LABEL_SIZE - 4, with_alpha(note_color, fminf(note_alpha * 2.0f, 1.0f)));
     } else {
-        DrawText("MINÉRIO", x, y, LABEL_SIZE, with_alpha(ORE_COLOR, 0.85f));
+        ui_draw_text("MINÉRIO", x, y, LABEL_SIZE, with_alpha(ORE_COLOR, 0.85f));
     }
     const char *amount = TextFormat("%d", w->ore);
     int size = LABEL_SIZE + 4 + (int)(glow * 6.0f);
-    DrawText(amount, x + SHOP_WIDTH - MeasureText(amount, size), y - 2 - (int)(glow * 3.0f), size,
+    ui_draw_text(amount, x + SHOP_WIDTH - ui_measure_text(amount, size), y - 2 - (int)(glow * 3.0f), size,
              mix_color(ORE_COLOR, WHITE, glow));
     for (int k = 0; k < DEF_TYPE_COUNT; k++) {
         DefenseType type = (DefenseType)k;
@@ -1297,10 +1299,10 @@ static void draw_shop(const World *w, const Tuning *t)
         int cost = defense_cost(t, type), max = defense_max(t, type), have = defenses_count(&w->defenses, type);
         bool full = have >= max, cheap = w->ore >= cost;
         Color c = (full || !cheap) ? DIM_COLOR : TEXT_COLOR;
-        DrawText(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, (full || !cheap) ? DIM_COLOR : PRIZE_COLOR);
-        DrawText(defense_name(type), x + 24, ry, LABEL_SIZE - 2, c);
+        ui_draw_text(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, (full || !cheap) ? DIM_COLOR : PRIZE_COLOR);
+        ui_draw_text(defense_name(type), x + 24, ry, LABEL_SIZE - 2, c);
         const char *right = full ? TextFormat("%d/%d", have, max) : TextFormat("%d    %d/%d", cost, have, max);
-        DrawText(right, x + SHOP_WIDTH - MeasureText(right, LABEL_SIZE - 2), ry, LABEL_SIZE - 2,
+        ui_draw_text(right, x + SHOP_WIDTH - ui_measure_text(right, LABEL_SIZE - 2), ry, LABEL_SIZE - 2,
                  full ? DIM_COLOR : (cheap ? ORE_COLOR : DIM_COLOR));
     }
     (void)now;

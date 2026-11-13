@@ -7,6 +7,7 @@
 #include <string.h>
 
 #include "core/vmath.h"
+#include "ui/font.h"
 #include "ui/hud.h"
 
 #define CARD_W      300
@@ -33,13 +34,13 @@ static Color alpha_of(Color c, float a)
 
 static void shadowed(const char *s, int x, int y, int size, Color c)
 {
-    DrawText(s, x + 2, y + 2, size, alpha_of((Color){ 0, 0, 0, 220 }, (float)c.a / 255.0f));
-    DrawText(s, x, y, size, c);
+    ui_draw_text(s, x + 2, y + 2, size, alpha_of((Color){ 0, 0, 0, 220 }, (float)c.a / 255.0f));
+    ui_draw_text(s, x, y, size, c);
 }
 
 static void centered(const char *s, int cx, int y, int size, Color c)
 {
-    shadowed(s, cx - MeasureText(s, size) / 2, y, size, c);
+    shadowed(s, cx - ui_measure_text(s, size) / 2, y, size, c);
 }
 
 static Rectangle card_rect(int index, int count)
@@ -176,7 +177,7 @@ static void draw_card(const World *w, const Tuning *t, int index, float appear, 
     }
     shadowed(header, x + 16, y + 13, SMALL_SIZE + 2, alpha_of(line, a));
     const char *key = TextFormat("[%d]", index + 1);
-    shadowed(key, x + CARD_W - 16 - MeasureText(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
+    shadowed(key, x + CARD_W - 16 - ui_measure_text(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
 
     // Emblema: um círculo na cor da linha, com o nível novo dentro.
     int ey = y + 96;

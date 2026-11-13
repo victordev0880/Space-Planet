@@ -33,6 +33,7 @@ typedef enum {
     SND_METEOR, SND_FRAGMENT, SND_TRACTOR_GRAB, SND_TRACTOR_MISS, SND_TRACTOR_RELEASE, SND_TRACTOR_BREAK,
     SND_DEPOSIT, SND_REPAIR,
     SND_ROCK_SHOT, SND_ORE, SND_BUY, SND_DENY, SND_INTERCEPT, SND_SHIELD_BLOCK, SND_SHIELD_DOWN,
+    SND_UI_MOVE, SND_UI_CONFIRM, SND_UI_BACK, SND_UI_START,
     SND_COUNT
 } SoundId;
 
@@ -46,12 +47,24 @@ typedef struct {
     uint32_t events_seen;
     uint32_t impacts_seen;
     uint32_t noise;     // gerador próprio (variações de tom), separado do da simulação
+
+    // Volumes das opções (0 a 1).
+    bool     muted;
+    float    volume;    // geral (multiplica o audio.volume do tuning)
+    float    sfx;       // efeitos
+    float    music;     // música
 } Audio;
 
 // Abre o dispositivo de som e gera os efeitos. Se não houver dispositivo, o
 // jogo segue mudo.
 void audio_init(Audio *a, const World *w, const Tuning *t, bool muted);
 void audio_apply_tuning(Audio *a, const Tuning *t, bool muted);
+
+// Volumes escolhidos na tela de opções.
+void audio_set_levels(Audio *a, const Tuning *t, float volume, float sfx, float music);
+
+// Som de interface (menus), sem posição. Aceita SND_UI_*.
+void audio_play_ui(Audio *a, const Tuning *t, SoundId id);
 
 // Toca os sons do que aconteceu desde o quadro anterior.
 void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera);

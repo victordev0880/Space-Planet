@@ -1,0 +1,19 @@
+# Telas fora da partida: título, opções e controles (a partir do título),
+# a partida, a pausa e as opções a partir dela, e a volta ao jogo.
+frames 460
+seed 1234
+
+at 0   menu title
+at 100 shot menus_01_titulo
+at 110 menu options
+at 150 shot menus_02_opcoes
+at 160 menu controls
+at 200 shot menus_03_controles
+at 210 menu game
+at 290 shot menus_04_partida
+at 300 menu pause
+at 330 shot menus_05_pausa
+at 340 menu options
+at 370 shot menus_06_opcoes_na_pausa
+at 380 menu game
+at 459 shot menus_07_de_volta

@@ -91,8 +91,32 @@ static void input_action_names_round_trip(void)
     CHECK(ACT_COUNT <= 32);   // as ações cabem em uma máscara de 32 bits
 }
 
+static void input_resync_swallows_the_closing_press(void)
+{
+    // O jogador fecha a pausa com Enter (que também é "chamar a horda") e
+    // segura o clique: nada disso pode chegar ao jogo como "apertou".
+    InputTracker t;
+    input_init(&t);
+    uint32_t held = ACT_BIT(ACT_READY) | ACT_BIT(ACT_FIRE);
+    InputSample s = sample(held, 40.0f, 0.0f);
+    input_feed(&t, &s);
+    input_resync(&t, held);
+
+    s = sample(held, 0.0f, 0.0f);
+    input_feed(&t, &s);
+    InputState st = input_tick(&t);
+    CHECK(st.held == held && st.pressed == 0u && st.released == 0u);
+    CHECK(st.look_dx == 0.0f);
+
+    s = sample(0u, 0.0f, 0.0f);
+    input_feed(&t, &s);
+    st = input_tick(&t);
+    CHECK(st.released == held);
+}
+
 void suite_input(void)
 {
+    RUN(input_resync_swallows_the_closing_press);
     RUN(input_reports_edges_once);
     RUN(input_quick_tap_between_ticks_is_not_lost);
     RUN(input_mouse_delta_accumulates_and_is_used_once);

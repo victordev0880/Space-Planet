@@ -38,6 +38,7 @@ static const Color SPACE_COLOR = { 2, 3, 8, 255 };   // quase preto, puxando par
 bool render_init(Renderer *r, const World *w, const Tuning *t, bool use_shaders)
 {
     *r = (Renderer){ 0 };
+    r->shake_scale = 1.0f;
     stars_build(&r->stars, t);
     if (!planet_render_init(&r->planet, &w->planet, t, use_shaders)) return false;
     city_lights_build(&r->cities, &w->planet, t, stars_glow_texture(&r->stars));
@@ -134,9 +135,9 @@ static void react_to_impacts(Renderer *r, const World *w, const Tuning *t, Vecto
 // quadrado do tremor: explosões pequenas mal se notam, as grandes sacodem.
 static void apply_shake(const Renderer *r, const Tuning *t, float time, Camera3D *camera)
 {
-    if (r->shake <= 0.0f) return;
+    if (r->shake <= 0.0f || r->shake_scale <= 0.0f) return;
 
-    float amount = r->shake * r->shake * t->shake_max_angle * DEG2RAD;
+    float amount = r->shake * r->shake * t->shake_max_angle * DEG2RAD * r->shake_scale;
     float phase = time * t->shake_frequency;
     // Três ondas fora de sincronia: parece aleatório, mas é repetível.
     float yaw = amount * sinf(phase) * sinf(phase * 0.53f + 1.7f);
@@ -168,6 +169,10 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     planet_render_update(&r->planet, &w->planet, t, camera.position);
 
     react_to_impacts(r, w, t, camera.position);
+    if (fabsf(r->yaw_offset) > 0.01f) {
+        Vector3 forward = Vector3Subtract(camera.target, camera.position);
+        camera.target = Vector3Add(camera.position, Vector3RotateByAxisAngle(forward, camera.up, r->yaw_offset * DEG2RAD));
+    }
     apply_shake(r, t, time, &camera);
     r->shake -= t->shake_decay * elapsed;
     if (r->shake < 0.0f) r->shake = 0.0f;

@@ -64,6 +64,15 @@ InputState input_tick(InputTracker *t)
     return s;
 }
 
+void input_resync(InputTracker *t, uint32_t held_now)
+{
+    t->held_now = held_now;
+    t->seen = 0u;
+    t->held_at_tick = held_now;
+    t->pending_dx = 0.0f;
+    t->pending_dy = 0.0f;
+}
+
 const char *action_name(Action a)
 {
     if ((int)a < 0 || a >= ACT_COUNT) return "?";

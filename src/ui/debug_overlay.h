@@ -46,6 +46,7 @@ typedef struct {
     const char *autoplay_script;   // NULL fora do autoplay
     int         autoplay_frame;
     int         autoplay_frames;
+    bool        menu_open;         // um menu na tela: sem a linha de controles
 } DebugInfo;
 
 void debug_overlay_init(DebugOverlay *o);

@@ -6,6 +6,7 @@
 #include <string.h>
 
 #include "core/vmath.h"
+#include "ui/font.h"
 
 #define FONT_SIZE     20
 #define LINE_HEIGHT   24
@@ -118,11 +119,11 @@ static void draw_notice(const DebugOverlay *o, const World *w)
     if (!o->notice_is_error && w->tick >= o->notice_until_tick) return;
 
     Color color = o->notice_is_error ? BAD_COLOR : GOOD_COLOR;
-    int width = MeasureText(o->notice, FONT_SIZE);
+    int width = ui_measure_text(o->notice, FONT_SIZE);
     int x = (GetScreenWidth() - width) / 2;
     int y = GetScreenHeight() - 84;
     DrawRectangle(x - PADDING, y - 6, width + PADDING * 2, FONT_SIZE + 12, PANEL_COLOR);
-    DrawText(o->notice, x, y, FONT_SIZE, color);
+    ui_draw_text(o->notice, x, y, FONT_SIZE, color);
 }
 
 // Linha de controles no pé da tela. Na partida, aparece só antes da primeira
@@ -161,18 +162,18 @@ static void draw_hint(const DebugOverlay *o, const World *w)
         snprintf(lines[0], sizeof lines[0], "%s", hint);
     }
     for (int i = 0; i < count; i++) {
-        int width = MeasureText(lines[i], FONT_SIZE);
+        int width = ui_measure_text(lines[i], FONT_SIZE);
         int x = (GetScreenWidth() - width) / 2;
         int y = (count == 1) ? GetScreenHeight() - 36 : GetScreenHeight() - 196 + i * (FONT_SIZE + 8);
         // Sombra escura por baixo: a dica passa por cima do planeta, que é claro.
-        DrawText(lines[i], x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
-        DrawText(lines[i], x, y, FONT_SIZE, HINT_COLOR);
+        ui_draw_text(lines[i], x + 2, y + 2, FONT_SIZE, HINT_SHADOW);
+        ui_draw_text(lines[i], x, y, FONT_SIZE, HINT_COLOR);
     }
 }
 
 void debug_overlay_draw(const DebugOverlay *o, const World *w, const DebugInfo *info)
 {
-    draw_hint(o, w);
+    if (!info->menu_open) draw_hint(o, w);
     draw_notice(o, w);
     if (!o->visible) return;
 

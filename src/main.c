@@ -9,6 +9,7 @@
 #include "raylib.h"
 #include "rlgl.h"
 
+#include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
 #include <string.h>
@@ -17,6 +18,7 @@
 #include "core/arena.h"
 #include "core/input.h"
 #include "core/loop.h"
+#include "core/settings.h"
 #include "game/score.h"
 #include "game/tuning.h"
 #include "game/waves.h"
@@ -27,7 +29,9 @@
 #include "tools/autopilot.h"
 #include "tools/autoplay.h"
 #include "ui/debug_overlay.h"
+#include "ui/font.h"
 #include "ui/hud.h"
+#include "ui/menus.h"
 
 static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media", "grande", "enorme" };
 
@@ -37,6 +41,7 @@ static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media",
 #define WAVES_PATH    DATA_DIR "/waves.txt"
 #define SAVE_DIR      "save"
 #define BEST_PATH     SAVE_DIR "/highscore.dat"
+#define SETTINGS_PATH SAVE_DIR "/settings.txt"
 #define CAPTURES_DIR  "captures"
 #define REPORT_PATH   CAPTURES_DIR "/report.txt"
 
@@ -47,6 +52,19 @@ static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media",
 // Memória da partida (grade de voxels do planeta), reservada uma única vez.
 // Uma grade de 128 pontos por eixo usa 4 MB; a de 256, o máximo aceito, 32 MB.
 #define WORLD_ARENA_BYTES ((size_t)40 * 1024 * 1024)
+
+// Transições entre telas: escurece, troca no escuro (recomeçar a partida
+// trava alguns décimos de segundo, e no escuro isso não aparece) e clareia.
+#define FADE_OUT_TIME 0.35f
+#define FADE_IN_TIME  0.70f
+#define TITLE_YAW     20.0f   // graus: no título, a câmera vira e o planeta fica à direita
+#define TITLE_PAN     3.0f    // rapidez do giro da câmera ao entrar e sair do título
+
+typedef struct {
+    float       alpha;   // 0 = nada, 1 = tela preta
+    int         dir;     // +1 escurecendo, -1 clareando, 0 parado
+    MenuCommand then;    // o que fazer quando ficar preta
+} Transition;
 
 typedef struct {
     const char *autoplay_path;   // NULL = jogo normal
@@ -181,6 +199,54 @@ static void reload_data(Tuning *tuning, WavePlan *plan, FixedLoop *loop, World *
                          world->tick + (uint64_t)(tuning->sim_hz * 2));
 }
 
+// Preferências que valem já: volumes, tremor e tela cheia. O autoplay não
+// mexe na janela (tela cheia atrapalharia quem está usando o computador).
+static void apply_settings(const Settings *s, Audio *audio, const Tuning *t, Renderer *r, bool window)
+{
+    audio_set_levels(audio, t, s->volume, s->sfx, s->music);
+    r->shake_scale = s->shake;
+    if (window && s->fullscreen != IsWindowState(FLAG_BORDERLESS_WINDOWED_MODE)) ToggleBorderlessWindowed();
+}
+
+static void save_settings(const Settings *s)
+{
+    MakeDirectory(SAVE_DIR);
+    if (!settings_save(s, SETTINGS_PATH)) TraceLog(LOG_WARNING, "nao consegui gravar %s", SETTINGS_PATH);
+}
+
+// Abre uma tela direto (roteiros do autoplay). Opções e controles lembram de
+// onde vieram; o título põe a câmera de apresentação.
+static void open_screen(Menu *m, Screen s, World *w, const Tuning *t)
+{
+    if (s == SCREEN_OPTIONS || s == SCREEN_CONTROLS) {
+        Screen parent = (m->screen == SCREEN_OPTIONS || m->screen == SCREEN_CONTROLS) ? m->parent
+                      : (m->screen == SCREEN_GAME) ? SCREEN_PAUSE : m->screen;
+        menu_open(m, s);
+        m->parent = parent;
+    } else {
+        menu_open(m, s);
+    }
+    if (s == SCREEN_TITLE) world_set_view(w, t, CAM_ORBIT);
+    if (s == SCREEN_GAME && w->cam_mode == CAM_ORBIT) world_set_view(w, t, CAM_SHIP);
+}
+
+// O título e as telas abertas a partir dele (a partida não está na tela).
+static bool title_context(const Menu *m)
+{
+    if (m->screen == SCREEN_TITLE) return true;
+    return (m->screen == SCREEN_OPTIONS || m->screen == SCREEN_CONTROLS) && m->parent == SCREEN_TITLE;
+}
+
+static SoundId menu_sound(MenuSound s)
+{
+    switch (s) {
+    case MENU_SOUND_MOVE:    return SND_UI_MOVE;
+    case MENU_SOUND_CONFIRM: return SND_UI_CONFIRM;
+    case MENU_SOUND_BACK:    return SND_UI_BACK;
+    default:                 return SND_COUNT;
+    }
+}
+
 int main(int argc, char **argv)
 {
     Options opt;
@@ -231,6 +297,13 @@ int main(int argc, char **argv)
     }
     if (!one_step_per_frame && tuning.window_fps_cap > 0) SetTargetFPS(tuning.window_fps_cap);
     if (autoplay) MakeDirectory(CAPTURES_DIR);
+    SetExitKey(KEY_NULL);   // o Esc abre a pausa; o jogo só fecha pelo menu ou pelo X da janela
+    ui_font_load();
+
+    // Preferências do jogador (o autoplay usa sempre as padrão).
+    static Settings settings;
+    settings_defaults(&settings);
+    if (!autoplay) settings_load(&settings, SETTINGS_PATH);
 
     // --- estado -------------------------------------------------------------
     uint64_t seed = (autoplay && script.has_seed) ? script.seed : (uint64_t)tuning.sim_seed;
@@ -266,9 +339,23 @@ int main(int argc, char **argv)
     world_set_plan(&world, &plan);
     bool muted = autoplay || opt.mute;   // o autoplay é mudo: não atrapalha quem está usando o computador
     audio_init(&audio, &world, &tuning, muted);
+    apply_settings(&settings, &audio, &tuning, &renderer, !autoplay);
     debug_overlay_init(&overlay);
     fixed_loop_init(&loop, tuning.sim_hz, tuning.sim_max_steps);
     input_init(&tracker);
+
+    // O jogo abre no título, com a câmera de apresentação; o autoplay vai
+    // direto para a partida (e abre telas só quando o roteiro pede).
+    static Menu menu;
+    menu.parent = SCREEN_TITLE;
+    menu_open(&menu, autoplay ? SCREEN_GAME : SCREEN_TITLE);
+    if (!autoplay) {
+        world_set_view(&world, &tuning, CAM_ORBIT);
+        renderer.yaw_offset = TITLE_YAW;
+    }
+    bool fresh = true;   // a partida do mundo ainda não começou: "jogar" não precisa recomeçar
+    bool quit = false;
+    Transition fade = { autoplay ? 0.0f : 1.0f, autoplay ? 0 : -1, MENU_NONE };
 
     // O recorde só é gravado em partidas de verdade, nunca no autoplay.
     int64_t best_score = autoplay ? 0 : score_load_best(BEST_PATH);
@@ -289,18 +376,42 @@ int main(int argc, char **argv)
         double frame_seconds = start - last_start;
         last_start = start;
 
+        // Tempo real do quadro para menus e transições (limitado: um quadro
+        // travado não pode pular uma transição inteira). No autoplay
+        // determinístico, um passo fixo, para as capturas se repetirem.
+        float ui_dt = one_step_per_frame ? 1.0f / (float)tuning.sim_hz : fminf((float)frame_seconds, 0.05f);
+
         // 1. input
-        InputSample sample;
+        InputSample sample = { 0u, 0.0f, 0.0f };
         const char *shot = NULL;
+        MenuCommand command = MENU_NONE;
         if (autoplay) {
             AutoplayFrame step;
             autoplay_step(&script, frame, &step);
+            if (step.screen != AP_SCREEN_KEEP) open_screen(&menu, (Screen)step.screen, &world, &tuning);
             sample = step.input;
             shot = step.shot;
             autoplay_apply(&step, &world, &tuning);   // câmera, nave, inimigos e crateras pedidos pelo roteiro
             if (step.autopilot) autopilot_drive(&world, world_tuning(&world), &sample);
+            MenuInput idle = { 0 };
+            idle.mouse = (Vector2){ -1000.0f, -1000.0f };   // longe de qualquer botão
+            menu_update(&menu, &idle, &settings, ui_dt);    // só as animações
+        } else if (fade.dir > 0) {
+            // Escurecendo para trocar de tela: nada de input.
+        } else if (menu.screen != SCREEN_GAME) {
+            MenuInput in = platform_menu_input();
+            command = menu_update(&menu, &in, &settings, ui_dt);
+            if (menu.sound != MENU_SOUND_NONE) audio_play_ui(&audio, &tuning, menu_sound(menu.sound));
+        } else if (platform_pause_pressed()) {
+            // Esc na partida: pausa. Depois do fim, volta ao título.
+            if (world.state == GAME_PLAYING) {
+                menu_open(&menu, SCREEN_PAUSE);
+                audio_play_ui(&audio, &tuning, SND_UI_BACK);
+            } else {
+                command = MENU_TO_TITLE;
+            }
         } else {
-            sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0);
+            sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0, &settings);
             if (skip_mouse_frames > 0) skip_mouse_frames--;
             // Cartas de evolução: um clique numa carta vale como a tecla dela.
             if (world.evo.choosing && IsMouseButtonPressed(MOUSE_BUTTON_LEFT)) {
@@ -310,8 +421,39 @@ int main(int argc, char **argv)
         }
         input_feed(&tracker, &sample);
 
-        // 2. simulação em passos fixos
-        int steps = one_step_per_frame ? 1 : fixed_loop_advance(&loop, frame_seconds);
+        // Comandos dos menus. Os que trocam a partida esperam a tela escurecer.
+        switch (command) {
+        case MENU_RESUME:
+            menu_open(&menu, SCREEN_GAME);
+            input_resync(&tracker, platform_poll_input(false, &settings).held);
+            skip_mouse_frames = 2;
+            break;
+        case MENU_SETTINGS:
+        case MENU_SETTINGS_DONE:
+            apply_settings(&settings, &audio, &tuning, &renderer, true);
+            if (command == MENU_SETTINGS_DONE) save_settings(&settings);
+            break;
+        case MENU_PLAY:
+        case MENU_RESTART:
+        case MENU_TO_TITLE:
+        case MENU_QUIT:
+            if (command != MENU_TO_TITLE) audio_play_ui(&audio, &tuning, command == MENU_QUIT ? SND_UI_BACK : SND_UI_START);
+            fade.dir = +1;
+            fade.then = command;
+            break;
+        default:
+            break;
+        }
+        if (!autoplay && IsKeyPressed(KEY_F11)) {   // tela cheia, de qualquer lugar
+            settings.fullscreen = !settings.fullscreen;
+            apply_settings(&settings, &audio, &tuning, &renderer, true);
+            save_settings(&settings);
+        }
+
+        // 2. simulação em passos fixos. Na pausa e no escuro de uma
+        // transição, a partida fica parada (e o relógio dela também).
+        bool frozen = menu_freezes_game(&menu) || fade.alpha >= 1.0f;
+        int steps = frozen ? 0 : one_step_per_frame ? 1 : fixed_loop_advance(&loop, frame_seconds);
         uint32_t pressed = 0u;
         for (int i = 0; i < steps; i++) {
             InputState state = input_tick(&tracker);
@@ -340,12 +482,55 @@ int main(int argc, char **argv)
         last_state = world.state;
         uint64_t notice_until = world.tick + (uint64_t)(tuning.sim_hz * 2);
         if ((pressed & ACT_BIT(ACT_RESET)) && world.state != GAME_PLAYING) {
-            world.plan = plan;   // hordas relidas com F5 valem a partir daqui
-            world_restart(&world, &tuning);
-            render_apply_tuning(&renderer, &world, &tuning);
-            new_best = false;
-            last_state = world.state;
+            if (autoplay) {
+                fade.alpha = 1.0f;   // sem transição: o roteiro recomeça na hora
+                fade.dir = +1;
+            } else if (fade.dir == 0) {
+                audio_play_ui(&audio, &tuning, SND_UI_START);
+                fade.dir = +1;
+            }
+            fade.then = MENU_RESTART;
             pressed &= ~ACT_BIT(ACT_RESET);
+        }
+
+        // Transição: no escuro, troca de tela (e recomeça a partida, se for o caso).
+        if (fade.dir != 0) {
+            float speed = (fade.dir > 0) ? 1.0f / FADE_OUT_TIME : 1.0f / FADE_IN_TIME;
+            fade.alpha += (float)fade.dir * speed * ui_dt;
+            if (fade.dir > 0 && fade.alpha >= 1.0f) {
+                fade.alpha = 1.0f;
+                fade.dir = -1;
+                MenuCommand then = fade.then;
+                fade.then = MENU_NONE;
+                if (then == MENU_QUIT) {
+                    quit = true;
+                } else if (then == MENU_PLAY && fresh) {
+                    world_set_view(&world, &tuning, CAM_SHIP);   // o mundo novo do título já serve
+                } else {
+                    world.plan = plan;   // hordas relidas com F5 valem a partir daqui
+                    world_restart(&world, &tuning);
+                    render_apply_tuning(&renderer, &world, &tuning);
+                }
+                if (then == MENU_TO_TITLE) {
+                    world_set_view(&world, &tuning, CAM_ORBIT);
+                    menu_open(&menu, SCREEN_TITLE);
+                    fresh = true;
+                } else if (then != MENU_QUIT) {
+                    menu_open(&menu, SCREEN_GAME);
+                    fresh = false;
+                }
+                new_best = false;
+                last_state = world.state;
+                input_resync(&tracker, autoplay ? 0u : platform_poll_input(false, &settings).held);
+                fixed_loop_init(&loop, tuning.sim_hz, tuning.sim_max_steps);   // sem correr atrás do tempo da troca
+                if (autoplay) {
+                    fade.alpha = 0.0f;
+                    fade.dir = 0;
+                }
+            } else if (fade.dir < 0 && fade.alpha <= 0.0f) {
+                fade.alpha = 0.0f;
+                fade.dir = 0;
+            }
         }
 
         // Ferramentas de debug do planeta destrutível: só com o F1 aberto,
@@ -387,7 +572,7 @@ int main(int argc, char **argv)
 
         // O mouse fica preso à janela enquanto pilota a nave ou a câmera livre
         // (e solto enquanto as cartas de evolução estão na tela).
-        bool want_capture = !autoplay && world.cam_mode != CAM_ORBIT && !world.evo.choosing;
+        bool want_capture = !autoplay && menu.screen == SCREEN_GAME && world.cam_mode != CAM_ORBIT && !world.evo.choosing;
         if (want_capture != cursor_captured) {
             if (want_capture) DisableCursor();
             else              EnableCursor();
@@ -410,6 +595,14 @@ int main(int argc, char **argv)
         info.autoplay_frame = frame;
         info.autoplay_frames = script.frames;
 
+        info.menu_open = (menu.screen != SCREEN_GAME);
+
+        // No título a câmera vira de lado e o planeta fica à direita, ao lado do nome.
+        bool on_title = title_context(&menu);
+        float yaw_goal = (menu.screen == SCREEN_TITLE) ? TITLE_YAW : 0.0f;
+        renderer.yaw_offset += (yaw_goal - renderer.yaw_offset) * (1.0f - expf(-TITLE_PAN * ui_dt));
+        if (!on_title && fade.alpha >= 1.0f) renderer.yaw_offset = 0.0f;
+
         // Daqui em diante, o tuning com as evoluções (barras, alcance da arma).
         const Tuning *play_tuning = world_tuning(&world);
         BeginDrawing();
@@ -429,9 +622,16 @@ int main(int argc, char **argv)
         hud.camera = render_camera(&world, &tuning, alpha);
         hud.best_score = best_score;
         hud.new_best = new_best;
-        hud_draw(&world, play_tuning, &hud);
-        cards_draw(&world, play_tuning, GetTime());
+        if (!on_title) {
+            hud_draw(&world, play_tuning, &hud);
+            cards_draw(&world, play_tuning, GetTime());
+        }
+        MenuView view = { best_score };
+        menu_draw(&menu, &world, &settings, &view);
         debug_overlay_draw(&overlay, &world, &info);
+        if (fade.alpha > 0.0f) {
+            DrawRectangle(0, 0, GetScreenWidth(), GetScreenHeight(), (Color){ 0, 0, 0, (unsigned char)(255.0f * fade.alpha) });
+        }
         audio_update(&audio, &world, play_tuning, hud.camera);
         rlDrawRenderBatchActive();
         double cpu_ms = (GetTime() - start) * 1000.0;
@@ -455,6 +655,7 @@ int main(int argc, char **argv)
 
         frame++;
         if (autoplay && frame >= script.frames) break;
+        if (quit) break;
     }
 
     // --- fim ----------------------------------------------------------------
@@ -526,6 +727,7 @@ int main(int argc, char **argv)
 
     audio_shutdown(&audio);
     render_shutdown(&renderer);
+    ui_font_unload();
     CloseWindow();
     arena_free(&world_arena);
     return exit_code;

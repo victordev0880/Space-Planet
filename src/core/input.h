@@ -75,6 +75,11 @@ void       input_init(InputTracker *t);
 void       input_feed(InputTracker *t, const InputSample *sample);
 InputState input_tick(InputTracker *t);
 
+// Recomeça a partir do que está apertado agora, sem gerar "apertou": ao sair
+// de um menu, a tecla ou o clique que o fechou não pode virar tiro ou dash.
+// Movimento de mouse pendente é descartado.
+void       input_resync(InputTracker *t, uint32_t held_now);
+
 const char *action_name(Action a);
 int         action_from_name(const char *name);   // -1 se o nome não existe
 

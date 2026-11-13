@@ -783,6 +783,44 @@ static void synth_shield_down(float *out, int n)
     }
 }
 
+// --- Interface -------------------------------------------------------------------
+
+static void synth_ui_move(float *out, int n)
+{
+    // Trocar de item: um "tic" curto e macio.
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(1500.0f, 1100.0f, t, 0.04f) / SAMPLE_RATE;
+        out[i] = sine(phase) * envelope(t, 0.001f, 70.0f);
+    }
+}
+
+static void synth_ui_confirm(float *out, int n)
+{
+    static const float NOTES[2] = { 880.0f, 1318.5f };
+    arpeggio(out, n, NOTES, 2, 0.05f, 16.0f);
+}
+
+static void synth_ui_back(float *out, int n)
+{
+    static const float NOTES[2] = { 987.8f, 659.3f };
+    arpeggio(out, n, NOTES, 2, 0.05f, 18.0f);
+}
+
+static void synth_ui_start(float *out, int n)
+{
+    // Começar a partida: um sopro subindo e um acorde que se abre.
+    static const float NOTES[4] = { 220.0f, 329.6f, 440.0f, 659.3f };
+    arpeggio(out, n, NOTES, 4, 0.07f, 2.2f);
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float rush = lowpass(&lp, noise(), sweep(300.0f, 5000.0f, t, 0.7f)) * envelope(t, 0.4f, 3.0f);
+        out[i] += 1.4f * rush;
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -852,6 +890,10 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_INTERCEPT]       = { synth_intercept,       0.20f, 0.45f, 3 },
     [SND_SHIELD_BLOCK]    = { synth_shield_block,    0.60f, 0.65f, 3 },
     [SND_SHIELD_DOWN]     = { synth_shield_down,     0.90f, 0.70f, 1 },
+    [SND_UI_MOVE]         = { synth_ui_move,         0.06f, 0.22f, 3 },
+    [SND_UI_CONFIRM]      = { synth_ui_confirm,      0.25f, 0.40f, 2 },
+    [SND_UI_BACK]         = { synth_ui_back,         0.25f, 0.35f, 2 },
+    [SND_UI_START]        = { synth_ui_start,        1.60f, 0.60f, 1 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -902,7 +944,7 @@ static void play(Audio *a, const Tuning *t, SoundId id, const Vector3 *pos, Came
     int slot = a->next_voice[id];
     a->next_voice[id] = (slot + 1) % def->voices;
     Sound s = a->voices[id][slot];
-    SetSoundVolume(s, Clamp(volume * def->gain, 0.0f, 1.0f));
+    SetSoundVolume(s, Clamp(volume * def->gain * a->sfx, 0.0f, 1.0f));
     SetSoundPitch(s, 1.0f + (random_unit(a) - 0.5f) * 2.0f * PITCH_SPREAD);
     SetSoundPan(s, pan);
     PlaySound(s);
@@ -912,6 +954,9 @@ void audio_init(Audio *a, const World *w, const Tuning *t, bool muted)
 {
     memset(a, 0, sizeof *a);
     a->noise = 0x9e3779b9u;
+    a->volume = 1.0f;
+    a->sfx = 1.0f;
+    a->music = 1.0f;
     a->events_seen = w->events.count;
     a->impacts_seen = w->impact_count;
 
@@ -927,7 +972,23 @@ void audio_init(Audio *a, const World *w, const Tuning *t, bool muted)
 
 void audio_apply_tuning(Audio *a, const Tuning *t, bool muted)
 {
-    if (a->ready) SetMasterVolume(muted ? 0.0f : t->audio_volume);
+    a->muted = muted;
+    if (a->ready) SetMasterVolume(muted ? 0.0f : t->audio_volume * a->volume);
+}
+
+void audio_set_levels(Audio *a, const Tuning *t, float volume, float sfx, float music)
+{
+    a->volume = Clamp(volume, 0.0f, 1.0f);
+    a->sfx = Clamp(sfx, 0.0f, 1.0f);
+    a->music = Clamp(music, 0.0f, 1.0f);
+    audio_apply_tuning(a, t, a->muted);
+}
+
+void audio_play_ui(Audio *a, const Tuning *t, SoundId id)
+{
+    if (!a->ready || id < SND_UI_MOVE || id >= SND_COUNT) return;
+    Camera3D none = { 0 };
+    play(a, t, id, NULL, none, 1.0f, 1.0f);
 }
 
 void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)

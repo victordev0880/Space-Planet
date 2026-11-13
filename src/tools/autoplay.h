@@ -56,6 +56,9 @@
 //                                 atrás (no sentido da órbita) e 10 de lado. Olha
 //                                 para o boss, ou, na carga e no disparo, para o
 //                                 meio do corte
+//   at 160 menu title             abre uma tela: title (com a câmera de
+//                                 apresentação), pause, options, controls, ou
+//                                 game (fecha o menu e volta à partida)
 //
 // Em um mesmo quadro a ordem é: view, ship, cam, waves, clear, spawn, crateras. Um
 // "cam" depois de um "ship" fotografa a nave de fora (na câmera livre a
@@ -85,8 +88,15 @@
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP, AP_ROCK, AP_ORE
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP, AP_ROCK, AP_ORE, AP_MENU
 } AutoplayCmd;
+
+// Telas que o comando "menu" abre (mesma ordem de Screen, em ui/menus.h).
+typedef enum {
+    AP_SCREEN_KEEP = -1,
+    AP_SCREEN_GAME, AP_SCREEN_TITLE, AP_SCREEN_PAUSE, AP_SCREEN_OPTIONS, AP_SCREEN_CONTROLS,
+    AP_SCREEN_COUNT
+} AutoplayScreen;
 
 typedef struct {
     int         frame;
@@ -151,6 +161,7 @@ typedef struct {
     AutoplayRock  rocks[AUTOPLAY_MAX_ROCKS];
     int           rock_count;
     int           ore;            // minério a dar à nave neste quadro
+    int           screen;         // tela a abrir (AutoplayScreen; AP_SCREEN_KEEP = nenhuma)
 
     AutoplayCrater craters[AUTOPLAY_MAX_CRATERS];
     int            crater_count;
