@@ -12,6 +12,8 @@
 #define SHIELDER_ABOVE  0.6f    // fica acima do grupo, em frações de `follow`
 #define SHIELDER_BEHIND 0.8f    // ... e atrás dele
 #define SHIELDER_IDLE   30.0f   // sem ninguém para proteger, espera em órbita nesta altura
+#define SHIELDER_GUARD  90.0f   // com a nave a esta distância do grupo, fica entre os dois...
+#define SHIELDER_FRONT  0.9f    // ... a esta fração de `follow` à frente do grupo
 
 Steer shielder_think(Enemies *e, int index, const EnemyContext *ctx)
 {
@@ -55,11 +57,20 @@ Steer shielder_think(Enemies *e, int index, const EnemyContext *ctx)
     center = Vector3Scale(center, 1.0f / (float)members);
     drift = Vector3Scale(drift, 1.0f / (float)members);
 
-    // Um pouco acima do grupo (longe do planeta) e atrás dele.
+    // Um pouco acima do grupo (longe do planeta) e atrás dele. Com a nave por
+    // perto, se põe entre ela e o grupo: escudo na frente, alvo exposto.
     Vector3 up = Vector3Normalize(center);
     Vector3 back = (Vector3LengthSqr(drift) > 1e-4f) ? Vector3Normalize(Vector3Negate(drift)) : ai_perpendicular(up);
     Vector3 spot = Vector3Add(center, Vector3Add(Vector3Scale(up, t->shielder_follow * SHIELDER_ABOVE),
                                                  Vector3Scale(back, t->shielder_follow * SHIELDER_BEHIND)));
+    if (ai_ship_targetable(ctx)) {
+        Vector3 to_ship = Vector3Subtract(ctx->ship->pos, center);
+        float d = Vector3Length(to_ship);
+        if (d < SHIELDER_GUARD && d > 1e-3f) {
+            Vector3 front = Vector3Add(center, Vector3Scale(to_ship, t->shielder_follow * SHIELDER_FRONT / d));
+            spot = Vector3Add(front, Vector3Scale(up, t->shielder_follow * 0.3f));
+        }
+    }
     Vector3 desired = Vector3Add(drift, Vector3Scale(Vector3Subtract(spot, en->pos), SHIELDER_SPRING));
     if (Vector3Length(desired) > speed) desired = Vector3Scale(Vector3Normalize(desired), speed);
     return ai_steer(desired, speed);

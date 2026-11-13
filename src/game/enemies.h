@@ -92,6 +92,9 @@ typedef struct {
     float      fire_wait;     // até o próximo tiro
     float      turret_wait;   // até a próxima rajada (ou tiro na nave, no Enxame)
     float      cooldown;      // Enxame: até poder sair do bando de novo para encarar a nave
+    Vector3    dodge;         // esquiva em curso (velocidade lateral somada ao voo)
+    float      dodge_left;    // segundos que ainda faltam da esquiva
+    float      dodge_wait;    // até poder esquivar de novo
     float      size;          // variação de tamanho do modelo (só desenho)
     int        burst;         // tiros restantes da rajada
     uint8_t    type;          // EnemyType

@@ -25,7 +25,7 @@ sim.max_steps = 5         # teto de passos por quadro quando o jogo atrasa
 sim.seed      = 20261111  # seed da partida
 
 # --- câmera -----------------------------------------------------------------
-camera.fov  = 60          # campo de visão vertical, em graus
+camera.fov  = 70          # campo de visão vertical, em graus
 camera.near = 0.1
 camera.far  = 4000
 
@@ -157,8 +157,11 @@ remesh.max_chunks = 12         # no máximo este número de chunks por quadro
 remesh.budget_ms  = 4.0        # ... ou este tempo por quadro, em milissegundos
 
 # --- derrota ----------------------------------------------------------------
-defeat.planet_hp = 0.35        # colapso quando a massa restante cai abaixo disto
-defeat.core_hp   = 0.60        # ... ou quando o núcleo cai abaixo disto
+# A vida do planeta é o volume que resta. O HUD a mostra como habitantes:
+# volume restante x planet.population (é só o nome; a conta é a do volume).
+defeat.planet_hp  = 0.35       # extinção quando o volume restante cai abaixo disto
+defeat.core_hp    = 0.60       # ... ou quando o núcleo cai abaixo disto
+planet.population = 8.0        # bilhões de habitantes com o planeta inteiro
 
 # --- partículas de impacto --------------------------------------------------
 particles.gravity     = 12     # puxão em direção ao centro do planeta
@@ -237,8 +240,8 @@ ship.spawn_distance = 2.3    # onde a nave nasce, em raios do planeta
 ship.spawn_pitch    = 13     # nasce de frente para o planeta, com o nariz este tanto (graus) acima do centro dele
 
 # --- câmera em terceira pessoa ----------------------------------------------
-chase.distance   = 7.5       # distância atrás da nave
-chase.height     = 2.2       # altura acima da nave
+chase.distance   = 10        # distância atrás da nave
+chase.height     = 2.9       # altura acima da nave
 chase.look_ahead = 16        # a câmera mira este tanto à frente da nave
 chase.pos_smooth = 14        # maior = a câmera gruda mais na nave
 chase.rot_smooth = 9

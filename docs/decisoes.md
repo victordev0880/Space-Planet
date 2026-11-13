@@ -790,6 +790,28 @@ por nível de evolução; a tela de fim lista as evoluções escolhidas.
 - O piloto automático escolhe sempre a primeira carta; não reflete escolhas
   de um jogador.
 
+## Ajustes antes do marco 8 (2026-11-13)
+
+- **Inimigos mais espertos:** os leves (Enxame, Kamikaze, Atirador, Escudeiro)
+  percebem quando a nave atira com o nariz neles e às vezes desviam para o
+  lado (`enemies.dodge_*`). A primeira versão (55% de chance, a cada 2 s)
+  tornava o Enxame quase impossível de acertar; ficou em 35%, a cada 4 s, um
+  desvio curto. O Kamikaze vem em zigue-zague; o Escudeiro, com a nave
+  perto, se põe entre ela e o grupo.
+- **Mais dano no planeta (~1,5x por inimigo):** o Enxame atira mais, abre
+  crateras maiores, espera menos e concentra as passadas (o alvo anda 16° em
+  vez de 28°: as crateras se sobrepõem e cavam fundo); bombas a cada 6 s,
+  Kamikaze com cratera maior, Sifão morde mais rápido, Escavador cava mais
+  rápido. Na partida do piloto automático (que agora evolui e mata rápido) o
+  efeito quase não aparece; num jogador comum, deve aparecer.
+- **Habitantes:** o HP do planeta aparece como habitantes (volume x 8
+  bilhões), o colapso como "extinção". Só o nome mudou.
+- **Câmera:** distância 7,5 → 10, altura 2,2 → 2,9 e campo de visão 60° → 70°.
+- **Piloto automático:** com o terreno entre ele e o alvo, ou rente ao chão,
+  agora acelera para contornar. Antes, parado, ele pairava no fundo de uma
+  cratera atirando na parede (apareceu quando a esquiva mudou a sequência de
+  sorteios de um teste).
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

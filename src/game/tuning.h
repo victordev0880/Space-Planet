@@ -157,6 +157,7 @@ typedef struct {
     // derrota
     float defeat_planet_hp;
     float defeat_core_hp;
+    float planet_population;   // bilhões de habitantes com o planeta inteiro (só para mostrar)
 
     // partículas de impacto
     float particles_gravity;
@@ -287,6 +288,12 @@ typedef struct {
     float enemies_shot_life;
 
     // Enxame
+    float dodge_speed;      // esquiva dos inimigos leves quando a nave atira neles
+    float dodge_time;
+    float dodge_cooldown;
+    float dodge_cone;       // graus: a nave precisa estar mirando até este tanto deles
+    float dodge_range;
+    float dodge_chance;     // chance de esquivar a cada vez que isso acontece
     float swarm_cruise_altitude;
     float swarm_attack_altitude;
     float swarm_fire_rate;

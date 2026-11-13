@@ -12,6 +12,15 @@ enemies.spawn_distance = 3.3     # onde as hordas aparecem, em raios do planeta 
 enemies.spawn_spread   = 12      # espalhamento de um grupo ao aparecer
 enemies.shot_life      = 3.5     # segundos de vida dos tiros inimigos
 
+# Esquiva: Enxame, Kamikaze, Atirador e Escudeiro percebem quando a nave está
+# atirando com o nariz apontado para eles e às vezes dão um desvio lateral.
+enemies.dodge_speed    = 12      # velocidade do desvio
+enemies.dodge_time     = 0.35    # duração do desvio, em segundos
+enemies.dodge_cooldown = 4.0     # tempo mínimo entre dois desvios do mesmo inimigo
+enemies.dodge_cone     = 7       # a nave precisa estar mirando até este ângulo (graus) deles
+enemies.dodge_range    = 110     # ... e a até esta distância
+enemies.dodge_chance   = 0.35    # chance de desviar a cada vez
+
 # --- Enxame -----------------------------------------------------------------
 # Drones do tamanho da nave, que chegam em bando. O bando para no ar acima do
 # alvo, em formação, espera um pouco e faz uma passada de ataque: desce
@@ -27,20 +36,20 @@ swarm.points          = 100
 swarm.ram_damage      = 14       # dano na nave ao trombar com ela
 swarm.cruise_altitude = 24       # altura em que o bando viaja
 swarm.attack_altitude = 8        # altura em que sai do mergulho
-swarm.fire_rate       = 2.5      # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
+swarm.fire_rate       = 3.2      # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
 swarm.shot_speed      = 55
 swarm.shot_damage     = 6        # dano de um tiro na nave
-swarm.crater_radius   = 3.4
-swarm.crater_depth    = 2.6
+swarm.crater_radius   = 3.7
+swarm.crater_depth    = 2.9
 swarm.aggro_range     = 65       # com a nave até esta distância, parte do bando sai para encará-la
 swarm.aggro_rate      = 0.9      # tiros por segundo na nave (pela metade enquanto espera no bando)
-swarm.hold_time       = 2.5      # segundos parado no ponto de espera antes de cada passada
+swarm.hold_time       = 2.0      # segundos parado no ponto de espera antes de cada passada
 swarm.engage_distance = 26       # distância em que fica da nave quando a encara
 swarm.engage_time     = 7        # segundos encarando a nave antes de voltar ao bando
 swarm.engage_share    = 0.5      # fração do bando que pode encarar a nave ao mesmo tempo
 swarm.spacing         = 5        # distância que cada drone mantém dos vizinhos
 swarm.dive_stagger    = 0.35     # segundos entre a passada de um drone e a do seguinte (o bando ataca em fila)
-swarm.drift           = 28       # graus que o alvo do bando anda a cada passada
+swarm.drift           = 16       # graus que o alvo do bando anda a cada passada (pouco: as crateras se sobrepõem e cavam fundo)
 
 # --- Bombardeiro ------------------------------------------------------------
 # Lento e grande, orbita o planeta soltando bombas. É blindado: tiros na
@@ -55,7 +64,7 @@ bomber.accel           = 9
 bomber.points          = 1500
 bomber.ram_damage      = 35
 bomber.altitude        = 26      # altura da órbita
-bomber.bomb_interval   = 7       # segundos entre uma bomba e a seguinte
+bomber.bomb_interval   = 6       # segundos entre uma bomba e a seguinte
 bomber.bomb_warning    = 1.8     # segundos de aviso (alvo marcado no solo) antes de soltar
 bomber.bomb_speed      = 9       # velocidade com que a bomba sai
 bomber.bomb_accel      = 14      # ... e quanto ela acelera ao cair
@@ -85,8 +94,8 @@ kamikaze.points        = 150
 kamikaze.ram_damage    = 22      # dano da explosão, junto da nave (cai com a distância)
 kamikaze.aggro_range   = 85      # trava na nave a esta distância
 kamikaze.blast_radius  = 8       # alcance da explosão
-kamikaze.crater_radius = 7
-kamikaze.crater_depth  = 6
+kamikaze.crater_radius = 8
+kamikaze.crater_depth  = 6.5
 
 # --- Escavador --------------------------------------------------------------
 # Pousa e cava um túnel reto rumo ao núcleo. Lá dentro ele só pode ser
@@ -98,7 +107,7 @@ digger.speed          = 18
 digger.accel          = 16
 digger.points         = 700
 digger.ram_damage     = 20
-digger.drill_speed    = 1.6      # quanto desce por segundo
+digger.drill_speed    = 1.8      # quanto desce por segundo
 digger.drill_radius   = 4.8      # raio do túnel (a nave cabe com folga)
 digger.drill_interval = 0.3      # segundos entre duas mordidas da broca
 
@@ -113,7 +122,7 @@ siphon.points         = 600
 siphon.ram_damage     = 15
 siphon.altitude       = 15
 siphon.drain_radius   = 2.8      # tamanho de cada mordida do feixe
-siphon.drain_interval = 0.4
+siphon.drain_interval = 0.32
 siphon.wander         = 3        # velocidade com que o feixe anda pelo solo
 
 # --- Atirador ---------------------------------------------------------------

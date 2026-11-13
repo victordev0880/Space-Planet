@@ -12,6 +12,8 @@
 #define KAMIKAZE_LOSE     1.6f   // desiste da nave além de aggro_range vezes isto
 #define KAMIKAZE_DETONATE 0.6f   // explode quando chega a esta fração do raio da explosão
 #define KAMIKAZE_LEAD     1.1f   // mira um pouco à frente da nave
+#define KAMIKAZE_WEAVE    0.45f  // zigue-zague: desvio lateral, em frações da velocidade
+#define KAMIKAZE_WEAVE_RATE 4.5f // ... e o ritmo dele, em radianos por segundo
 
 Steer kamikaze_think(Enemies *e, int index, const EnemyContext *ctx)
 {
@@ -34,8 +36,15 @@ Steer kamikaze_think(Enemies *e, int index, const EnemyContext *ctx)
             enemies_damage(e, index, en->hp, DEATH_DETONATE);
             return ai_steer(en->vel, speed);
         }
+        // Vem em zigue-zague: mais difícil de acertar do que em linha reta.
         Vector3 aim = ai_lead(en->pos, ctx->ship->pos, ai_ship_velocity(ctx->ship), speed * KAMIKAZE_LEAD);
-        return ai_steer(Vector3Scale(Vector3Normalize(Vector3Subtract(aim, en->pos)), speed), speed);
+        Vector3 dir = Vector3Normalize(Vector3Subtract(aim, en->pos));
+        Vector3 across = Vector3CrossProduct(dir, Vector3Normalize(en->pos));
+        if (Vector3LengthSqr(across) > 1e-6f) {
+            float weave = sinf(en->age * KAMIKAZE_WEAVE_RATE + (float)index) * KAMIKAZE_WEAVE;
+            dir = Vector3Normalize(Vector3Add(dir, Vector3Scale(Vector3Normalize(across), weave)));
+        }
+        return ai_steer(Vector3Scale(dir, speed), speed);
     }
 
     // Mergulho: reto no alvo, sem desviar do chão (é para bater).

@@ -137,6 +137,7 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
 
     Vector3 aim;
     float distance = 0.0f;
+    bool blocked = false;
     TunnelMode tunnel = target.found ? tunnel_approach(w, &target, &aim, &distance) : TUNNEL_NONE;
     bool in_tunnel = (tunnel != TUNNEL_NONE);
     if (in_tunnel) {
@@ -152,6 +153,7 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
         if (planet_raycast(&w->planet, s->pos, to, Vector3Length(to), &hit)) {
             Vector3 around = Vector3Subtract(to, Vector3Scale(radial, Vector3DotProduct(to, radial)));
             aim = Vector3Add(s->pos, Vector3Add(Vector3Normalize(around), Vector3Scale(radial, 0.4f)));
+            blocked = true;
         }
     } else {
         // Sem alvo: voa nivelado, na direção em que já ia.
@@ -188,6 +190,12 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
             sample->held |= ACT_BIT(ACT_BACK);
         }
         if (tunnel == TUNNEL_FIRING && ahead > cosf(FIRE_ANGLE_DEG * DEG2RAD)) sample->held |= ACT_BIT(ACT_FIRE);
+        return;
+    }
+    // Com o terreno no caminho ou rente ao chão, acelera para contornar e subir
+    // (parada, a nave pairaria no fundo de uma cratera atirando na parede).
+    if (blocked || s->altitude < SAFE_ALTITUDE) {
+        sample->held |= ACT_BIT(ACT_FORWARD);
         return;
     }
     if (distance > CHASE_FAR) sample->held |= ACT_BIT(ACT_FORWARD);

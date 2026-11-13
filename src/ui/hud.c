@@ -166,6 +166,25 @@ static const char *format_points(int64_t value)
     return out;
 }
 
+// Habitantes, a partir de bilhões: "7,48 bilhões", "1 bilhão", "640 milhões".
+// (A vida do planeta é o volume que resta; os habitantes são só o nome dela.)
+static const char *format_population(float billions)
+{
+    static char out[32];
+    if (billions < 0.0f) billions = 0.0f;
+    if (billions >= 1.995f) {
+        snprintf(out, sizeof out, "%.2f bilhões", (double)billions);
+    } else if (billions >= 0.995f) {
+        snprintf(out, sizeof out, "%.2f bilhão", (double)billions);
+    } else {
+        snprintf(out, sizeof out, "%.0f milhões", (double)(billions * 1000.0f));
+    }
+    for (char *c = out; *c != '\0'; c++) {
+        if (*c == '.') *c = ',';   // vírgula decimal, como se escreve em português
+    }
+    return out;
+}
+
 static float seconds(const World *w, const Tuning *t)
 {
     return (float)w->tick / (float)t->sim_hz;
@@ -205,18 +224,18 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
 
     int x = center_x - BAR_WIDTH / 2;
     int y = BAR_TOP;
-    const char *mass = TextFormat("massa restante %.1f%%", (double)hp * 100.0);
+    const char *people = TextFormat("%s de habitantes", format_population(hp * t->planet_population));
     DrawRectangle(x - 10, y - 8, BAR_WIDTH + 20, LABEL_SIZE + BAR_HEIGHT + 34, FRAME_COLOR);
     DrawText("PLANETA", x, y, LABEL_SIZE, TEXT_COLOR);
-    DrawText(mass, x + BAR_WIDTH - MeasureText(mass, LABEL_SIZE), y, LABEL_SIZE, color);
+    DrawText(people, x + BAR_WIDTH - MeasureText(people, LABEL_SIZE), y, LABEL_SIZE, color);
 
     int bar_y = y + LABEL_SIZE + 6;
     draw_bar(x, bar_y, BAR_WIDTH, BAR_HEIGHT, hp, color);
 
-    // Marca do ponto de colapso.
+    // Marca do ponto de extinção.
     int marker_x = x + (int)((float)BAR_WIDTH * t->defeat_planet_hp);
     DrawRectangle(marker_x - 1, bar_y - 4, 2, BAR_HEIGHT + 8, MARKER_COLOR);
-    DrawText("colapso", marker_x - MeasureText("colapso", SMALL_SIZE) / 2, bar_y + BAR_HEIGHT + 5, SMALL_SIZE,
+    DrawText("extinção", marker_x - MeasureText("extinção", SMALL_SIZE) / 2, bar_y + BAR_HEIGHT + 5, SMALL_SIZE,
              DIM_COLOR);
 
     // Núcleo (só depois de atingido).
@@ -825,7 +844,7 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
     text_centered(title, sw / 2, sh / 2 - 190, BANNER_SIZE, with_alpha(won ? HEALTHY : DYING, band));
     if (!won) {
         const char *why = (planet_core_hp(&w->planet) < t->defeat_core_hp) ? "o núcleo foi destruído"
-                                                                            : "o planeta perdeu massa demais";
+                                                                            : "a vida no planeta não se sustenta mais";
         text_centered(why, sw / 2, sh / 2 - 126, LABEL_SIZE, with_alpha(TEXT_COLOR, band));
     }
 
@@ -846,8 +865,8 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
 
     int reached = won ? w->plan.count : w->director.wave + 1;
     Color body = with_alpha(TEXT_COLOR, panel);
-    text_centered(TextFormat("planeta salvo   %.1f%%      horda   %d de %d", (double)planet_hp(&w->planet) * 100.0,
-                             reached, w->plan.count),
+    text_centered(TextFormat("%s de habitantes salvos      horda   %d de %d",
+                             format_population(planet_hp(&w->planet) * t->planet_population), reached, w->plan.count),
                   sw / 2, y, LABEL_SIZE, body);
     y += 28;
     text_centered(TextFormat("abates   %d      bombas derrubadas   %d", sc->kills, sc->bombs_down), sw / 2, y,
@@ -908,7 +927,7 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
     } else if (w->collapsed) {
         const char *banner = "COLAPSO PLANETÁRIO";
         const char *reason = (planet_core_hp(&w->planet) < t->defeat_core_hp) ? "o núcleo foi destruído"
-                                                                              : "o planeta perdeu massa demais";
+                                                                              : "a vida no planeta não se sustenta mais";
         int band_y = screen_h / 2 - 70;
         DrawRectangle(0, band_y, screen_w, 140, (Color){ 20, 0, 0, 190 });
         text_centered(banner, screen_w / 2, band_y + 26, BANNER_SIZE - 4, DYING);

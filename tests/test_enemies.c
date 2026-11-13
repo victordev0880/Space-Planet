@@ -196,6 +196,33 @@ static void swarm_holds_then_engages_the_ship(void)
     }
 }
 
+// Com a nave atirando e mirando nele, um drone desvia para o lado da linha de
+// tiro; sem atirar, ou mirando longe, não.
+static void enemies_dodge_when_aimed_at(void)
+{
+    static World w;
+    Vector3 ship_at = { 0.0f, 0.0f, 60.0f };
+    make_world(&w, ship_at);
+    Tuning t = exact();
+    t.dodge_chance = 1.0f;
+    Vector3 drone = Vector3Add(ship_at, (Vector3){ 0.0f, 0.0f, 40.0f });   // bem na frente do nariz (+z)
+    world_spawn(&w, &t, ENEMY_SHIELDER, 1, drone);
+    Enemy *en = &w.enemies.items[find_type(&w, ENEMY_SHIELDER)];
+
+    run(&w, &t, idle(), 5);
+    CHECK(en->dodge_left <= 0.0f);   // sem tiros, nada
+
+    w.ship.muzzle = 0.05f;           // acabou de atirar
+    run(&w, &t, idle(), 1);
+    CHECK(en->dodge_left > 0.0f);
+    Vector3 line = Vector3Normalize(Vector3Subtract(en->pos, w.ship.pos));
+    CHECK(fabsf(Vector3DotProduct(Vector3Normalize(en->dodge), line)) < 0.2f);   // para o lado, não para trás
+
+    // Logo depois, não desvia de novo (tempo de recarga).
+    float wait = en->dodge_wait;
+    CHECK(wait > 0.0f);
+}
+
 // O piloto automático (ferramenta de teste) derruba um Escavador que já está
 // no túnel: para sobre a boca e atira reto para baixo, como um jogador faria.
 static void autopilot_shoots_down_the_tunnel(void)
@@ -495,6 +522,7 @@ void suite_enemies(void)
     RUN(digger_tunnels_toward_the_core);
     RUN(autopilot_shoots_down_the_tunnel);
     RUN(swarm_holds_then_engages_the_ship);
+    RUN(enemies_dodge_when_aimed_at);
     RUN(siphon_drains_the_ground);
     RUN(sniper_keeps_away_and_charges_before_firing);
     RUN(sniper_shot_can_be_dodged_after_the_lock);

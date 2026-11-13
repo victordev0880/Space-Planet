@@ -25,6 +25,7 @@
 #define HEAVY_FIRST      0.5f     // fração do intervalo até a primeira bomba (ou lançamento)
 #define SIPHON_SPIN      0.7f     // giro do Sifão em volta do próprio eixo, em radianos por segundo
 #define SNIPER_AIM_TURN  14.0f    // rapidez com que o Atirador vira o cano para a mira
+#define DODGE_KICK       0.5f     // fração da esquiva aplicada de uma vez, no começo dela
 
 // O ponto fraco do Bombardeiro: o motor, atrás (em eixos do modelo, vezes a escala).
 static const Vector3 BOMBER_ENGINE = { 0.0f, 0.08f, 1.05f };
@@ -382,6 +383,53 @@ static void orient_enemy(Enemy *en, const Tuning *t, Vector3 applied_accel, floa
     orient(en, applied_accel, t->enemy[en->type].accel, dt);
 }
 
+// Quem sabe esquivar, e quando: os leves, fora dos momentos em que estão
+// presos a uma tarefa (passada, carga do tiro).
+static bool can_dodge(const Enemy *en)
+{
+    switch ((EnemyType)en->type) {
+    case ENEMY_SWARM:    return en->state != SWARM_DIVE;
+    case ENEMY_KAMIKAZE: return en->state == KAMIKAZE_HUNT;
+    case ENEMY_SNIPER:   return en->arming <= 0.0f;
+    case ENEMY_SHIELDER: return true;
+    default:             return false;
+    }
+}
+
+// Esquiva: com a nave atirando e o nariz apontado para ele, o inimigo às
+// vezes dá um desvio lateral rápido (para o lado da linha de tiro). Devolve a
+// velocidade a somar ao voo neste passo.
+static Vector3 dodge(Enemy *en, const EnemyContext *ctx)
+{
+    const Tuning *t = ctx->t;
+    Vector3 none = { 0.0f, 0.0f, 0.0f };
+    en->dodge_wait -= ctx->dt;
+    if (en->dodge_left > 0.0f) {
+        en->dodge_left -= ctx->dt;
+        return en->dodge;
+    }
+    const Ship *s = ctx->ship;
+    if (s == NULL || s->muzzle <= 0.0f || en->dodge_wait > 0.0f || !can_dodge(en)) return none;
+    Vector3 to = Vector3Subtract(en->pos, s->pos);
+    float d = Vector3Length(to);
+    if (d < 1e-3f || d > t->dodge_range) return none;
+    if (Vector3DotProduct(ship_forward(s), Vector3Scale(to, 1.0f / d)) < cosf(t->dodge_cone * DEG2RAD)) return none;
+    en->dodge_wait = t->dodge_cooldown;
+    if (rng_float(ctx->rng) >= t->dodge_chance) return none;   // desta vez não percebeu
+
+    // Para o lado, perpendicular à linha de tiro e ao "para cima" do planeta.
+    Vector3 side = Vector3CrossProduct(to, Vector3Normalize(en->pos));
+    if (Vector3LengthSqr(side) < 1e-6f) side = ai_perpendicular(to);
+    side = Vector3Normalize(side);
+    if (rng_float(ctx->rng) < 0.5f) side = Vector3Negate(side);
+    en->dodge = Vector3Scale(side, t->dodge_speed);
+    en->dodge_left = t->dodge_time;
+    // Um empurrão na hora: sem ele, o limite de aceleração deixaria o
+    // desvio lento demais para servir de alguma coisa.
+    en->vel = Vector3Add(en->vel, Vector3Scale(en->dodge, DODGE_KICK));
+    return en->dodge;
+}
+
 static Steer think(Enemies *e, int index, const EnemyContext *ctx)
 {
     switch ((EnemyType)e->items[index].type) {
@@ -429,6 +477,11 @@ void enemies_tick(Enemies *e, const EnemyContext *ctx)
         if (steer.scripted) {
             orient_enemy(en, t, (Vector3){ 0.0f, 0.0f, 0.0f }, dt);
             continue;
+        }
+        Vector3 sidestep = dodge(en, ctx);
+        if (Vector3LengthSqr(sidestep) > 0.0f) {
+            steer.desired = Vector3Add(steer.desired, sidestep);
+            steer.max_speed += t->dodge_speed;
         }
         Vector3 desired = avoid_obstacles(en, ctx, steer.desired, stats->speed, steer.avoid_ground);
 

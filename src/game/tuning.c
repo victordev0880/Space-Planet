@@ -144,6 +144,7 @@ static const TuneField FIELDS[] = {
 
     F("defeat.planet_hp",       defeat_planet_hp,       0,      1),
     F("defeat.core_hp",         defeat_core_hp,         0,      1),
+    F("planet.population",      planet_population,      0.001,  1000),
 
     F("particles.gravity",      particles_gravity,      0,      200),
     F("particles.rock_count",   particles_rock_count,   0,      50),
@@ -269,6 +270,12 @@ static const TuneField ENEMY_FIELDS[] = {
     F("swarm.accel",            enemy[ENEMY_SWARM].accel,       0.1,  1000),
     F("swarm.points",           enemy[ENEMY_SWARM].points,      0,    1000000),
     F("swarm.ram_damage",       enemy[ENEMY_SWARM].ram_damage,  0,    10000),
+    F("enemies.dodge_speed",    dodge_speed,            0,      500),
+    F("enemies.dodge_time",     dodge_time,             0,      10),
+    F("enemies.dodge_cooldown", dodge_cooldown,         0,      60),
+    F("enemies.dodge_cone",     dodge_cone,             0,      90),
+    F("enemies.dodge_range",    dodge_range,            0,      2000),
+    F("enemies.dodge_chance",   dodge_chance,           0,      1),
     F("swarm.cruise_altitude",  swarm_cruise_altitude,  1,      500),
     F("swarm.attack_altitude",  swarm_attack_altitude,  0.5,    500),
     F("swarm.fire_rate",        swarm_fire_rate,        0,      60),
