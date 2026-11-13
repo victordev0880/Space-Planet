@@ -280,6 +280,7 @@ int main(int argc, char **argv)
     int crater_size = 1;   // tamanho da cratera de debug (começa na média)
     int frame = 0;
     int screenshots = 0;
+    int boss_downs = 0, boss_down_frames[AUTOPLAY_MAX_BOSS_DOWNS] = { 0 };
     double last_start = GetTime();
 
     // --- laço principal -----------------------------------------------------
@@ -447,6 +448,10 @@ int main(int argc, char **argv)
             frame_stats_add(&stats, frame, frame_ms, cpu_ms);
             frame_stats_add_sim(&stats, sim_ms);
         }
+        // Quadro em que cada boss caiu (o relatório lista os primeiros).
+        if (autoplay && world.score.bosses > boss_downs && boss_downs < AUTOPLAY_MAX_BOSS_DOWNS) {
+            boss_down_frames[boss_downs++] = frame;
+        }
 
         frame++;
         if (autoplay && frame >= script.frames) break;
@@ -493,6 +498,12 @@ int main(int argc, char **argv)
         report.waves_on = world.director.phase != DIRECTOR_OFF;
         report.game_state = (world.state == GAME_WON) ? "vitoria" : (world.state == GAME_LOST) ? "derrota" : "jogando";
         report.enemies_alive = enemies_alive(&world.enemies);
+        report.boss_active = boss_active(&world.boss);
+        report.boss_hp = world.boss.hp / fmaxf(world.boss.hp_max, 1e-3f);
+        report.boss_phase = world.boss.phase;
+        report.boss_downs = boss_downs;
+        for (int i = 0; i < boss_downs; i++) report.boss_down_frames[i] = boss_down_frames[i];
+        report.ability_owned = world.ability.owned;
         report.warnings = log_warnings;
         report.errors = log_errors;
         report.first_problem = log_first_problem;

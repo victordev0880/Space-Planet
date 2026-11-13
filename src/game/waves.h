@@ -4,6 +4,8 @@
 //   wave.1.pause   = 6                     calmaria, em segundos, antes da horda 1
 //   wave.1.group.1 = swarm 6 0 40 10       tipo, quantidade, atraso (s), azimute e
 //   wave.1.group.2 = swarm 6 8 -30 25      elevação (graus) da direção de chegada
+//   wave.5.group.1 = breaker 1 0 20 20     um boss entra como um grupo de um
+//                                          (a horda só acaba quando ele cai)
 // As hordas são numeradas de 1 em diante, sem pular; os grupos também.
 // Azimute e elevação seguem a convenção do Sol (sun.azimuth/sun.elevation).
 //
@@ -19,6 +21,7 @@
 
 #include "core/config.h"
 #include "core/vmath.h"
+#include "game/boss_types.h"
 #include "game/enemy_types.h"
 
 #define WAVES_MAX       16
@@ -55,6 +58,10 @@ int wave_enemy_count(const WaveDef *w, EnemyType type);
 
 const char *enemy_type_name(EnemyType type);   // nome no arquivo: "swarm", "bomber"
 int         enemy_type_from_name(const char *name);   // -1 se o nome não existe
+int         boss_type_from_name(const char *name);    // "breaker" -> BOSS_BREAKER; -1 se não existe
+
+// O boss da horda (BossType), ou -1 se ela não tem boss.
+int wave_boss(const WaveDef *w);
 
 // --- diretor ----------------------------------------------------------------
 

@@ -23,6 +23,10 @@
 #define BLAST_MIN        0.4f     // explosões da nave: na borda, o dano não cai abaixo desta fração
 #define BLAST_VISUAL     6.0f     // tamanho do efeito de uma explosão da nave, em raios por unidade
 #define REFLECT_DAMAGE   2.0f     // um tiro refletido vale este tanto de tiros da nave
+#define BOSS_PART_HULL   99       // parte do boss atingida: casco (0 a 3 = capacitores, 4 = núcleo)
+#define BEAM_TICKS       6        // o laser do boss fere a nave a cada tantos passos (não a cada um)
+#define ABILITY_BEAM_SHOW 0.45f   // segundos que o raio do núcleo fica na tela
+#define ABILITY_JOLT     8.0f     // tranco na câmera quando o raio sai
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -373,6 +377,32 @@ static bool reflect(World *w, const Tuning *t, Shot *s, Vector3 point)
     return true;
 }
 
+// Tiro da nave no boss: capacitor (só carregado leva dano), núcleo (blindado
+// fora do atordoamento) ou casco (só faísca).
+static void hit_boss(World *w, const Tuning *t, const Shot *s, int part, Vector3 point, Vector3 back)
+{
+    Boss *b = &w->boss;
+    uint32_t tick = (uint32_t)w->tick;
+    float damage = s->damage * (1.0f + t->armor_break_bonus * (float)w->evo.rank[EVO_ARMOR_BREAK]);
+    if (w->evo.rank[EVO_CRIT] > 0 && rng_float(&w->rng) < t->crit_chance * (float)w->evo.rank[EVO_CRIT]) {
+        damage *= t->crit_mult;
+        events_push(&w->events, tick, EV_CRIT, ENEMY_BOMBER, point, damage);
+    }
+    float applied = 0.0f;
+    bool open = false;
+    if (part < BOSS_CAPACITORS) {
+        applied = boss_damage_capacitor(b, t, part, damage, &w->events, tick);
+        open = applied > 0.0f;
+    } else if (part == BOSS_CAPACITORS) {
+        open = boss_core_factor(b, t) >= 0.99f;
+        applied = boss_damage_core(b, t, damage, &w->events, tick);
+    }
+    if (applied > 0.0f) b->flash = 0.06f;
+    particles_sparks(&w->particles, &w->rng, point, back, open ? 9 : 5, 14.0f, open ? WEAK_SPARK : ARMOR_SPARK);
+    events_push(&w->events, tick, open ? EV_WEAK_HIT : EV_ARMOR_HIT, ENEMY_BOMBER, point, applied);
+    w->hit_marker = HIT_MARKER_TIME;
+}
+
 // Tiro da nave: acha o primeiro obstáculo no trecho que ele percorreu.
 static void resolve_bolt(World *w, const Tuning *t, int index)
 {
@@ -426,10 +456,39 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
             ground = true;
         }
     }
+    // O boss: capacitores, núcleo e o casco (que só bloqueia).
+    int boss_part = -1;
+    Boss *bs = &w->boss;
+    if (boss_active(bs)) {
+        float scale = t->breaker_scale;
+        for (int k = 0; k < BOSS_CAPACITORS + 1 + BOSS_HULL_SPHERES; k++) {
+            Vector3 center;
+            float radius;
+            if (k < BOSS_CAPACITORS) {
+                center = BREAKER_CAPACITOR[k];
+                radius = BREAKER_CAPACITOR_RADIUS * scale + t->weapon_hit_margin;
+            } else if (k == BOSS_CAPACITORS) {
+                center = BREAKER_CORE;
+                radius = BREAKER_CORE_RADIUS * scale + t->weapon_hit_margin;
+            } else {
+                center = BREAKER_HULL[k - BOSS_CAPACITORS - 1].center;
+                radius = BREAKER_HULL[k - BOSS_CAPACITORS - 1].radius * scale;
+            }
+            float hit = segment_sphere(a, b, boss_point(bs, t, center), radius);
+            if (hit >= 0.0f && hit < first) {
+                first = hit;
+                boss_part = (k <= BOSS_CAPACITORS) ? k : BOSS_PART_HULL;
+                enemy = bomb = -1;
+                ground = false;
+            }
+        }
+    }
+
     float moon_hit = segment_sphere(a, b, w->moon.pos, w->moon.radius);
     if (moon_hit >= 0.0f && moon_hit < first) {
         first = moon_hit;
         enemy = bomb = -1;
+        boss_part = -1;
         ground = true;
     }
 
@@ -488,6 +547,8 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
             s->last_hit = (int16_t)enemy;
             return;
         }
+    } else if (boss_part >= 0) {
+        hit_boss(w, t, s, boss_part, point, back);
     } else if (bomb >= 0) {
         Shot *target = &p->items[bomb];
         target->hp -= s->damage;
@@ -540,6 +601,114 @@ static void resolve_enemy_shot(World *w, const Tuning *t, int index)
         if (bomb) blow_up_bomb(w, t, index, false);
         else      projectiles_remove(&w->shots, index);
     }
+}
+
+// Distância de `p` ao segmento de `a` até `b`.
+static float point_segment(Vector3 p, Vector3 a, Vector3 b)
+{
+    Vector3 ab = Vector3Subtract(b, a);
+    float len2 = Vector3LengthSqr(ab);
+    float u = (len2 > 1e-8f) ? Clamp(Vector3DotProduct(Vector3Subtract(p, a), ab) / len2, 0.0f, 1.0f) : 0.0f;
+    return Vector3Distance(p, Vector3Add(a, Vector3Scale(ab, u)));
+}
+
+void combat_boss(World *w, const Tuning *t)
+{
+    Boss *b = &w->boss;
+    Ship *s = &w->ship;
+    if (!boss_active(b) || !s->alive || !w->ship_active) return;
+
+    // Laser: queima a nave que estiver no feixe (de tempos em tempos, não a
+    // cada passo, para o aviso de dano não piscar sem parar).
+    if (b->state == BOSS_FIGHT && b->action == BREAKER_FIRE) {
+        Vector3 from = boss_point(b, t, BREAKER_MUZZLE);
+        if (point_segment(s->pos, from, b->beam_point) < t->breaker_beam_width + t->ship_radius) {
+            if (++w->beam_ticks >= BEAM_TICKS) {
+                w->beam_ticks = 0;
+                combat_damage_ship(w, t, t->breaker_beam_damage * (float)BEAM_TICKS / (float)t->sim_hz, s->pos);
+            }
+        } else {
+            w->beam_ticks = BEAM_TICKS - 1;   // entrou no feixe: o primeiro dano é na hora
+        }
+    }
+
+    // O casco é um muro: a nave é empurrada para fora e quica.
+    for (int k = 0; k < BOSS_HULL_SPHERES; k++) {
+        Vector3 center = boss_point(b, t, BREAKER_HULL[k].center);
+        float reach = BREAKER_HULL[k].radius * t->breaker_scale + t->ship_radius;
+        Vector3 offset = Vector3Subtract(s->pos, center);
+        float distance = Vector3Length(offset);
+        if (distance >= reach || distance < 1e-4f) continue;
+        Vector3 normal = Vector3Scale(offset, 1.0f / distance);
+        s->pos = Vector3Add(center, Vector3Scale(normal, reach + 0.05f));
+        Vector3 relative = Vector3Subtract(Vector3Add(s->vel, s->fall), b->vel);
+        float into = -Vector3DotProduct(relative, normal);
+        if (into > 0.0f) {
+            s->vel = Vector3Add(s->vel, Vector3Scale(normal, into * (1.0f + t->ship_bounce)));
+            if (into > RAM_MIN_SPEED) {
+                combat_damage_ship(w, t, t->breaker_ram_damage * Clamp(into / RAM_SPEED_FULL, 0.3f, 1.0f),
+                                   Vector3Add(center, Vector3Scale(normal, reach - t->ship_radius)));
+            }
+        }
+    }
+}
+
+void combat_ability(World *w, const InputState *in, const Tuning *t, float dt)
+{
+    Ability *a = &w->ability;
+    Ship *s = &w->ship;
+    a->cooldown = fmaxf(a->cooldown - dt, 0.0f);
+    a->beam_left = fmaxf(a->beam_left - dt, 0.0f);
+    bool held = (in->held & ACT_BIT(ACT_ALT_FIRE)) != 0u;
+    if (!a->owned || !s->alive || !held || a->cooldown > 0.0f) {
+        a->charge = 0.0f;
+        return;
+    }
+    a->charge += dt;
+    if (a->charge < t->ability_charge) return;
+
+    // O raio: reto à frente do nariz, até o alcance ou até o planeta.
+    a->charge = 0.0f;
+    a->cooldown = t->ability_cooldown;
+    Vector3 dir = ship_forward(s);
+    Vector3 from = Vector3Add(s->pos, Vector3Scale(dir, 2.0f));
+    float length = t->ability_range;
+    Vector3 hit;
+    if (planet_raycast(&w->planet, from, dir, length, &hit)) length = Vector3Distance(from, hit);
+    Vector3 to = Vector3Add(from, Vector3Scale(dir, length));
+    a->beam_from = from;
+    a->beam_to = to;
+    a->beam_left = ABILITY_BEAM_SHOW;
+    uint32_t tick = (uint32_t)w->tick;
+
+    Enemies *e = &w->enemies;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
+        const Enemy *en = &e->items[i];
+        if (point_segment(en->pos, from, to) > t->ability_width + t->enemy[en->type].radius) continue;
+        if (enemies_shielded_by(e, t, i) >= 0) continue;
+        enemies_damage(e, i, t->ability_damage, DEATH_PLAYER);
+        particles_sparks(&w->particles, &w->rng, en->pos, Vector3Negate(dir), 10, 18.0f, CRIT_SPARK);
+    }
+    Projectiles *p = &w->shots;
+    for (int i = 0; i < p->pool.capacity; i++) {
+        if (!pool_alive(&p->pool, i) || p->items[i].kind != SHOT_BOMB) continue;
+        if (point_segment(p->items[i].pos, from, to) < t->ability_width + t->bomber_bomb_radius) blow_up_bomb(w, t, i, true);
+    }
+    Boss *b = &w->boss;
+    if (boss_vulnerable(b)) {
+        for (int k = 0; k < BOSS_CAPACITORS; k++) {
+            Vector3 c = boss_point(b, t, BREAKER_CAPACITOR[k]);
+            float r = BREAKER_CAPACITOR_RADIUS * t->breaker_scale + t->ability_width;
+            if (point_segment(c, from, to) < r) boss_damage_capacitor(b, t, k, t->ability_damage, &w->events, tick);
+        }
+        Vector3 core = boss_point(b, t, BREAKER_CORE);
+        if (point_segment(core, from, to) < BREAKER_CORE_RADIUS * t->breaker_scale + t->ability_width) {
+            boss_damage_core(b, t, t->ability_damage, &w->events, tick);
+        }
+    }
+    world_jolt(w, ABILITY_JOLT);
+    events_push(&w->events, tick, EV_ABILITY, 0, from, length);
 }
 
 // Inimigos que trombam com a nave.

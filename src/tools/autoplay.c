@@ -107,6 +107,14 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         }
         e.cmd = AP_SHOT;
         strcpy(e.name, tokens[3]);
+    } else if (strcmp(cmd, "cam") == 0 && count >= 4 && strcmp(tokens[3], "boss") == 0) {
+        // Câmera que acompanha o boss: acima dele, atrás e de lado (distâncias).
+        bool ok = (count == 6 || count == 7)
+               && parse_float(tokens[4], &e.pos.x) && parse_float(tokens[5], &e.pos.y);
+        if (ok && count == 7) ok = parse_float(tokens[6], &e.pos.z);
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> cam boss <acima> <atras> [<lado>]");
+        e.cmd = AP_CAM;
+        e.count = 1;
     } else if (strcmp(cmd, "cam") == 0) {
         // Posição obrigatória; o alvo é opcional e, se omitido, é a origem.
         bool ok = (count == 6 || count == 9)
@@ -197,6 +205,19 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
     } else if (strcmp(cmd, "clear") == 0) {
         if (count != 3) return fail(ap, line_no, "esperado: at <quadro> clear");
         e.cmd = AP_CLEAR;
+    } else if (strcmp(cmd, "boss") == 0) {
+        bool ok = (count == 7) && parse_float(tokens[4], &e.pos.x) && parse_float(tokens[5], &e.pos.y)
+               && parse_float(tokens[6], &e.pos.z);
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> boss <tipo> <x> <y> <z>");
+        e.action = boss_type_from_name(tokens[3]);
+        if (e.action < 0) return fail(ap, line_no, "boss: tipo desconhecido: \"%s\"", tokens[3]);
+        if (Vector3Length(e.pos) < 1e-4f) return fail(ap, line_no, "boss: a direcao nao pode ser (0 0 0)");
+        e.cmd = AP_BOSS;
+    } else if (strcmp(cmd, "bosshp") == 0) {
+        if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f && e.speed <= 1.0f)) {
+            return fail(ap, line_no, "esperado: at <quadro> bosshp <fracao da vida, de 0 a 1>");
+        }
+        e.cmd = AP_BOSS_HP;
     } else if (strcmp(cmd, "xp") == 0) {
         if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f)) {
             return fail(ap, line_no, "esperado: at <quadro> xp <quantidade positiva>");
@@ -329,11 +350,14 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     uint32_t pulse = 0u;   // ações de "press": valem só neste quadro
     out->shot = NULL;
     out->has_cam = false;
+    out->cam_boss = false;
     out->has_view = false;
     out->has_ship = false;
     out->has_waves = false;
     out->clear = false;
     out->xp = 0.0f;
+    out->boss = -1;
+    out->boss_hp = -1.0f;
     out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
@@ -349,6 +373,7 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_SHOT:    out->shot = e->name; break;
         case AP_CAM:
             out->has_cam = true;
+            out->cam_boss = (e->count == 1);
             out->cam_pos = e->pos;
             out->cam_target = e->target;
             break;
@@ -389,6 +414,13 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_XP:
             out->xp += e->speed;
             break;
+        case AP_BOSS:
+            out->boss = e->action;
+            out->boss_dir = e->pos;
+            break;
+        case AP_BOSS_HP:
+            out->boss_hp = e->speed;
+            break;
         case AP_EVOLVE:
             if (out->evolve_count < EVO_COUNT) {
                 out->evolve_id[out->evolve_count] = e->action;
@@ -419,13 +451,30 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     // A troca de câmera e a nave vêm antes: um "cam" no mesmo quadro parte delas.
     if (frame->has_view) world_set_view(w, t, frame->view);
     if (frame->has_ship) world_place_ship(w, t, frame->ship_pos, frame->ship_target, frame->ship_speed);
-    if (frame->has_cam) world_place_camera(w, frame->cam_pos, frame->cam_target);
+    if (frame->has_cam && frame->cam_boss) {
+        // Segue o boss: na carga e no disparo, olha para o meio do corte.
+        const Boss *b = &w->boss;
+        if (boss_active(b)) {
+            Vector3 radial = Vector3Normalize(b->pos);
+            Vector3 ahead = Vector3Normalize(Vector3CrossProduct(b->axis, radial));
+            Vector3 pos = Vector3Add(b->pos, Vector3Scale(radial, frame->cam_pos.x));
+            pos = Vector3Add(pos, Vector3Scale(ahead, -frame->cam_pos.y));
+            pos = Vector3Add(pos, Vector3Scale(b->axis, frame->cam_pos.z));
+            bool cutting = b->state == BOSS_FIGHT && (b->action == BREAKER_CHARGE || b->action == BREAKER_FIRE);
+            Vector3 look = cutting ? Vector3Scale(boss_cut_direction(b, 0.5f), w->planet.params.radius) : b->pos;
+            world_place_camera(w, pos, look);
+        }
+    } else if (frame->has_cam) {
+        world_place_camera(w, frame->cam_pos, frame->cam_target);
+    }
     if (frame->has_waves) world_set_waves(w, frame->waves_on);
     if (frame->clear) world_clear_enemies(w);
     for (int i = 0; i < frame->evolve_count; i++) {
         world_set_evolution(w, t, (EvolutionId)frame->evolve_id[i], frame->evolve_rank[i]);
     }
     if (frame->xp > 0.0f) world_give_xp(w, t, frame->xp);
+    if (frame->boss >= 0) world_spawn_boss(w, t, (BossType)frame->boss, frame->boss_dir);
+    if (frame->boss_hp > 0.0f) boss_set_health(&w->boss, t, frame->boss_hp, &w->events, (uint32_t)w->tick);
     for (int i = 0; i < frame->spawn_count; i++) {
         world_spawn_variant(w, t, frame->spawns[i].type, frame->spawns[i].count, frame->spawns[i].center,
                             frame->spawns[i].variant);
@@ -575,6 +624,15 @@ bool autoplay_write_report(const char *path, const AutoplayReport *r)
         fprintf(f, "score = %lld\n", (long long)r->score);
         fprintf(f, "kills = %d\n", r->kills);
         fprintf(f, "enemies_alive = %d\n", r->enemies_alive);
+        fprintf(f, "\n");
+    }
+    if (r->boss_active || r->boss_downs > 0) {
+        if (r->boss_active) fprintf(f, "boss = fase %d, vida %.2f\n", r->boss_phase, (double)r->boss_hp);
+        fprintf(f, "bosses_down = %d\n", r->boss_downs);
+        for (int i = 0; i < r->boss_downs && i < AUTOPLAY_MAX_BOSS_DOWNS; i++) {
+            fprintf(f, "boss_down_frame = %d\n", r->boss_down_frames[i]);
+        }
+        fprintf(f, "ability = %s\n", r->ability_owned ? "sim" : "nao");
         fprintf(f, "\n");
     }
     fprintf(f, "warnings = %d\n", r->warnings);

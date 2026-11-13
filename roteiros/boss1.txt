@@ -1,0 +1,92 @@
+# Roteiro do marco 8 (Rompe-Mundos): a chegada do boss, a primeira carga com o
+# traço do corte no chão, o laser cortando uma fatia do planeta (ninguém
+# destrói os capacitores) e depois o piloto automático lutando: capacitores,
+# núcleo exposto, as fases 2 e 3 (puladas com "bosshp"), a morte, o núcleo
+# ganho e o raio dele usado contra uma horda.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/boss1.txt"
+#
+# O boss chega da direção (0.397 0.342 0.852). A nave espera longe, fora do
+# alcance das torres dele. Cada "cam" congela a partida enquanto dura (um ou
+# dois quadros), então os tempos de depois atrasam um pouquinho.
+
+frames 6900
+seed 8
+
+at 0    waves off
+at 0    ship -39.1 47.8 221.5  41.1 35.4 88.3
+at 0    boss breaker 0.397 0.342 0.852
+
+# --- chegada -------------------------------------------------------------------
+at 60   shot boss1_01_chegando
+at 200  shot boss1_02_freando
+at 305  cam boss 8 28 -26
+at 306  shot boss1_03_de_perto
+at 307  cam boss 14 -34 22
+at 308  shot boss1_04_outro_lado
+at 309  view ship
+
+# --- primeira carga: o traço no chão e os capacitores --------------------------
+at 790  shot boss1_05_carga
+at 900  cam boss 110 0 130
+at 901  shot boss1_06_traco
+at 902  view ship
+
+# --- o laser corta (ninguém destruiu os capacitores) ---------------------------
+at 1345 shot boss1_07_disparo
+at 1400 cam boss 110 0 130
+at 1401 shot boss1_08_cortando
+at 1402 view ship
+at 1490 cam boss 110 0 130
+at 1491 shot boss1_09_vala
+at 1492 view ship
+
+# --- fase 1: o piloto automático destrói os capacitores e ataca o núcleo --------
+at 1530 autopilot on
+at 1900 shot boss1_10_luta
+at 2200 shot boss1_11_luta
+at 2500 shot boss1_12_luta
+at 2800 shot boss1_13_luta
+at 3100 shot boss1_14_luta
+
+# --- fase 2: drones ---------------------------------------------------------------
+at 3200 bosshp 0.5
+at 3240 shot boss1_15_fase2
+at 3500 shot boss1_16_fase2
+at 3800 shot boss1_17_fase2
+
+# --- fase 3: núcleo meio aberto, cargas curtas ------------------------------------
+at 4000 bosshp 0.2
+at 4040 shot boss1_18_fase3
+at 4300 shot boss1_19_fase3
+at 4600 shot boss1_20_fase3
+
+# --- a morte e a recompensa ---------------------------------------------------------
+at 4700 bosshp 0.02
+at 4760 shot boss1_21_morte
+at 4820 shot boss1_22_morte
+at 4880 shot boss1_23_morte
+at 4940 shot boss1_24_morte
+at 5000 shot boss1_25_morte
+at 5100 shot boss1_26_recompensa
+at 5250 shot boss1_27_recompensa
+
+# --- o raio do núcleo contra uma horda --------------------------------------------
+# A nave, parada no lado do dia, de frente para um bando e um Bombardeiro em
+# fila; segura o botão direito (0,5 s de carga) e o raio atravessa a fila.
+at 5150 autopilot off
+at 5300 clear
+at 5300 ship 45.06 35.05 82.11  45.06 35.05 -20
+at 5300 spawn swarm 6  45.0 36.0 48.0
+at 5300 spawn bomber 1  45.0 35.0 18.0
+at 5301 hold alt_fire
+at 5333 shot boss1_28_raio
+at 5335 cam 70.0 40.0 50.0  45.06 35.05 45.0
+at 5336 shot boss1_29_raio_de_lado
+at 5337 view ship
+at 5345 release alt_fire
+at 5350 autopilot on
+at 5600 shot boss1_30_depois
+at 6000 shot boss1_31_depois
+at 6400 shot boss1_32_depois
+at 6899 shot boss1_33_fim

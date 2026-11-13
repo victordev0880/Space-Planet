@@ -37,6 +37,12 @@ void combat_fire(World *w, const InputState *in, const Tuning *t, float dt);
 
 // Dash explosivo (evolução): explode em volta da nave. Chamado quando o dash começa.
 void combat_dash_blast(World *w, const Tuning *t);
+
+// O raio do núcleo Rompe-Mundos (botão direito, segurando), se a nave o tem.
+void combat_ability(World *w, const InputState *in, const Tuning *t, float dt);
+
+// O boss contra a nave: o laser que a queima e o casco em que ela tromba.
+void combat_boss(World *w, const Tuning *t);
 void combat_resolve(World *w, const Tuning *t);
 void combat_sweep(World *w, const Tuning *t);
 

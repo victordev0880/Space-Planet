@@ -25,6 +25,7 @@
 #define TUNING_FILE     "tuning.txt"
 #define ENEMIES_FILE    "enemies.txt"
 #define EVOLUTIONS_FILE "evolutions.txt"
+#define BOSSES_FILE     "bosses.txt"
 
 typedef struct {
     // janela
@@ -389,6 +390,27 @@ typedef struct {
     float reflect_chance;
     float fighters_damage, fighters_rate, fighters_speed, fighters_range;
     float hangar_rate;
+
+    // --- data/bosses.txt ----------------------------------------------------
+    // Rompe-Mundos. Os vetores [3] valem por fase (1, 2 e 3).
+    float breaker_hp, breaker_scale, breaker_altitude, breaker_speed, breaker_points, breaker_xp;
+    float breaker_enter_time, breaker_spawn_distance;
+    float breaker_rest[3];              // segundos entre o fim de um corte e a próxima carga
+    float breaker_charge[3];            // segundos de carga (com o traço do corte no chão)
+    float breaker_cut_length[3];        // comprimento do corte, em graus de arco
+    float breaker_turret_interval[3];
+    float breaker_fire_time, breaker_cut_radius, breaker_cut_sink, breaker_cut_spacing;
+    float breaker_cut_turn;   // graus que a órbita gira, no máximo, antes de cada carga
+    float breaker_beam_damage, breaker_beam_width;
+    float breaker_capacitor_hp, breaker_stagger_time, breaker_core_armor, breaker_core_open;
+    float breaker_phase_2, breaker_phase_3;
+    int   breaker_turret_burst;
+    float breaker_turret_damage, breaker_turret_range, breaker_turret_speed;
+    float breaker_launch_interval;
+    int   breaker_launch_count;
+    float breaker_ram_damage;
+    // Núcleo Rompe-Mundos (a recompensa): o raio no botão direito.
+    float ability_damage, ability_range, ability_width, ability_cooldown, ability_charge;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4
@@ -402,6 +424,9 @@ bool tuning_from_config(Tuning *out, const Config *tuning_cfg, const Config *ene
 
 // Preenche em `out` só os campos de data/evolutions.txt (mesmas garantias).
 bool tuning_evolutions_from_config(Tuning *out, const Config *evolutions_cfg, char *err, size_t err_len);
+
+// ... e só os de data/bosses.txt.
+bool tuning_bosses_from_config(Tuning *out, const Config *bosses_cfg, char *err, size_t err_len);
 
 // Lê data_dir/tuning.txt, enemies.txt e evolutions.txt e preenche `out`.
 // Mesmas garantias de tuning_from_config.

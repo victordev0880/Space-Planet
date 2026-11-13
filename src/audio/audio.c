@@ -8,7 +8,7 @@
 #include "core/vmath.h"
 
 #define SAMPLE_RATE  44100
-#define MAX_SAMPLES  (SAMPLE_RATE * 26 / 10)   // o som mais longo tem 2,6 segundos
+#define MAX_SAMPLES  (SAMPLE_RATE * 36 / 10)   // o som mais longo tem 3,6 segundos
 #define PER_FRAME    2       // no máximo este tanto de cópias do mesmo som por quadro
 #define PITCH_SPREAD 0.06f   // variação aleatória de tom, para repetições não soarem iguais
 
@@ -450,6 +450,149 @@ static void synth_ally_shot(float *out, int n)
     }
 }
 
+// --- Boss -------------------------------------------------------------------
+
+static void synth_boss_enter(float *out, int n)
+{
+    // Chegada do boss: um ronco grave que sobe, com uma sirene de dois tons
+    // por cima. Algo enorme está vindo.
+    LowPass lp = { 0 }, siren_lp = { 0 };
+    float phase = 0.0f, siren = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(38.0f, 62.0f, t, length) / SAMPLE_RATE;
+        float drone = saw(phase) + 0.7f * saw(phase * 1.498f) + 0.5f * square(phase * 0.5f);
+        float rumble = lowpass(&lp, drone + 0.4f * noise(), 420.0f);
+        siren += ((fmodf(t, 0.9f) < 0.45f) ? 466.2f : 349.2f) / SAMPLE_RATE;
+        float alarm = lowpass(&siren_lp, square(siren), 1800.0f) * ((t > 0.4f) ? 0.22f : 0.0f);
+        float shape = fminf(t / 0.6f, 1.0f) * fminf((length - t) / 0.8f, 1.0f);
+        out[i] = (rumble * 0.9f + alarm) * shape;
+    }
+}
+
+static void synth_boss_charge(float *out, int n)
+{
+    // O canhão começa a carregar: zumbido elétrico subindo, com estalos.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float u = t / length;
+        phase += sweep(55.0f, 330.0f, t, length) / SAMPLE_RATE;
+        float hum = saw(phase) + 0.5f * saw(phase * 2.003f);
+        float crackle = (noise() > 0.995f - 0.01f * u) ? noise() : 0.0f;
+        float body = lowpass(&lp, hum, 900.0f + 2400.0f * u);
+        float shape = fminf(t / 0.3f, 1.0f) * fminf((length - t) / 0.5f, 1.0f);
+        out[i] = (0.8f * body + 0.6f * crackle) * shape * (0.4f + 0.6f * u);
+    }
+}
+
+static void synth_boss_fire(float *out, int n)
+{
+    // O laser cortando: rugido grave e chiado de rocha derretendo, o tempo todo.
+    LowPass lp = { 0 }, hiss_lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float wobble = 1.0f + 0.04f * sinf(2.0f * PI * 9.0f * t);
+        phase += 68.0f * wobble / SAMPLE_RATE;
+        float roar = lowpass(&lp, saw(phase) + 0.8f * saw(phase * 1.01f) + 0.6f * noise(), 700.0f);
+        float hiss = noise() - lowpass(&hiss_lp, noise(), 2500.0f);
+        float blast = (t < 0.05f) ? noise() * (1.0f - t / 0.05f) : 0.0f;
+        float shape = fminf(t / 0.02f, 1.0f) * fminf((length - t) / 0.6f, 1.0f);
+        out[i] = (1.2f * roar + 0.35f * hiss + blast) * shape;
+    }
+}
+
+static void synth_boss_capacitor(float *out, int n)
+{
+    // Capacitor estourado: estalo elétrico e uma descarga descendo.
+    explosion(out, n, 5200.0f, 7.0f, 140.0f, 0.03f);
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(2400.0f, 200.0f, t, 0.35f) / SAMPLE_RATE;
+        out[i] += 0.5f * square(phase) * envelope(t, 0.001f, 7.0f);
+    }
+}
+
+static void synth_boss_stagger(float *out, int n)
+{
+    // Atordoado: as máquinas desligando, com engasgos.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(420.0f, 32.0f, t, length * 0.8f) / SAMPLE_RATE;
+        float sputter = (fmodf(t, 0.11f) < 0.07f || t < 0.3f) ? 1.0f : 0.25f;
+        float v = lowpass(&lp, saw(phase) + 0.5f * square(phase * 0.5f), 1400.0f);
+        out[i] = v * sputter * envelope(t, 0.005f, 1.6f);
+    }
+}
+
+static void synth_boss_phase(float *out, int n)
+{
+    // Mudança de fase: um urro metálico, mais grave que a trompa da horda.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float bend = sweep(70.0f, 52.0f, t, length);
+        phase += bend / SAMPLE_RATE;
+        float v = saw(phase) + 0.8f * saw(phase * 1.26f) + 0.6f * saw(phase * 1.5f) + 0.3f * noise();
+        float growl = 0.75f + 0.25f * sinf(2.0f * PI * 13.0f * t);
+        float shape = fminf(t / 0.1f, 1.0f) * fminf((length - t) / 0.5f, 1.0f);
+        out[i] = lowpass(&lp, v, 1100.0f) * growl * shape;
+    }
+}
+
+static void synth_boss_down(float *out, int n)
+{
+    // O boss explodindo: a maior explosão do jogo, com um grave que demora a sumir.
+    explosion(out, n, 2600.0f, 1.1f, 44.0f, 0.03f);
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(52.0f, 26.0f, t, 2.5f) / SAMPLE_RATE;
+        out[i] += 0.9f * sine(phase) * envelope(t, 0.01f, 1.2f);
+    }
+}
+
+static void synth_reward(float *out, int n)
+{
+    // Núcleo adquirido: um acorde que sobe, brilhando, com um arpejo em cima.
+    static const float NOTES[6] = { 392.0f, 523.3f, 659.3f, 784.0f, 1046.5f, 1568.0f };
+    arpeggio(out, n, NOTES, 6, 0.09f, 1.6f);
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float pad = saw(196.0f * t) + 0.7f * saw(293.7f * t) + 0.5f * saw(392.0f * t);
+        float shape = fminf(t / 0.4f, 1.0f) * fminf((length - t) / 0.8f, 1.0f);
+        out[i] += 0.35f * lowpass(&lp, pad, sweep(400.0f, 3000.0f, t, length * 0.7f)) * shape;
+    }
+}
+
+static void synth_ability(float *out, int n)
+{
+    // O raio do núcleo: estalo e um rasgo grave que desce, bem encorpado.
+    LowPass lp = { 0 }, tear_lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(900.0f, 60.0f, t, 0.5f) / SAMPLE_RATE;
+        float crack = (t < 0.02f) ? noise() : 0.0f;
+        float body = lowpass(&lp, saw(phase) + 0.6f * saw(phase * 1.5f), 2000.0f);
+        float tear = lowpass(&tear_lp, noise(), sweep(7000.0f, 500.0f, t, 0.6f));
+        out[i] = (body + 1.4f * crack + 0.7f * tear) * envelope(t, 0.001f, 3.5f);
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -495,6 +638,15 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_BLAST]        = { synth_blast,        0.70f, 0.80f, 3 },
     [SND_CRIT]         = { synth_crit,         0.12f, 0.40f, 3 },
     [SND_ALLY_SHOT]    = { synth_ally_shot,    0.10f, 0.12f, 6 },
+    [SND_BOSS_ENTER]     = { synth_boss_enter,     3.60f, 0.90f, 1 },
+    [SND_BOSS_CHARGE]    = { synth_boss_charge,    2.80f, 0.70f, 1 },
+    [SND_BOSS_FIRE]      = { synth_boss_fire,      3.00f, 0.90f, 1 },   // dura o mesmo que breaker.fire_time
+    [SND_BOSS_CAPACITOR] = { synth_boss_capacitor, 0.70f, 0.80f, 3 },
+    [SND_BOSS_STAGGER]   = { synth_boss_stagger,   1.80f, 0.80f, 1 },
+    [SND_BOSS_PHASE]     = { synth_boss_phase,     1.80f, 0.85f, 1 },
+    [SND_BOSS_DOWN]      = { synth_boss_down,      3.60f, 1.00f, 1 },
+    [SND_REWARD]         = { synth_reward,         2.60f, 0.65f, 1 },
+    [SND_ABILITY]        = { synth_ability,        1.00f, 0.85f, 2 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -632,6 +784,17 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_DASH:        s = SND_DASH; positional = false; break;
         case EV_BUMP:        s = SND_BUMP; positional = false; volume = Clamp(e->value / 20.0f, 0.2f, 1.0f); break;
         case EV_SPAWN:       s = SND_WARP; floor = 0.35f; break;
+        // O boss é enorme e importante: tem de ser ouvido de qualquer lugar.
+        case EV_BOSS_ENTER:     s = SND_BOSS_ENTER; positional = false; break;
+        case EV_BOSS_CHARGE:    s = SND_BOSS_CHARGE; floor = 0.6f; break;
+        case EV_BOSS_FIRE:      s = SND_BOSS_FIRE; floor = 0.7f; break;
+        case EV_BOSS_CAPACITOR: s = SND_BOSS_CAPACITOR; floor = 0.5f; break;
+        case EV_BOSS_STAGGER:   s = SND_BOSS_STAGGER; floor = 0.6f; break;
+        case EV_BOSS_PHASE:     s = SND_BOSS_PHASE; floor = 0.6f; break;
+        case EV_BOSS_BLAST:     s = SND_BLAST; floor = 0.4f; break;
+        case EV_BOSS_DOWN:      s = SND_BOSS_DOWN; positional = false; break;
+        case EV_REWARD:         s = SND_REWARD; positional = false; break;
+        case EV_ABILITY:        s = SND_ABILITY; positional = false; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

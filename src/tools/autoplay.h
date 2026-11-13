@@ -45,6 +45,12 @@
 //   at 120 xp 30                  dá 30 de XP à nave (abre as cartas de nível)
 //   at 130 evolve escort 2        põe uma evolução direto no nível 2 (nomes de
 //                                 data/evolutions.txt: escort, spread, crit...)
+//   at 140 boss breaker 0 1 0     põe um boss em cena, chegando da direção (x y z)
+//   at 145 bosshp 0.2             põe a vida do boss em 20% (com a troca de fase)
+//   at 150 cam boss 80 60 10      câmera livre seguindo o boss: 80 acima dele, 60
+//                                 atrás (no sentido da órbita) e 10 de lado. Olha
+//                                 para o boss, ou, na carga e no disparo, para o
+//                                 meio do corte
 //
 // Em um mesmo quadro a ordem é: view, ship, cam, waves, clear, spawn, crateras. Um
 // "cam" depois de um "ship" fotografa a nave de fora (na câmera livre a
@@ -69,10 +75,11 @@
 #define AUTOPLAY_MAX_CRATERS 16     // comandos "crater" em um mesmo quadro
 #define AUTOPLAY_MAX_BARRAGE 500    // crateras de um único "barrage"
 #define AUTOPLAY_MAX_SPAWNS  8      // comandos "spawn" em um mesmo quadro
+#define AUTOPLAY_MAX_BOSS_DOWNS 4   // quadros de boss derrotado listados no relatório
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP
 } AutoplayCmd;
 
 typedef struct {
@@ -106,6 +113,7 @@ typedef struct {
     InputSample input;
     const char *shot;         // nome do screenshot pedido, ou NULL
     bool        has_cam;      // true = reposicionar a câmera livre
+    bool        cam_boss;     // ... seguindo o boss (cam_pos = acima, atrás, de lado)
     Vector3     cam_pos;
     Vector3     cam_target;
     bool        has_view;     // true = trocar de câmera
@@ -118,6 +126,9 @@ typedef struct {
     bool        waves_on;
     bool        clear;        // tirar de cena todos os inimigos e tiros
     float       xp;           // XP a dar à nave neste quadro
+    int         boss;         // boss a pôr em cena neste quadro (-1 = nenhum)
+    Vector3     boss_dir;
+    float       boss_hp;      // vida do boss a impor neste quadro, em fração (-1 = nada)
     int         evolve_count;
     int         evolve_id[EVO_COUNT];
     int         evolve_rank[EVO_COUNT];
@@ -242,7 +253,15 @@ typedef struct {
     const char *game_state;        // "jogando", "vitoria" ou "derrota"
     int         enemies_alive;
 
-    int         warnings;         // avisos e erros emitidos durante a execução
+    // Bosses: o que está em cena ao fim e o quadro em que cada um caiu.
+    bool        boss_active;
+    float       boss_hp;           // fração da vida, de 0 a 1
+    int         boss_phase;
+    int         boss_downs;
+    int         boss_down_frames[AUTOPLAY_MAX_BOSS_DOWNS];
+    bool        ability_owned;     // a nave tem o núcleo do Rompe-Mundos
+
+    int         warnings;        // avisos e erros emitidos durante a execução
     int         errors;
     const char *first_problem;    // texto do primeiro aviso/erro, ou NULL
 } AutoplayReport;

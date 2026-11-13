@@ -29,6 +29,26 @@ int enemy_type_from_name(const char *name)
     return -1;
 }
 
+static const char *const BOSS_NAMES[BOSS_TYPE_COUNT] = {
+    [BOSS_BREAKER] = "breaker",
+};
+
+int boss_type_from_name(const char *name)
+{
+    for (int i = 0; i < BOSS_TYPE_COUNT; i++) {
+        if (strcmp(BOSS_NAMES[i], name) == 0) return i;
+    }
+    return -1;
+}
+
+int wave_boss(const WaveDef *w)
+{
+    for (int g = 0; g < w->group_count; g++) {
+        if (w->groups[g].type >= WAVE_BOSS_BASE) return w->groups[g].type - WAVE_BOSS_BASE;
+    }
+    return -1;
+}
+
 // Lê "wave.N.pause" ou "wave.N.group.M". Devolve 1 (pausa), 2 (grupo) ou 0.
 static int parse_key(const char *key, int *wave, int *group)
 {
@@ -86,8 +106,16 @@ bool waves_parse(WavePlan *plan, const Config *c, char *err, size_t err_len)
         }
         int type = enemy_type_from_name(name);
         if (type < 0) {
-            snprintf(err, err_len, "%s: tipo de inimigo desconhecido: \"%s\"", e->key, name);
-            return false;
+            int boss = boss_type_from_name(name);
+            if (boss < 0) {
+                snprintf(err, err_len, "%s: tipo de inimigo desconhecido: \"%s\"", e->key, name);
+                return false;
+            }
+            if (count != 1) {
+                snprintf(err, err_len, "%s: um boss entra sozinho (quantidade 1)", e->key);
+                return false;
+            }
+            type = WAVE_BOSS_BASE + boss;
         }
         if (count < 1 || count > WAVE_GROUP_MAX_COUNT || !(delay >= 0.0f && delay <= 600.0f)
             || !(elevation >= -90.0f && elevation <= 90.0f) || !isfinite(azimuth)) {

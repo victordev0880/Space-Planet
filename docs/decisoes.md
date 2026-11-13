@@ -812,6 +812,97 @@ por nível de evolução; a tela de fim lista as evoluções escolhidas.
   cratera atirando na parede (apareceu quando a esquiva mudou a sequência de
   sorteios de um teste).
 
+## Marco 8: Rompe-Mundos, o primeiro boss (2026-11-13)
+
+### Um boss é uma entidade à parte, não um inimigo grande
+O boss tem estrutura própria (`game/boss.c`, `Boss` dentro do `World`), não
+uma entrada no pool de inimigos: tem várias peças com regras diferentes
+(capacitores, núcleo, casco), uma máquina de ações e fases, e só existe um por
+vez. Como os inimigos, não mexe no planeta nem cria entidades: deixa pedidos
+(mordidas do laser, drones a soltar, explosões da morte) que o mundo executa.
+Entra numa horda como um grupo de `data/waves.txt` (`breaker 1 ...`); a horda
+não acaba enquanto ele estiver em cena. Números em `data/bosses.txt`.
+
+### O ciclo do Rompe-Mundos
+- **Descanso:** orbita e atira na nave com duas torretas (rajadas).
+- **Carga:** desacelera; o traço do corte aparece no chão (um arco à frente
+  dele, com a largura da vala que vai abrir) e quatro capacitores acendem nos
+  flancos. Só nessa hora eles levam dano. Destruídos os quatro, o tiro falha.
+- **Disparo:** o laser varre o traço em 3 s e abre uma vala (mordidas esféricas
+  a cada 3 de arco). A nave que entra no feixe leva dano.
+- **Atordoado:** com o tiro cancelado, as pétalas do dorso abrem e o núcleo leva
+  o dano inteiro por 7 s. Fora disso, o núcleo fechado só deixa passar 8%.
+- **Fases** pela vida (60% e 25%): cargas mais curtas, cortes mais longos (60°,
+  75°, 90°), drones a partir da fase 2 e, na fase 3, o núcleo meio aberto (40%).
+- **Morte:** 3,6 s de explosões pelo casco, que escurece e pega fogo; depois a
+  explosão grande, pontos, XP e o núcleo como recompensa.
+
+### O corte mede o chão uma vez, no começo da carga
+A primeira versão media o solo a cada mordida. Como as mordidas se sobrepõem,
+cada uma encontrava o chão já cavado pela anterior e descia mais: o corte virava
+uma escada até o centro do planeta (o núcleo caiu para 64% numa luta). Agora o
+relevo ao longo do traço é medido 65 vezes no começo da carga
+(`Boss.cut_ground`), e toda mordida fica na mesma profundidade em relação a ele.
+O desenho do traço usa a mesma medida (e não faz mais raycasts por quadro). Há
+um teste para isso.
+
+### A órbita gira antes de cada carga
+Com a órbita num eixo fixo, todos os cortes caíam no mesmo grande círculo e a
+vala só aprofundava. Antes de cada carga o eixo gira até 50° (sorteado,
+`breaker.cut_turn`): cada corte é uma cicatriz nova, em outro lugar do planeta.
+
+### Tamanho do corte
+A vala tem uns 13 de largura e 20 de fundo (mordida de raio 11, centro 9 abaixo
+do solo): passa da crosta (16 de espessura) e deixa o manto em brasa no fundo.
+Cada corte tira de 2,5% a 4% do planeta. Menos que isso parecia um arranhão;
+mais fundo ameaçaria o núcleo, que é a ameaça do Escavador.
+
+### A recompensa: o núcleo Rompe-Mundos
+Segurar o botão direito por 0,5 s solta um raio reto que atravessa tudo na
+linha (inimigos, bombas, peças de boss) até 240 de distância, com recarga de
+16 s. O HUD mostra o raio acima do painel da nave. O botão direito estava livre
+(o lock-on da arma secundária ainda não existe); quando ela vier, as duas
+precisam dividir o botão ou o raio muda de tecla.
+
+### HUD e som
+- Barra do boss no alto, logo abaixo da do planeta: nome, fase, marcas das
+  fases, quadradinhos dos capacitores na carga; fica rosa com o núcleo aberto.
+  Os avisos descem para baixo dela. (Embaixo, colidia com o painel da nave.)
+- Na tela: losangos nos capacitores carregados, círculo "NÚCLEO" no núcleo
+  aberto e seta na borda quando o boss está fora de vista.
+- Avisos "CORTE EM n s: DESTRUA OS CAPACITORES (k/4)", "O LASER ESTÁ CORTANDO O
+  PLANETA!" e "NÚCLEO EXPOSTO". Piscam clareando, nunca escurecendo: escuros,
+  sumiam no espaço.
+- Sons sintetizados para chegada (ronco e sirene), carga, laser, capacitor,
+  atordoamento, fase, morte, recompensa e raio.
+
+### Piloto automático e roteiros
+- O casco tapa as peças de quase todos os lados. O piloto automático vai até um
+  ponto de tiro de frente para a peça (acima do boss para o núcleo, ao lado
+  para cada capacitor), contornando o boss se estiver do lado errado, e só
+  atira de lá. Antes disso ele pairava embaixo do boss acertando o casco.
+- Comandos novos: `boss breaker x y z`, `bosshp f` (pula para uma fase) e
+  `cam boss acima atrás [lado]` (câmera que segue o boss; na carga e no disparo
+  olha para o meio do corte). O relatório traz o boss em cena, os quadros em
+  que cada boss caiu e se a nave tem o raio.
+- `boss1.txt`: chegada, carga, corte, luta, fases 2 e 3, morte, recompensa e o
+  raio atravessando um bando.
+
+### Medições (Vega 8)
+- `boss1.txt` (6900 quadros): mediana 3,75 ms, p99 8,75 ms; os cortes e os
+  drones tiram 6,7% do planeta, núcleo intacto. Mesmo `state_hash` sem shaders.
+- `onda1.txt` (partida inteira, boss na horda 5): vitória, planeta em 88%,
+  núcleo intacto, boss derrotado aos 3,5 min; mediana 3,5 ms, p99 7,75 ms. Os
+  quadros lentos mudam de lugar entre execuções (ruído da máquina).
+
+### Limitações conhecidas do marco 8
+- A vala, vista de lado, mostra mais a parede escura da crosta do que o manto;
+  a lava aparece bem de cima. Um brilho de "rocha quente" nas bordas recém
+  cortadas ficaria melhor (polimento, marco 10).
+- A horda 10 ainda não é um boss (o próximo, Colmeia Lunar, é do marco 11).
+- O piloto automático leva bem mais tempo que um jogador para matar o boss
+  (perde capacitores no caminho); o roteiro usa `bosshp` para mostrar o fim.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

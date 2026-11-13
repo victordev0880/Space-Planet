@@ -38,6 +38,10 @@ static const Color DYING        = { 235, 80, 60, 255 };
 static const Color CORE_COLOR   = { 255, 190, 90, 255 };
 static const Color MARKER_COLOR = { 255, 255, 255, 230 };
 static const Color PRIZE_COLOR         = { 255, 214, 110, 255 };
+static const Color BOSS_COLOR          = { 255, 84, 60, 255 };
+static const Color ABILITY_COLOR       = { 120, 220, 255, 255 };
+static const Color CAPACITOR_COLOR     = { 255, 210, 80, 255 };
+static const Color CORE_OPEN_COLOR     = { 255, 110, 230, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -375,6 +379,21 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
     ship_bar(x, y + SHIP_ROW * 2, "ENERGIA", s->energy, t->ship_energy_max, s->boost_spent ? DIM_COLOR : ENERGY_COLOR);
     draw_level(w, t, x, y + SHIP_ROW * 3, x + 96 + SHIP_BAR_WIDTH + 28);
 
+    // Núcleo Rompe-Mundos: pronto, carregando ou em recarga, logo acima do painel.
+    const Ability *ab = &w->ability;
+    if (ab->owned) {
+        int ay = y - 44;
+        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
+        DrawText("RAIO", x, ay, LABEL_SIZE - 2, ABILITY_COLOR);
+        float ready = 1.0f - ab->cooldown / fmaxf(t->ability_cooldown, 1e-3f);
+        Color c = (ab->cooldown <= 0.0f) ? ABILITY_COLOR : with_alpha(ABILITY_COLOR, 0.45f);
+        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, (ab->charge > 0.0f) ? ab->charge / t->ability_charge : ready, c);
+        if (ab->cooldown <= 0.0f && ab->charge <= 0.0f) {
+            DrawText("botão direito", x + 96 + SHIP_BAR_WIDTH - MeasureText("botão direito", SMALL_SIZE + 2), ay - 12,
+                     SMALL_SIZE + 2, DIM_COLOR);
+        }
+    }
+
     // Velocidade e altitude, ao lado das barras.
     int info_x = x + 96 + SHIP_BAR_WIDTH + 28;
     float speed = Vector3Length(Vector3Add(s->vel, s->fall));
@@ -503,7 +522,10 @@ static void draw_wave_info(const World *w, const Tuning *t)
     // Primeiro mede quantas linhas os inimigos vivos ocupam, para o painel
     // crescer junto.
     int lines = 1, line_x = 0;
+    bool boss = boss_active(&w->boss);
+    const char *boss_item = boss ? boss_name((BossType)w->boss.type) : NULL;
     if (d->phase == DIRECTOR_ACTIVE) {
+        if (boss) line_x = MeasureText(boss_item, WAVE_ITEM_SIZE) + 14;
         for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
             int count = enemies_of(w, (EnemyType)type);
             if (count == 0) continue;
@@ -530,6 +552,11 @@ static void draw_wave_info(const World *w, const Tuning *t)
     } else if (d->phase == DIRECTOR_ACTIVE) {
         line_x = x;
         bool any = false;
+        if (boss) {
+            DrawText(boss_item, line_x, row_y, WAVE_ITEM_SIZE, BOSS_COLOR);
+            line_x += MeasureText(boss_item, WAVE_ITEM_SIZE) + 14;
+            any = true;
+        }
         for (int type = 0; type < ENEMY_TYPE_COUNT; type++) {
             int count = enemies_of(w, (EnemyType)type);
             if (count == 0) continue;
@@ -551,6 +578,22 @@ static void draw_wave_info(const World *w, const Tuning *t)
 // planeta (ou mirando na nave) agora, para o jogador decidir o que caçar.
 #define ALERT_SIZE 18
 
+// Logo abaixo do painel do planeta (que cresce quando o núcleo aparece) vem a
+// barra do boss, se houver um, e depois os avisos.
+#define BOSS_PANEL_HEIGHT 58
+
+static bool boss_bar_shown(const World *w)
+{
+    return boss_active(&w->boss) && w->boss.state != BOSS_DYING;
+}
+
+static int below_planet(const World *w)
+{
+    int y = BAR_TOP + LABEL_SIZE + BAR_HEIGHT + 40;
+    if (planet_core_hp(&w->planet) < CORE_SHOW_BELOW) y += LABEL_SIZE + 22;
+    return y;
+}
+
 static void draw_alerts(const World *w, const Tuning *t, int center_x)
 {
     const Enemies *e = &w->enemies;
@@ -571,8 +614,30 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
     }
 
     float now = seconds(w, t);
-    int y = BAR_TOP + LABEL_SIZE + BAR_HEIGHT + 40;
-    if (planet_core_hp(&w->planet) < CORE_SHOW_BELOW) y += LABEL_SIZE + 22;
+    int y = below_planet(w) + (boss_bar_shown(w) ? BOSS_PANEL_HEIGHT + 4 : 0);
+
+    // O boss vem antes de tudo: é o que mais fere o planeta.
+    const Boss *b = &w->boss;
+    if (boss_vulnerable(b)) {
+        if (b->action == BREAKER_CHARGE) {
+            float left = b->timer;
+            float urgency = 1.0f - left / fmaxf(t->breaker_charge[b->phase - 1], 1e-3f);
+            // Pisca clareando (nunca escurecendo): tem de ser lido sobre o espaço.
+            float blink = (sinf(now * (6.0f + 18.0f * urgency)) > 0.0f) ? 0.5f : 0.0f;
+            text_centered(TextFormat("CORTE EM %.0f s: DESTRUA OS CAPACITORES (%d/%d)", (double)ceilf(left),
+                                     BOSS_CAPACITORS - boss_capacitors_left(b), BOSS_CAPACITORS),
+                          center_x, y, ALERT_SIZE + 6, mix_color(BOSS_COLOR, WHITE, blink));
+            y += ALERT_SIZE + 12;
+        } else if (b->action == BREAKER_FIRE) {
+            text_centered("O LASER ESTÁ CORTANDO O PLANETA!", center_x, y, ALERT_SIZE + 6,
+                          mix_color(BOSS_COLOR, WHITE, 0.25f + 0.25f * sinf(now * 25.0f)));
+            y += ALERT_SIZE + 12;
+        } else if (b->action == BREAKER_STAGGER) {
+            text_centered(TextFormat("NÚCLEO EXPOSTO: ATAQUE O NÚCLEO! (%.0f s)", (double)ceilf(b->timer)), center_x, y,
+                          ALERT_SIZE + 6, mix_color(CORE_OPEN_COLOR, WHITE, 0.25f + 0.25f * sinf(now * 8.0f)));
+            y += ALERT_SIZE + 12;
+        }
+    }
     if (digging >= 0.0f) {
         float blink = 0.7f + 0.3f * sinf(now * (4.0f + 10.0f * digging));
         text_centered(TextFormat("ESCAVADOR CAVANDO RUMO AO NÚCLEO  %.0f%%", (double)digging * 100.0), center_x, y,
@@ -591,7 +656,56 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
     }
 }
 
-// Avisos grandes no meio da tela: começo e fim de cada horda.
+// Quanto tempo cada aviso grande fica na tela (0 = não é aviso grande).
+static float banner_time(EventType type)
+{
+    switch (type) {
+    case EV_WAVE_START: return BANNER_TIME;
+    case EV_WAVE_CLEAR: return CLEAR_TIME;
+    case EV_BOSS_ENTER: return 4.2f;
+    case EV_BOSS_PHASE: return 2.2f;
+    case EV_BOSS_DOWN:  return 3.2f;
+    case EV_REWARD:     return 5.5f;
+    default:            return 0.0f;
+    }
+}
+#define BANNER_LONGEST 5.5f
+
+// Avisos de boss: chegada, fase, destruição e a recompensa.
+static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, float age, float fade, int y)
+{
+    int sw = GetScreenWidth();
+    const char *name = boss_name((BossType)e->sub);
+    switch ((EventType)e->type) {
+    case EV_BOSS_ENTER: {
+        DrawRectangle(0, y - 24, sw, BANNER_SIZE + 104, with_alpha((Color){ 30, 4, 4, 255 }, fade * 0.6f));
+        float blink = (sinf(age * 12.0f) > 0.0f) ? 1.0f : 0.45f;
+        text_centered("ALERTA", sw / 2, y - 14, LABEL_SIZE + 10, with_alpha(BOSS_COLOR, fade * blink));
+        text_centered(name, sw / 2, y + 18, BANNER_SIZE + 6, with_alpha(BOSS_COLOR, fade));
+        text_centered("quando ele carregar o canhão, destrua os 4 capacitores", sw / 2, y + BANNER_SIZE + 34,
+                      LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+        break;
+    }
+    case EV_BOSS_PHASE:
+        text_centered(TextFormat("%s  -  FASE %d", name, (int)e->value), sw / 2, y, BANNER_SIZE - 14,
+                      with_alpha(BOSS_COLOR, fade));
+        break;
+    case EV_BOSS_DOWN:
+        text_centered(TextFormat("%s DESTRUÍDO", name), sw / 2, y, BANNER_SIZE - 10, with_alpha(PRIZE_COLOR, fade));
+        text_centered(TextFormat("+%s", format_points((int64_t)e->value)), sw / 2, y + BANNER_SIZE, LABEL_SIZE + 4,
+                      with_alpha(PRIZE_COLOR, fade));
+        break;
+    default:   // EV_REWARD
+        text_centered("NÚCLEO ROMPE-MUNDOS ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(ABILITY_COLOR, fade));
+        text_centered(TextFormat("segure o botão direito: um raio que atravessa tudo (recarga de %.0f s)",
+                                 (double)t->ability_cooldown),
+                      sw / 2, y + BANNER_SIZE - 6, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+        break;
+    }
+    (void)w;
+}
+
+// Avisos grandes no meio da tela: começo e fim de cada horda, e os do boss.
 static void draw_banners(const World *w, const Tuning *t)
 {
     int sw = GetScreenWidth(), sh = GetScreenHeight();
@@ -599,15 +713,17 @@ static void draw_banners(const World *w, const Tuning *t)
         const GameEvent *e = events_find(&w->events, id);
         if (e == NULL) break;
         float age = event_age(w, t, e);
-        if (age > BANNER_TIME) break;   // os eventos estão em ordem: daqui para trás, todos são mais velhos
-        if (e->type != EV_WAVE_START && e->type != EV_WAVE_CLEAR) continue;
+        if (age > BANNER_LONGEST) break;   // os eventos estão em ordem: daqui para trás, todos são mais velhos
+        float total = banner_time((EventType)e->type);
+        if (total <= 0.0f || age > total) continue;
 
-        float total = (e->type == EV_WAVE_START) ? BANNER_TIME : CLEAR_TIME;
         float fade = fminf(fminf(age / 0.25f, (total - age) / 0.5f), 1.0f);
         if (fade <= 0.0f) continue;
         int y = sh / 2 - 130;
 
-        if (e->type == EV_WAVE_START) {
+        if (e->type != EV_WAVE_START && e->type != EV_WAVE_CLEAR) {
+            boss_banner(w, t, e, age, fade, y);
+        } else if (e->type == EV_WAVE_START) {
             int number = (int)e->value;
             DrawRectangle(0, y - 14, sw, BANNER_SIZE + 64, with_alpha((Color){ 10, 4, 18, 255 }, fade * 0.55f));
             text_centered(TextFormat("HORDA %d", number), sw / 2, y, BANNER_SIZE, with_alpha(TEXT_COLOR, fade));
@@ -889,6 +1005,79 @@ static void draw_end(const World *w, const Tuning *t, const HudContext *ctx)
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+//  Boss
+// ---------------------------------------------------------------------------
+#define BOSS_BAR_WIDTH  480
+
+// Barra de vida no alto, logo abaixo da do planeta, com a fase e os
+// capacitores; e na tela, marcadores nos capacitores carregados e no núcleo
+// aberto.
+static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
+{
+    const Boss *b = &w->boss;
+    if (!boss_bar_shown(w)) return;
+    int sw = GetScreenWidth();
+    float now = seconds(w, t);
+
+    int top = below_planet(w);
+    int x = sw / 2 - BOSS_BAR_WIDTH / 2, y = top + 30;
+    DrawRectangle(x - 12, top, BOSS_BAR_WIDTH + 24, BOSS_PANEL_HEIGHT, FRAME_COLOR);
+    DrawText(boss_name((BossType)b->type), x, top + 6, LABEL_SIZE, BOSS_COLOR);
+    const char *phase = TextFormat("FASE %d", b->phase);
+    DrawText(phase, x + BOSS_BAR_WIDTH - MeasureText(phase, LABEL_SIZE), top + 6, LABEL_SIZE, TEXT_COLOR);
+    // Na entrada, a barra enche (e ele ainda é invulnerável).
+    float fill = b->hp / fmaxf(b->hp_max, 1e-3f);
+    if (b->state == BOSS_ENTER) fill *= 1.0f - Clamp(b->timer / t->breaker_enter_time, 0.0f, 1.0f);
+    bool open = boss_core_factor(b, t) >= 0.99f;
+    Color bar = open ? mix_color(CORE_OPEN_COLOR, WHITE, 0.3f + 0.3f * sinf(now * 8.0f)) : BOSS_COLOR;
+    draw_bar(x, y, BOSS_BAR_WIDTH, 12, fill, bar);
+    // Marcas das fases.
+    for (int k = 0; k < 2; k++) {
+        float mark = (k == 0) ? t->breaker_phase_2 : t->breaker_phase_3;
+        int mx = x + (int)((float)BOSS_BAR_WIDTH * mark);
+        DrawRectangle(mx - 1, y - 3, 2, 18, MARKER_COLOR);
+    }
+    // Capacitores: um quadradinho por capacitor, aceso enquanto carregado.
+    if (boss_capacitors_armed(b)) {
+        int px = sw / 2 - (BOSS_CAPACITORS * 22) / 2;
+        for (int k = 0; k < BOSS_CAPACITORS; k++) {
+            Color c = (b->cap_hp[k] > 0.0f) ? CAPACITOR_COLOR : with_alpha(DIM_COLOR, 0.5f);
+            DrawRectangle(px + k * 22, y + 17, 16, 7, c);
+        }
+    }
+
+    // Marcadores na tela.
+    if (!boss_vulnerable(b)) {
+        Vector2 p;
+        if (!project(camera, b->pos, &p) || !on_screen(p)) edge_arrow(camera, b->pos, ARROW_SIZE * 2.0f, BOSS_COLOR);
+        return;
+    }
+    bool any_visible = false;
+    if (boss_capacitors_armed(b)) {
+        for (int k = 0; k < BOSS_CAPACITORS; k++) {
+            if (b->cap_hp[k] <= 0.0f) continue;
+            Vector2 p;
+            Vector3 pos = boss_point(b, t, BREAKER_CAPACITOR[k]);
+            if (project(camera, pos, &p) && on_screen(p)) {
+                diamond(p, 9.0f + 2.0f * sinf(now * 10.0f), CAPACITOR_COLOR);
+                any_visible = true;
+            }
+        }
+    }
+    Vector3 core = boss_point(b, t, BREAKER_CORE);
+    Vector2 cp;
+    if (open && project(camera, core, &cp) && on_screen(cp)) {
+        DrawCircleLines((int)cp.x, (int)cp.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
+        text_centered("NÚCLEO", (int)cp.x, (int)cp.y - 34, 18, CORE_OPEN_COLOR);
+        any_visible = true;
+    }
+    Vector2 bp;
+    if (!any_visible && (!project(camera, b->pos, &bp) || !on_screen(bp))) {
+        edge_arrow(camera, b->pos, ARROW_SIZE * 2.0f, with_alpha(BOSS_COLOR, 0.7f + 0.3f * sinf(now * 6.0f)));
+    }
+}
+
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
 {
     int screen_w = GetScreenWidth();
@@ -909,6 +1098,7 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
 
     if (playing && !w->evo.choosing) {   // com as cartas na tela, o painel da nave sai do caminho
         if (w->state == GAME_PLAYING) {  // no fim, quem fala é o painel do resultado
+            draw_boss(w, t, ctx->camera);
             draw_ship(w, t, ctx->camera);
             draw_banners(w, t);
         }

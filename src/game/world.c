@@ -43,6 +43,10 @@ static const Rgb8 TRAIL_COLOR       = { 110, 190, 255 };
 static const Rgb8 TRAIL_BOOST_COLOR = { 255, 196, 120 };
 static const Rgb8 TRAIL_SLING_COLOR = { 190, 150, 255 };
 static const Rgb8 SPARK_COLOR       = { 255, 214, 150 };
+static const Rgb8 BOSS_BLAST_HOT    = { 255, 236, 200 };
+static const Rgb8 BOSS_BLAST_GLOW   = { 255, 90, 60 };
+static const Rgb8 BOSS_BLAST_DEBRIS = { 70, 66, 80 };
+#define BOSS_BLAST_JOLT 6.0f
 
 // ---------------------------------------------------------------------------
 //  Câmeras
@@ -456,6 +460,7 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     score_reset(&w->score);
     evolution_reset(&w->evo);
     allies_reset(&w->allies);
+    boss_reset(&w->boss);
     w->eff = *t;
     director_stop(&w->director);
     w->state = GAME_PLAYING;
@@ -507,6 +512,56 @@ void world_clear_enemies(World *w)
 {
     enemies_clear(&w->enemies);
     projectiles_clear(&w->shots);
+    boss_reset(&w->boss);
+}
+
+BossContext world_boss_context(World *w, const Tuning *t)
+{
+    BossContext c;
+    c.planet = &w->planet;
+    c.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
+    c.shots = &w->shots;
+    c.events = &w->events;
+    c.rng = &w->rng;
+    c.t = t;
+    c.tick = (uint32_t)w->tick;
+    c.dt = 1.0f / (float)t->sim_hz;
+    return c;
+}
+
+void world_spawn_boss(World *w, const Tuning *t, BossType type, Vector3 dir)
+{
+    BossContext ctx = world_boss_context(w, t);
+    boss_spawn(&w->boss, type, &ctx, dir);
+}
+
+// O boss pensa; o mundo executa o que ele pede (cortes no planeta, drones,
+// explosões da morte) e, se ele acabou de cair, paga a recompensa.
+static void tick_boss(World *w, const Tuning *t)
+{
+    Boss *b = &w->boss;
+    BossContext ctx = world_boss_context(w, t);
+    boss_tick(b, &ctx);
+    for (int i = 0; i < b->carve_count; i++) world_carve(w, t, b->carves[i].center, b->carves[i].radius);
+    if (b->launch_request > 0) world_spawn(w, t, ENEMY_SWARM, b->launch_request, boss_point(b, t, BREAKER_BAY));
+    if (b->blast_now) {
+        particles_explosion(&w->particles, &w->rng, b->blast_at, b->vel, t->breaker_scale * 0.45f, BOSS_BLAST_HOT,
+                            BOSS_BLAST_GLOW, BOSS_BLAST_DEBRIS);
+        world_jolt(w, BOSS_BLAST_JOLT);
+    }
+    if (!b->defeated) return;
+    b->defeated = false;
+    particles_explosion(&w->particles, &w->rng, b->pos, b->vel, t->breaker_scale * 1.6f, BOSS_BLAST_HOT, BOSS_BLAST_GLOW,
+                        BOSS_BLAST_DEBRIS);
+    world_jolt(w, BOSS_BLAST_JOLT * 4.0f);
+    if (w->state != GAME_PLAYING) return;
+    score_kill(&w->score, t, t->breaker_points);
+    w->score.bosses++;
+    world_give_xp(w, t, t->breaker_xp);
+    if (!w->ability.owned) {
+        w->ability.owned = true;
+        events_push(&w->events, (uint32_t)w->tick, EV_REWARD, b->type, w->ship.pos, 0.0f);
+    }
 }
 
 void world_set_plan(World *w, const WavePlan *plan)
@@ -531,6 +586,8 @@ void world_restart(World *w, const Tuning *t)
     score_reset(&w->score);
     evolution_reset(&w->evo);
     allies_reset(&w->allies);
+    boss_reset(&w->boss);
+    memset(&w->ability, 0, sizeof w->ability);
     w->cards_at = 0;
     w->eff = *t;
     ship_spawn(&w->ship, t, &w->planet);
@@ -557,7 +614,8 @@ static void run_director(World *w, const InputState *in, const Tuning *t, float 
         w->director.timer = 0.0f;
         events_push(&w->events, tick, EV_CALM_SKIP, 0, (Vector3){ 0.0f, 0.0f, 0.0f }, 0.0f);
     }
-    DirectorStep step = director_tick(&w->director, &w->plan, enemies_alive(&w->enemies), dt);
+    int alive = enemies_alive(&w->enemies) + (boss_active(&w->boss) ? 1 : 0);   // o boss também conta
+    DirectorStep step = director_tick(&w->director, &w->plan, alive, dt);
 
     if (step.wave_started) {
         events_push(&w->events, tick, EV_WAVE_START, 0, (Vector3){ 0.0f, 0.0f, 0.0f }, (float)(w->director.wave + 1));
@@ -565,6 +623,10 @@ static void run_director(World *w, const InputState *in, const Tuning *t, float 
     float distance = t->enemies_spawn_distance * w->planet.params.radius;
     for (int i = 0; i < step.spawn_count; i++) {
         const WaveGroup *g = step.spawn[i];
+        if (g->type >= WAVE_BOSS_BASE) {
+            world_spawn_boss(w, t, (BossType)(g->type - WAVE_BOSS_BASE), wave_group_direction(g));
+            continue;
+        }
         world_spawn(w, t, (EnemyType)g->type, g->count, Vector3Scale(wave_group_direction(g), distance));
     }
     if (step.wave_cleared) {
@@ -584,7 +646,7 @@ static void update_game_state(World *w)
         w->state = GAME_LOST;
         w->state_tick = w->tick;
         events_push(&w->events, tick, EV_GAME_LOST, 0, origin, 0.0f);
-    } else if (w->director.phase == DIRECTOR_DONE && enemies_alive(&w->enemies) == 0) {
+    } else if (w->director.phase == DIRECTOR_DONE && enemies_alive(&w->enemies) == 0 && !boss_active(&w->boss)) {
         w->state = GAME_WON;
         w->state_tick = w->tick;
         events_push(&w->events, tick, EV_GAME_WON, 0, origin, 0.0f);
@@ -611,6 +673,8 @@ static void hold_still(World *w)
         w->allies.items[i].pos_prev = w->allies.items[i].pos;
         w->allies.items[i].rot_prev = w->allies.items[i].rot;
     }
+    w->boss.pos_prev = w->boss.pos;
+    w->boss.rot_prev = w->boss.rot;
 }
 
 // ---------------------------------------------------------------------------
@@ -769,6 +833,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         ship_effects(w, &ev);
         if (ev.dashed) combat_dash_blast(w, t);
         combat_fire(w, &input, t, dt);
+        combat_ability(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);
 
@@ -778,8 +843,10 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
             world_carve(w, t, w->enemies.carves[i].center, w->enemies.carves[i].radius);
         }
         w->enemies.carve_count = 0;
+        tick_boss(w, t);
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
+        combat_boss(w, t);
         combat_sweep(w, t);
         open_cards(w, t);
 
@@ -899,6 +966,14 @@ uint64_t world_hash(const World *w)
         if (pool_alive(&w->shots.pool, i)) h = hash_vec3(h, w->shots.items[i].pos);
     }
 
+    HASH(h, w->boss.state);
+    if (boss_active(&w->boss)) {
+        h = hash_vec3(h, w->boss.pos);
+        HASH(h, w->boss.hp);
+        HASH(h, w->boss.action);
+        HASH(h, w->boss.cap_hp);
+    }
+    HASH(h, w->ability.owned);
     HASH(h, w->evo.level);
     HASH(h, w->evo.xp);
     HASH(h, w->evo.rank);

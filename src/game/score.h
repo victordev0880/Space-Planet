@@ -21,6 +21,7 @@ typedef struct {
     int     kills;
     int     kills_by_type[ENEMY_TYPE_COUNT];
     int     bombs_down;     // bombas derrubadas no ar
+    int     bosses;         // bosses derrotados
     int64_t planet_bonus;   // soma dos bônus de planeta intacto
 } Score;
 

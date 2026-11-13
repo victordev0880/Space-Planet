@@ -50,6 +50,16 @@ typedef enum {
     EV_REFLECT,        // o escudo devolveu um tiro inimigo
     EV_BLAST,          // explosão da nave (dash explosivo, reação em cadeia; value = raio)
     EV_CRIT,           // acerto crítico
+    EV_BOSS_ENTER,     // um boss chegou                    (sub = BossType)
+    EV_BOSS_CHARGE,    // o Rompe-Mundos começou a carregar (value = segundos de carga)
+    EV_BOSS_FIRE,      // ... e disparou o laser
+    EV_BOSS_CAPACITOR, // um capacitor foi destruído        (value = quantos sobram)
+    EV_BOSS_STAGGER,   // o boss ficou atordoado (núcleo aberto)
+    EV_BOSS_PHASE,     // o boss mudou de fase              (value = fase nova)
+    EV_BOSS_BLAST,     // explosão no casco do boss morrendo
+    EV_BOSS_DOWN,      // o boss foi destruído              (value = pontos)
+    EV_REWARD,         // a nave ganhou o núcleo do boss
+    EV_ABILITY,        // o raio do núcleo saiu             (value = alcance)
     EV_TYPE_COUNT
 } EventType;
 

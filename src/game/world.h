@@ -19,6 +19,7 @@
 #include "core/rng.h"
 #include "core/vmath.h"
 #include "game/allies.h"
+#include "game/boss.h"
 #include "game/enemies.h"
 #include "game/events.h"
 #include "game/evolution.h"
@@ -56,6 +57,16 @@ typedef struct {
 
 #define WORLD_IMPACT_HISTORY 32
 
+// Núcleo Rompe-Mundos, a recompensa do primeiro boss: segurando o botão
+// direito, a nave carrega e solta um raio que atravessa tudo numa linha.
+typedef struct {
+    bool    owned;       // a nave tem o núcleo
+    float   cooldown;    // segundos até poder usar de novo
+    float   charge;      // segundos segurando o botão
+    float   beam_left;   // segundos que o raio ainda fica na tela (só desenho)
+    Vector3 beam_from, beam_to;
+} Ability;
+
 typedef enum {
     GAME_PLAYING,
     GAME_WON,      // todas as hordas vencidas
@@ -91,6 +102,11 @@ typedef struct {
     InputState   frozen_input;  // o que o jogador fez durante o congelamento (vale depois dele)
     float        hit_marker;    // segundos restantes do marcador de acerto na mira (HUD)
     float        kill_marker;   // ... e do de abate
+
+    // --- boss ---
+    Boss         boss;
+    Ability      ability;
+    int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
     // --- evolução ---
     Evolution    evo;
@@ -151,6 +167,12 @@ void world_set_waves(World *w, bool on);
 
 // Ferramenta de debug e do autoplay: põe um grupo de inimigos em `center`.
 int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 center);
+
+// Põe um boss em cena, chegando da direção `dir` (também usado pelas hordas).
+void world_spawn_boss(World *w, const Tuning *t, BossType type, Vector3 dir);
+
+// Contexto para o boss pensar neste passo.
+BossContext world_boss_context(World *w, const Tuning *t);
 
 // O mesmo, com a variação (desenho e cor) escolhida: -1 = sorteada, como no jogo.
 int world_spawn_variant(World *w, const Tuning *t, EnemyType type, int count, Vector3 center, int variant);

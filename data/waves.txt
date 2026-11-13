@@ -5,7 +5,8 @@
 #  wave.N.group.M = tipo quantidade atraso azimute elevacao
 #     tipo:      swarm (Enxame), bomber (Bombardeiro), kamikaze, digger
 #                (Escavador), siphon (Sifão), sniper (Atirador), shielder
-#                (Escudeiro), carrier (Porta-drones)
+#                (Escudeiro), carrier (Porta-drones); ou um boss: breaker
+#                (Rompe-Mundos, data/bosses.txt), sempre com quantidade 1
 #     atraso:    segundos depois do começo da horda em que o grupo aparece
 #     azimute e elevação: de onde o grupo vem, em graus (mesma convenção do
 #     Sol em tuning.txt). A nave começa olhando para o planeta a partir do
@@ -44,52 +45,50 @@ wave.4.group.3 = sniper 2 4 -50 30
 wave.4.group.4 = kamikaze 5 10 170 -10
 wave.4.group.5 = swarm 4 14 -100 -20
 
-# Horda 5 (22): o primeiro Escavador, rumo ao núcleo.
-wave.5.pause   = 10
-wave.5.group.1 = digger 1 0 10 40
-wave.5.group.2 = swarm 8 2 -60 0
-wave.5.group.3 = bomber 1 6 90 20
-wave.5.group.4 = kamikaze 6 10 -150 15
-wave.5.group.5 = swarm 6 16 30 -30
+# Horda 5: o Rompe-Mundos (boss). Só ele por alguns segundos, para a entrada
+# ser vista; depois uma escolta leve. Na fase 2 ele mesmo lança drones.
+#   tipo "breaker", sempre 1.
+wave.5.pause   = 12
+wave.5.group.1 = breaker 1 0 25 20
+wave.5.group.2 = swarm 6 14 -40 10
+wave.5.group.3 = kamikaze 4 40 120 -10
 
-# Horda 6 (24): Sifões drenando, protegidos.
-wave.6.pause   = 10
-wave.6.group.1 = siphon 2 0 -30 15
-wave.6.group.2 = shielder 1 0 -30 18
-wave.6.group.3 = swarm 8 4 120 10
-wave.6.group.4 = sniper 2 8 40 -20
-wave.6.group.5 = kamikaze 6 12 -120 30
-wave.6.group.6 = swarm 5 18 0 50
+# Horda 6 (22): o primeiro Escavador, rumo ao núcleo.
+wave.6.pause   = 12
+wave.6.group.1 = digger 1 0 10 40
+wave.6.group.2 = swarm 8 2 -60 0
+wave.6.group.3 = bomber 1 6 90 20
+wave.6.group.4 = kamikaze 6 10 -150 15
+wave.6.group.5 = swarm 6 16 30 -30
 
-# Horda 7 (26 + os lançados): o Porta-drones.
-wave.7.pause   = 11
-wave.7.group.1 = carrier 1 0 45 25
-wave.7.group.2 = swarm 8 2 -45 0
-wave.7.group.3 = bomber 1 8 160 10
-wave.7.group.4 = kamikaze 8 12 -90 -20
-wave.7.group.5 = shielder 1 12 -90 -16
-wave.7.group.6 = sniper 2 16 0 40
-wave.7.group.7 = swarm 5 22 90 -35
+# Horda 7 (24): Sifões drenando, protegidos.
+wave.7.pause   = 10
+wave.7.group.1 = siphon 2 0 -30 15
+wave.7.group.2 = shielder 1 0 -30 18
+wave.7.group.3 = swarm 8 4 120 10
+wave.7.group.4 = sniper 2 8 40 -20
+wave.7.group.5 = kamikaze 6 12 -120 30
+wave.7.group.6 = swarm 5 18 0 50
 
-# Horda 8 (28): ataque ao núcleo.
+# Horda 8 (26 + os lançados): o Porta-drones.
 wave.8.pause   = 11
-wave.8.group.1 = digger 2 0 -20 30
-wave.8.group.2 = shielder 1 0 -20 34
-wave.8.group.3 = siphon 2 4 100 -10
-wave.8.group.4 = swarm 10 6 -120 10
-wave.8.group.5 = bomber 2 12 50 15
-wave.8.group.6 = kamikaze 8 16 170 0
-wave.8.group.7 = sniper 2 20 -60 -30
+wave.8.group.1 = carrier 1 0 45 25
+wave.8.group.2 = swarm 8 2 -45 0
+wave.8.group.3 = bomber 1 8 160 10
+wave.8.group.4 = kamikaze 8 12 -90 -20
+wave.8.group.5 = shielder 1 12 -90 -16
+wave.8.group.6 = sniper 2 16 0 40
+wave.8.group.7 = swarm 5 22 90 -35
 
-# Horda 9 (35): dois Porta-drones.
-wave.9.pause   = 12
-wave.9.group.1 = carrier 2 0 0 20
-wave.9.group.2 = swarm 10 3 -70 -10
-wave.9.group.3 = shielder 2 3 -70 -6
-wave.9.group.4 = sniper 3 8 110 30
-wave.9.group.5 = kamikaze 10 12 -150 20
-wave.9.group.6 = siphon 2 18 60 -25
-wave.9.group.7 = swarm 6 22 150 40
+# Horda 9 (28): ataque ao núcleo.
+wave.9.pause   = 11
+wave.9.group.1 = digger 2 0 -20 30
+wave.9.group.2 = shielder 1 0 -20 34
+wave.9.group.3 = siphon 2 4 100 -10
+wave.9.group.4 = swarm 10 6 -120 10
+wave.9.group.5 = bomber 2 12 50 15
+wave.9.group.6 = kamikaze 8 16 170 0
+wave.9.group.7 = sniper 2 20 -60 -30
 
 # Horda 10 (40): tudo junto.
 wave.10.pause   = 14

@@ -21,13 +21,22 @@
 #define TUNNEL_ALIGNED  2.0f    // ... ou já está alinhado com o túnel
 #define TUNNEL_BRAKE    25.0f   // a esta distância do ponto sobre a boca, para de acelerar e freia
 #define TUNNEL_CREEP    3.0f    // velocidade de aproximação final (e de frenagem sobre a boca)
+#define PART_VANTAGE    32.0f   // peça do boss: atira desta distância, de frente para ela
+#define PART_CLEAR_COS  0.55f   // ... a peça está à vista dentro deste cone em volta da normal dela
+#define PART_BRAKE      22.0f   // indo ao ponto de tiro: a esta distância dele, freia
+#define PART_CREEP      8.0f    // ... e chega nesta velocidade
+
+// Aproximações especiais: indo ao ponto de onde se atira, ou já atirando.
+typedef enum { TUNNEL_NONE, TUNNEL_GOING, TUNNEL_FIRING } TunnelMode;
 
 typedef struct {
     bool    found;
     Vector3 pos;
     Vector3 vel;
     float   score;   // menor = mais urgente
-    int     enemy;   // índice do inimigo (-1 = uma bomba)
+    int     enemy;   // índice do inimigo (-1 = uma bomba ou o boss)
+    bool    part;    // uma peça do boss: só se acerta de frente para ela
+    Vector3 normal;  // ... a direção para onde a peça está voltada
 } Target;
 
 static void offer(Target *best, Vector3 from, Vector3 pos, Vector3 vel, float urgency, int enemy)
@@ -39,6 +48,18 @@ static void offer(Target *best, Vector3 from, Vector3 pos, Vector3 vel, float ur
         best->vel = vel;
         best->score = score;
         best->enemy = enemy;
+        best->part = false;
+    }
+}
+
+static void offer_part(Target *best, Vector3 from, Vector3 pos, Vector3 vel, float urgency, Vector3 normal)
+{
+    bool was = best->found;
+    float score = best->score;
+    offer(best, from, pos, vel, urgency, -1);
+    if (!was || best->score < score) {
+        best->part = true;
+        best->normal = normal;
     }
 }
 
@@ -62,7 +83,7 @@ static float urgency(const World *w, const Tuning *t, int index)
 static Target pick_target(const World *w, const Tuning *t)
 {
     const Ship *s = &w->ship;
-    Target best = { false, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 0.0f, -1 };
+    Target best = { false, { 0.0f, 0.0f, 0.0f }, { 0.0f, 0.0f, 0.0f }, 0.0f, -1, false, { 0.0f, 1.0f, 0.0f } };
 
     // Bombas caindo vêm antes de tudo.
     const Projectiles *p = &w->shots;
@@ -77,14 +98,58 @@ static Target pick_target(const World *w, const Tuning *t)
         if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f) continue;
         offer(&best, s->pos, e->items[i].pos, e->items[i].vel, urgency(w, t, i), i);
     }
+
+    // O boss: na carga, os capacitores antes de tudo; aberto, o núcleo; fechado,
+    // o núcleo só se não houver nada melhor.
+    // Os capacitores ficam nos flancos (voltados para fora do casco); o núcleo,
+    // no dorso (voltado para longe do planeta).
+    const Boss *b = &w->boss;
+    if (boss_vulnerable(b)) {
+        if (boss_capacitors_armed(b)) {
+            for (int k = 0; k < BOSS_CAPACITORS; k++) {
+                if (b->cap_hp[k] <= 0.0f) continue;
+                Vector3 local = { BREAKER_CAPACITOR[k].x, 0.0f, 0.0f };
+                Vector3 normal = Vector3Normalize(Vector3RotateByQuaternion(local, b->rot));
+                offer_part(&best, s->pos, boss_point(b, t, BREAKER_CAPACITOR[k]), b->vel, 0.15f, normal);
+            }
+        }
+        float factor = boss_core_factor(b, t);
+        float core_urgency = (factor >= 0.99f) ? 0.2f : (factor >= 0.3f) ? 0.7f : 2.5f;
+        Vector3 up = Vector3RotateByQuaternion((Vector3){ 0.0f, 1.0f, 0.0f }, b->rot);
+        offer_part(&best, s->pos, boss_point(b, t, BREAKER_CORE), b->vel, core_urgency, up);
+    }
     return best;
+}
+
+// Peça do boss: o casco tapa a peça de quase todos os lados. A nave vai até um
+// ponto de tiro de frente para ela e só atira de lá. Do lado errado do boss,
+// passa antes por um ponto ao lado, para não atravessar o casco.
+static TunnelMode part_approach(const Ship *s, const Target *target, Vector3 *aim, float *distance)
+{
+    if (!target->part) return TUNNEL_NONE;
+    Vector3 from_part = Vector3Subtract(s->pos, target->pos);
+    float d = Vector3Length(from_part);
+    float facing = Vector3DotProduct(from_part, target->normal) / fmaxf(d, 1e-3f);
+    if (facing > PART_CLEAR_COS && d < PART_VANTAGE * 2.0f) {
+        *aim = target->pos;
+        *distance = d;
+        return TUNNEL_FIRING;
+    }
+    Vector3 vantage = Vector3Add(target->pos, Vector3Scale(target->normal, PART_VANTAGE));
+    if (facing < 0.0f) {
+        Vector3 side = Vector3Subtract(from_part, Vector3Scale(target->normal, Vector3DotProduct(from_part, target->normal)));
+        if (Vector3LengthSqr(side) < 1e-4f) side = Vector3Perpendicular(target->normal);
+        vantage = Vector3Add(target->pos, Vector3Add(Vector3Scale(Vector3Normalize(side), PART_VANTAGE * 1.2f),
+                                                     Vector3Scale(target->normal, PART_VANTAGE * 0.3f)));
+    }
+    *aim = vantage;
+    *distance = Vector3Distance(s->pos, vantage);
+    return TUNNEL_GOING;
 }
 
 // Escavador dentro do túnel: o tiro só o alcança descendo pelo túnel. Em vez
 // de mirar nele (a rocha está no caminho), a nave vai até um ponto acima da
 // boca e, de lá, aponta reto para baixo.
-typedef enum { TUNNEL_NONE, TUNNEL_GOING, TUNNEL_FIRING } TunnelMode;
-
 static TunnelMode tunnel_approach(const World *w, const Target *target, Vector3 *aim, float *distance)
 {
     if (target->enemy < 0) return TUNNEL_NONE;
@@ -114,7 +179,8 @@ static float forward_speed(const Ship *s)
 
 void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
 {
-    const uint32_t flight = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_BOOST) | ACT_BIT(ACT_FIRE);
+    const uint32_t flight = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_BOOST) | ACT_BIT(ACT_FIRE)
+                          | ACT_BIT(ACT_ALT_FIRE);
     sample->held &= ~flight;
     sample->look_dx = 0.0f;
     sample->look_dy = 0.0f;
@@ -140,7 +206,8 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     bool blocked = false;
     TunnelMode tunnel = target.found ? tunnel_approach(w, &target, &aim, &distance) : TUNNEL_NONE;
     bool in_tunnel = (tunnel != TUNNEL_NONE);
-    if (in_tunnel) {
+    bool to_vantage = !in_tunnel && target.found && part_approach(s, &target, &aim, &distance) == TUNNEL_GOING;
+    if (in_tunnel || to_vantage) {
         // (a mira e a distância já vêm prontas)
     } else if (target.found) {
         distance = Vector3Distance(s->pos, target.pos);
@@ -176,6 +243,13 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     sample->look_dy = -turn_pitch / t->ship_mouse_sens;   // mouse para cima levanta o nariz
 
     if (!target.found) return;
+    if (to_vantage) {
+        // Indo ao ponto de tiro da peça do boss: acelera de longe, chega devagar.
+        float along = forward_speed(s);
+        if (distance > PART_BRAKE || along < PART_CREEP) sample->held |= ACT_BIT(ACT_FORWARD);
+        else if (along > PART_CREEP * 2.0f) sample->held |= ACT_BIT(ACT_BACK);
+        return;
+    }
     if (in_tunnel) {
         // Indo: acelera de longe e freia ao chegar. Atirando: nenhuma tecla de
         // movimento, para os estabilizadores segurarem a nave sobre a boca
@@ -203,5 +277,9 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     if (distance < CHASE_NEAR) sample->held |= ACT_BIT(ACT_BACK);
     if (ahead > cosf(FIRE_ANGLE_DEG * DEG2RAD) && distance < t->weapon_range * 0.9f) {
         sample->held |= ACT_BIT(ACT_FIRE);
+        // Com o núcleo Rompe-Mundos pronto, segura o botão direito também.
+        if (w->ability.owned && w->ability.cooldown <= 0.0f && distance < t->ability_range * 0.8f) {
+            sample->held |= ACT_BIT(ACT_ALT_FIRE);
+        }
     }
 }

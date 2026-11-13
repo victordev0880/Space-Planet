@@ -1,0 +1,71 @@
+# ============================================================================
+#  TERRA FRATURADA - bosses
+#
+#  Mesmo formato de data/tuning.txt, e também relido pela tecla F5.
+#  Um boss entra numa horda como um grupo de data/waves.txt (tipo "breaker").
+# ============================================================================
+
+# --- Rompe-Mundos -------------------------------------------------------------
+# Um canhão colossal em órbita. De tempos em tempos carrega um laser que corta
+# uma fatia do planeta: o traço do corte aparece no chão durante a carga, e
+# quatro capacitores acendem no casco. Destruídos os quatro a tempo, o tiro
+# falha, ele fica atordoado e o núcleo abre: é aí que ele sofre de verdade.
+# Três fases (pela vida que resta): cargas mais curtas e cortes mais longos.
+breaker.hp             = 240     # vida do núcleo
+breaker.scale          = 8       # tamanho do modelo (uns 24 de comprimento)
+breaker.altitude       = 46      # altura da órbita
+breaker.speed          = 6       # velocidade na órbita (devagar na carga)
+breaker.points         = 10000
+breaker.xp             = 30
+breaker.enter_time     = 5       # segundos da entrada (invulnerável)
+breaker.spawn_distance = 4       # de onde vem, em raios do planeta
+
+breaker.rest_1   = 7             # segundos entre um corte e a próxima carga, por fase
+breaker.rest_2   = 5.5
+breaker.rest_3   = 4
+breaker.charge_1 = 10            # segundos de carga: o tempo para destruir os capacitores
+breaker.charge_2 = 8
+breaker.charge_3 = 6.5
+breaker.cut_length_1 = 60        # comprimento do corte, em graus de arco
+breaker.cut_length_2 = 75
+breaker.cut_length_3 = 90
+
+breaker.fire_time   = 3          # segundos que o laser leva para varrer o traço
+breaker.cut_radius  = 11         # raio de cada mordida do laser
+breaker.cut_sink    = 9          # o centro da mordida fica este tanto abaixo do solo
+                                 # (vala de uns 13 de largura e 20 de fundo: passa
+                                 # da crosta e deixa o manto em brasa à mostra)
+breaker.cut_spacing = 3          # distância entre duas mordidas
+breaker.cut_turn    = 50         # antes de cada carga, a órbita gira até este tanto
+                                 # (graus): os cortes caem em lugares diferentes,
+                                 # em vez de aprofundar sempre a mesma vala
+breaker.beam_damage = 45         # dano por segundo na nave que entra no feixe
+breaker.beam_width  = 3.5
+
+breaker.capacitor_hp = 10        # vida de cada capacitor (são quatro)
+breaker.stagger_time = 7         # segundos atordoado, com o núcleo aberto
+breaker.core_armor   = 0.08      # fração do dano que chega ao núcleo fechado
+breaker.core_open    = 0.4       # ... e na fase 3, com o núcleo meio aberto
+breaker.phase_2      = 0.6       # fração da vida em que começa a fase 2
+breaker.phase_3      = 0.25      # ... e a fase 3
+
+breaker.turret_burst      = 4    # torretas: tiros por rajada
+breaker.turret_damage     = 7
+breaker.turret_range      = 130
+breaker.turret_speed      = 70
+breaker.turret_interval_1 = 4    # segundos entre rajadas, por fase
+breaker.turret_interval_2 = 3
+breaker.turret_interval_3 = 2.2
+
+breaker.launch_interval = 14     # a partir da fase 2, solta drones do Enxame
+breaker.launch_count    = 4
+breaker.ram_damage      = 30     # dano na nave ao trombar no casco
+
+# --- Núcleo Rompe-Mundos (a recompensa) ----------------------------------------
+# Derrotado, o boss deixa o núcleo dele: o botão direito passa a carregar um
+# raio que atravessa todos os inimigos numa linha.
+ability.damage   = 30            # dano em cada inimigo atingido
+ability.range    = 240
+ability.width    = 4             # largura do raio
+ability.cooldown = 16            # segundos entre dois raios
+ability.charge   = 0.5           # segundos segurando o botão até o raio sair

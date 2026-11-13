@@ -49,6 +49,7 @@ int main(void)
     suite_combat();
     suite_enemies();
     suite_evolution();
+    suite_boss();
     suite_autoplay();
     finish_current();
 

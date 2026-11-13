@@ -427,6 +427,55 @@ static const TuneField EVO_FIELDS[] = {
     F("hangar.rate",             hangar_rate,             0,    10),
 };
 
+// data/bosses.txt
+static const TuneField BOSS_FIELDS[] = {
+    F("breaker.hp",               breaker_hp,               1,    100000),
+    F("breaker.scale",            breaker_scale,            0.5,  100),
+    F("breaker.altitude",         breaker_altitude,         5,    1000),
+    F("breaker.speed",            breaker_speed,            0,    500),
+    F("breaker.points",           breaker_points,           0,    10000000),
+    F("breaker.xp",               breaker_xp,               0,    10000),
+    F("breaker.enter_time",       breaker_enter_time,       0.1,  60),
+    F("breaker.spawn_distance",   breaker_spawn_distance,   1.5,  20),
+    F("breaker.rest_1",           breaker_rest[0],          0,    120),
+    F("breaker.rest_2",           breaker_rest[1],          0,    120),
+    F("breaker.rest_3",           breaker_rest[2],          0,    120),
+    F("breaker.charge_1",         breaker_charge[0],        0.5,  120),
+    F("breaker.charge_2",         breaker_charge[1],        0.5,  120),
+    F("breaker.charge_3",         breaker_charge[2],        0.5,  120),
+    F("breaker.cut_length_1",     breaker_cut_length[0],    1,    180),
+    F("breaker.cut_length_2",     breaker_cut_length[1],    1,    180),
+    F("breaker.cut_length_3",     breaker_cut_length[2],    1,    180),
+    F("breaker.turret_interval_1", breaker_turret_interval[0], 0.2, 60),
+    F("breaker.turret_interval_2", breaker_turret_interval[1], 0.2, 60),
+    F("breaker.turret_interval_3", breaker_turret_interval[2], 0.2, 60),
+    F("breaker.fire_time",        breaker_fire_time,        0.2,  30),
+    F("breaker.cut_radius",       breaker_cut_radius,       0.5,  40),
+    F("breaker.cut_sink",         breaker_cut_sink,         0,    40),
+    F("breaker.cut_spacing",      breaker_cut_spacing,      0.5,  40),
+    F("breaker.cut_turn",         breaker_cut_turn,         0,    180),
+    F("breaker.beam_damage",      breaker_beam_damage,      0,    10000),
+    F("breaker.beam_width",       breaker_beam_width,       0.1,  50),
+    F("breaker.capacitor_hp",     breaker_capacitor_hp,     0.1,  10000),
+    F("breaker.stagger_time",     breaker_stagger_time,     0.5,  60),
+    F("breaker.core_armor",       breaker_core_armor,       0,    1),
+    F("breaker.core_open",        breaker_core_open,        0,    1),
+    F("breaker.phase_2",          breaker_phase_2,          0,    1),
+    F("breaker.phase_3",          breaker_phase_3,          0,    1),
+    I("breaker.turret_burst",     breaker_turret_burst,     0,    50),
+    F("breaker.turret_damage",    breaker_turret_damage,    0,    10000),
+    F("breaker.turret_range",     breaker_turret_range,     0,    5000),
+    F("breaker.turret_speed",     breaker_turret_speed,     1,    2000),
+    F("breaker.launch_interval",  breaker_launch_interval,  0.5,  600),
+    I("breaker.launch_count",     breaker_launch_count,     0,    24),
+    F("breaker.ram_damage",       breaker_ram_damage,       0,    10000),
+    F("ability.damage",           ability_damage,           0,    10000),
+    F("ability.range",            ability_range,            1,    5000),
+    F("ability.width",            ability_width,            0.1,  100),
+    F("ability.cooldown",         ability_cooldown,         0,    600),
+    F("ability.charge",           ability_charge,           0,    10),
+};
+
 #undef I
 #undef F
 #undef C
@@ -437,10 +486,11 @@ typedef struct {
     int              count;
 } TuneTable;
 
-static const TuneTable TABLES[3] = {
+static const TuneTable TABLES[4] = {
     { TUNING_FILE,     FIELDS,       (int)(sizeof FIELDS / sizeof FIELDS[0]) },
     { ENEMIES_FILE,    ENEMY_FIELDS, (int)(sizeof ENEMY_FIELDS / sizeof ENEMY_FIELDS[0]) },
     { EVOLUTIONS_FILE, EVO_FIELDS,   (int)(sizeof EVO_FIELDS / sizeof EVO_FIELDS[0]) },
+    { BOSSES_FILE,     BOSS_FIELDS,  (int)(sizeof BOSS_FIELDS / sizeof BOSS_FIELDS[0]) },
 };
 
 static bool is_known_key(const TuneTable *table, const char *key)
@@ -573,10 +623,23 @@ bool tuning_evolutions_from_config(Tuning *out, const Config *evolutions_cfg, ch
     return true;
 }
 
+bool tuning_bosses_from_config(Tuning *out, const Config *bosses_cfg, char *err, size_t err_len)
+{
+    Tuning t = *out;
+    if (!apply_table(&t, &TABLES[3], bosses_cfg, err, err_len)) return false;
+    if (t.breaker_phase_3 >= t.breaker_phase_2) {
+        snprintf(err, err_len, "%s: breaker.phase_3 precisa ser menor que breaker.phase_2", BOSSES_FILE);
+        return false;
+    }
+    *out = t;
+    if (err_len > 0) err[0] = '\0';
+    return true;
+}
+
 bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len)
 {
     // static: a struct Config é grande (dezenas de KB) e não precisa ficar na pilha.
-    static Config tuning_cfg, enemies_cfg, evolutions_cfg;
+    static Config tuning_cfg, enemies_cfg, evolutions_cfg, bosses_cfg;
     char path[256];
 
     snprintf(path, sizeof path, "%s/%s", data_dir, TUNING_FILE);
@@ -594,10 +657,16 @@ bool tuning_load(Tuning *out, const char *data_dir, char *err, size_t err_len)
         snprintf(err, err_len, "%s: %s", EVOLUTIONS_FILE, evolutions_cfg.error);
         return false;
     }
-    // Tudo ou nada: `out` só muda se os três arquivos estiverem certos.
+    snprintf(path, sizeof path, "%s/%s", data_dir, BOSSES_FILE);
+    if (!config_load_file(&bosses_cfg, path)) {
+        snprintf(err, err_len, "%s: %s", BOSSES_FILE, bosses_cfg.error);
+        return false;
+    }
+    // Tudo ou nada: `out` só muda se os quatro arquivos estiverem certos.
     Tuning t = *out;
     if (!tuning_from_config(&t, &tuning_cfg, &enemies_cfg, err, err_len)) return false;
     if (!tuning_evolutions_from_config(&t, &evolutions_cfg, err, err_len)) return false;
+    if (!tuning_bosses_from_config(&t, &bosses_cfg, err, err_len)) return false;
     *out = t;
     return true;
 }
