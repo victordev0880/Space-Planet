@@ -1277,7 +1277,7 @@ envolve a própria nave).
 - As hordas 11 a 19 combinam os tipos: cerco de Sifões e Atiradores, dois
   Porta-drones, ataque ao núcleo pelos dois lados, a "sangria". A maior tem 36
   inimigos, chegando em grupos.
-- **Escalonamento**: os inimigos nascem com 4% a mais de vida a cada horda
+- **Escalonamento**: os inimigos nascem com 4% a mais de vida a cada horda (2,5% desde o marco 12)
   (`waves.hp_growth`; 76% a mais na horda 20). A nave cresce com as
   evoluções, e as hordas finais precisam acompanhar. A barra de vida dos
   inimigos agora usa a vida máxima de cada um.
@@ -1321,6 +1321,197 @@ cabeça dele por cima, como faria um jogador que segue o tremor.
   esporo arremessado. As lutas dele são o pior caso.
 - A vida dos bosses não escala com a partida: eles são medidos contra a nave
   evoluída da horda em que aparecem.
+
+## Marco 12: os pedidos do Victor depois do conteúdo (2026-11-14)
+
+Os pedidos foram seis:
+- evolução com menos texto;
+- construção de defesas mais simples;
+- inimigos mais relevantes ("quase não tiram vida do planeta, parecem burras");
+- combate mais divertido e um voo que não enjoe;
+- online cooperativo com dificuldade crescente;
+- stats mais bonitos e originais.
+
+Foram quatro commits: A (conforto e combate), B e C (inimigos, cartas,
+construção, HUD) e D (online). O Victor autorizou a Winsock (a rede do
+próprio Windows) e escolheu: anfitrião com IP direto, até 4 jogadores, e as
+mesmas evoluções em cartas curtas.
+
+### O que causava o enjoo
+A câmera usava o "para cima" da nave. A rolagem (Q/E) e o endireitamento
+automático em volta do planeta giravam o horizonte inteiro na tela, o tempo
+todo. Somavam-se:
+- o campo de visão que abria 14° no boost;
+- a câmera que inclinava 14° no rasante;
+- o tremor, que girava a imagem 1,8°.
+
+**Horizonte travado:**
+- A nave não rola mais. O mouse vira a nave em volta do "para cima" do
+  planeta e levanta o nariz até `ship.pitch_limit` (89,5°: na vertical
+  exata não haveria "direita").
+- Nas curvas a nave inclina só no desenho (`ship.bank`). A câmera usa o topo
+  da nave, que agora é sempre o do planeta, então nunca gira o horizonte.
+- FOV do boost 5°, inclinação do rasante 5°, tremor 0,7°.
+- Q virou o raio do núcleo e E, a construção.
+
+### Combate
+- **Mísseis** (botão direito, o "secundário com lock-on" que o plano previa
+  desde o marco 4):
+  - segurando, a mira trava um alvo a cada 0,18 s, dentro de 16° do nariz,
+    até 4 alvos (um por carga);
+  - soltando, sai um míssil teleguiado por trava, que explode em área;
+  - sem trava, sai um só, que procura o inimigo mais perto;
+  - as cargas recarregam sozinhas (2,2 s cada);
+  - no HUD, as cargas ficam em triângulos sob a mira e os alvos travados
+    ganham colchetes girando.
+- **Esquiva perfeita**: um golpe que atravessa o dash dá um instante
+  congelado, 30 de energia e 2,5 s de foco (tiros e mísseis 1,5x). Vale uma
+  por dash, e o primeiro instante mostra "ESQUIVA PERFEITA!". Premia
+  esquivar no último instante, em vez de usar o dash a esmo.
+- **Peso nos golpes**: cada tiro empurra o inimigo (`weapon.knockback`,
+  dividido pelo tamanho dele). O míssil empurra 4x.
+- Cuidado no desenho do míssil: o rastro saindo da nave passava por trás da
+  câmera e virava um leque na tela inteira. O rastro foi limitado a 9
+  unidades.
+
+### Inimigos relevantes
+A medição: o piloto automático terminava a campanha com o planeta em 90%.
+- Vida ~1,6x. A primeira tentativa, ~2,3x somada ao crescimento por horda,
+  fez o piloto automático perder o núcleo na horda 10. O crescimento por
+  horda caiu de 4% para 2,5%.
+- Mais dano ao planeta: crateras do Enxame 5/4,2 (eram 3,7/2,9), 5 tiros por
+  segundo no mergulho, bombas a cada 3,5 s (eram 6), feixe do Sifão mais
+  largo.
+- Menos distração: o Enxame espera 0,7 s em formação (eram 2 s), só 1/4 do
+  bando sai para encarar a nave (era 1/2) e por 4 s, e o Kamikaze trava na
+  nave a 42 (era 85), então mais deles mergulham no planeta.
+- **Cerco**: o alvo do bando andava 16° por passada, em linha reta, e o
+  bando "passeava" pelo planeta. Agora o rumo vira um pouco a cada passada
+  (`swarm.drift / swarm.siege`) e o alvo anda num círculo de 12° em volta de
+  onde o bando chegou. As crateras se somam e cavam até o manto.
+- Resultado na campanha do piloto automático: o planeta termina em 73%, mas
+  ele consertou 35% com rochas, então as hordas tiraram ~62%. Consertar
+  passou a importar.
+
+### Cartas e construção
+- **Cartas**: um ícone desenhado em código para cada uma das 20 evoluções, o
+  nome e uma linha só ("+2 tiros em leque", "Escudo cheio: dano x1.6"). O
+  efeito descrito é o que esta carta dá, não o total acumulado. Saiu a linha
+  das essências.
+- **Construção**: antes, três teclas soltas (4/5/6) construíam embaixo da
+  nave, e um painel fixo ocupava o canto. Agora:
+  - E abre a barra das três defesas (ícone, preço, quantas há; em vermelho
+    sem minério);
+  - uma sombra no chão (anel do tamanho da cúpula, com um feixe) mostra
+    onde a defesa vai ficar: onde a mira toca o planeta (até 170), ou o chão
+    embaixo da nave;
+  - 1/2/3 constroem e fecham a barra (4/5/6 continuam como atalho);
+  - o canto de baixo à direita mostra só o minério e a dica do E.
+
+### HUD novo
+- **Mostrador da nave** (canto de baixo à esquerda), como o instrumento de
+  um caça:
+  - escudo no arco de fora e casco no de dentro (270°, a abertura embaixo);
+  - a energia enche a abertura;
+  - a velocidade no meio, com a altitude embaixo;
+  - o nível num hexágono, com o XP como contorno enchendo e as evoluções
+    como losangos coloridos;
+  - os núcleos dos bosses em mostradores pequenos que enchem ao recarregar.
+- **Planeta**: um globo que racha em lava conforme perde massa, os
+  habitantes em destaque e a barra em 25 segmentos inclinados (os da zona de
+  extinção, com o fundo avermelhado).
+
+### Online: por que lockstep
+O jogo já era determinístico (o mesmo roteiro dá o mesmo hash), e era isso
+que o online precisava. Em vez de mandar a posição de cada nave, inimigo,
+tiro e voxel (milhares de coisas, e o planeta muda), os computadores trocam
+só o comando de cada jogador a cada passo (20 bytes). Cada um roda a
+partida inteira.
+- **Atraso de comando**: o que se aperta vale 4 passos (~67 ms) depois,
+  para a espera pelos outros quase nunca travar. Em jogo cooperativo, mal
+  se sente.
+- **Estrela**: os clientes mandam os comandos ao anfitrião; ele junta os de
+  todos para cada passo e manda a todos. Cada pacote repete os últimos 8
+  passos. Com UDP, um pacote perdido é coberto pelo seguinte, sem esperar
+  reenvio (o TCP pararia tudo).
+- **Dessincronia**: a cada 120 passos o cliente manda o hash do estado; se
+  não bater com o do anfitrião, aparece um aviso. O hash do online não
+  inclui nada local (câmera, os campos do jogador da tela).
+- **Queda**: 8 s sem notícia. O anfitrião larga o jogador (os comandos dele
+  passam a valer vazio e a nave fica parada); o cliente que perde o
+  anfitrião vê o motivo na tela da sala.
+- **Início idêntico**: `world_start_online` zera tudo o que entra no hash
+  (relógio, rng com a seed do anfitrião, Lua, partículas, eventos, impactos,
+  planeta). Os computadores passaram tempos diferentes no título, ou jogaram
+  outra partida antes.
+
+### Online: o mundo com vários jogadores
+`World.players` guarda o que é de cada um: nave, evolução, mísseis, núcleos,
+aliados, rocha a reboque, marcadores. Os campos de jogador do World (ship,
+evo...) são sempre os do jogador `current`; `world_use_player` troca. Assim o
+combate, as evoluções e o HUD continuaram escritos para "a nave".
+- A cada passo o mundo assume a vez de cada jogador (nave, tiro,
+  habilidades, construção) e depois roda a parte comum: hordas, inimigos,
+  boss, rochas, defesas.
+- **A parte comum roda sempre na vez do jogador 0**, e não na do jogador
+  local: o resultado tem de ser o mesmo em todos os computadores. Foi o
+  maior cuidado: o F2 (câmera livre) congela a partida só naquele
+  computador, então no online ele fica desligado. O Enter (chamar a horda)
+  vale se qualquer um apertar.
+- Os acertos se resolvem por dono do tiro, com as evoluções dele (crítico,
+  ogivas, foco). Os abates, na vez de quem abateu (roubo de vida, reação em
+  cadeia, desmanche).
+- **XP do time**: o abate de um dá XP e essência a todos, e cada um escolhe
+  as próprias cartas, sem congelar a partida.
+- Cada inimigo e o boss enxergam a nave mais perto deles. A explosão do
+  Kamikaze fere todas as naves por perto. O minério vai para a nave mais
+  perto, e o minério é do time.
+- A rocha a reboque guarda o dono e segue a nave dele.
+- **No jogo solo nada mudou**: o mesmo roteiro dá o mesmo hash de antes da
+  refatoração.
+
+### Online: dificuldade e telas
+- Por jogador a mais: inimigos +20% de vida, grupos +45%, bosses +60%
+  (`coop.*`). Com 4: grupos 2,35x, inimigos 1,6x, bosses 2,8x. Os grupos
+  maiores chegam pelos mesmos lados das hordas, e o time precisa se dividir
+  entre defender e caçar.
+- Telas: `JOGAR ONLINE` no título; `CRIAR SALA` ou `ENTRAR NUMA SALA` (campo
+  de IP, Ctrl+V cola); a sala com as quatro vagas e, para o anfitrião, os
+  IPs desta máquina. No jogo, cada companheiro tem etiqueta J1 a J4 na cor
+  dele, com a vida. A pausa não congela, e sair da partida volta ao título.
+  R, depois do fim, recomeça para todos no mesmo passo.
+- **Hospedagem**: não há servidor. O anfitrião é o jogo de quem criou a
+  sala. Pela internet: Radmin VPN ou ZeroTier (grátis, sem mexer no
+  roteador), ou abrir a porta UDP 27015 no roteador do anfitrião.
+
+### O bug que só as duas janelas acharam
+O anfitrião simulava os primeiros passos (prontos desde o início) antes de
+juntá-los no pacote dos clientes. Ao simular, o lockstep apaga o passo, e o
+pacote dele nunca saía: o cliente ficava no passo 4 para sempre. O teste no
+mesmo processo passou por sorte de tempo. Agora o anfitrião junta o pacote
+antes de simular cada passo. Também: o anfitrião repetia o início só por 3
+s, e o cliente ocupado gerando o planeta podia perdê-lo. Agora repete até o
+cliente mandar o primeiro comando.
+
+### Medições (Vega 8)
+- Online, duas janelas no mesmo PC com o piloto automático: as duas chegam
+  ao passo 1800 com o mesmo hash. Nos testes, com 25% dos pacotes perdidos,
+  10 s de partida terminam idênticos.
+- `onda1.txt` (35 min de jogo): o mesmo `state_hash` antes e depois da
+  refatoração do online. O planeta termina em 73% na horda 20, com 35%
+  consertados. O piloto automático derruba 3 bosses; no tempo do roteiro, o
+  Devorador ainda luta.
+- Tempos: a máquina estava mais lenta neste dia. O `desempenho.txt`, que não
+  tem nada deste marco, foi de 4,0–4,5 ms para 7,75 ms de mediana (com 2 ms
+  de processador). Na campanha: mediana 8,25 ms, p99 22 ms. O que importa
+  para quem joga, `boss1.txt` em tempo real com vsync: **59,6 FPS de média**,
+  0,9% dos quadros acima de 1,5x o orçamento (contando os das capturas).
+
+### Limitações conhecidas do marco 12
+- Sem servidor de salas nem convite por código: é o IP do anfitrião.
+- Se o anfitrião sai, a partida acaba para todos (não há migração).
+- Não há como entrar numa partida já começada.
+- O piloto automático não usa a esquiva perfeita.
 
 ## Respostas do Victor (2026-11-11)
 
