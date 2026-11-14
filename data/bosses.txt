@@ -176,6 +176,61 @@ tunnel.cooldown = 22
 tunnel.altitude = 14          # sai a esta altura sobre a superfície
 tunnel.time     = 0.8         # invulnerável este tanto ao sair
 
+# --- Devorador (o chefe final) --------------------------------------------------
+# Uma bocarra colossal. Um redemoinho em volta dela suga rochas e minério, e
+# cada rocha engolida cura (roube as rochas com o raio trator, ou quebre-as a
+# tiros). De tempos em tempos marca um ponto do planeta (círculo vermelho no
+# chão, olhos acesos) e mergulha para morder: acertar os olhos a tempo o faz
+# errar; um escudo local (tecla 5) no ponto quebra os dentes dele. Depois de
+# morder, mastiga de garganta exposta. O comportamento segue o HP do PLANETA:
+# faminto, frenético e, abaixo da metade, o banquete (agarrado ao planeta,
+# devorando sem parar, garganta sempre aberta). Morto, devolve o que comeu.
+dev.hp             = 900
+dev.points         = 50000
+dev.enter_time     = 7
+dev.spawn_distance = 4.5      # de onde vem, em raios do planeta
+dev.scale          = 13       # raio do corpo
+dev.altitude       = 72       # altura da ronda
+dev.speed          = 9        # velocidade na ronda
+
+dev.vortex_range   = 110      # o redemoinho alcança rochas e minério até esta distância da boca
+dev.vortex_pull    = 30       # aceleração do puxão
+dev.heal_fragment  = 0.025    # fração da vida que um fragmento engolido cura
+dev.heal_meteor    = 0.05     # ... e um meteoro
+dev.heal_ore       = 0.002    # ... e um cristal de minério
+
+dev.bite_interval_1 = 9       # segundos entre mordidas, faminto
+dev.bite_interval_2 = 6       # ... e frenético
+dev.aim_time       = 3.6      # o aviso: o círculo no chão antes do mergulho
+dev.aim_altitude   = 42       # de que altura ele mergulha
+dev.dive_time      = 1.0
+dev.chew_time      = 3.5      # mastigando, com a garganta exposta
+dev.rise_time      = 2.0
+dev.bite_radius    = 20       # a cratera da mordida
+dev.bite_depth     = 14
+dev.bite_spread    = 35       # escolhe o ponto até este tanto (graus) do ponto embaixo dele
+
+dev.flinch         = 28       # dano nos olhos, durante o aviso, que o faz errar a mordida
+dev.flinch_stun    = 3.5      # ... e fica atordoado este tanto, garganta exposta
+dev.broken_stun    = 8        # mordeu um escudo local: dentes quebrados, atordoado este tanto
+dev.throat_armor   = 0.03     # fração do dano com a boca fechada
+
+dev.frenzy_hp      = 0.85     # planeta abaixo disto: frenético
+dev.feast_hp       = 0.6      # ... e abaixo disto: o banquete
+
+dev.teeth_interval = 3.5      # frenético: rajada de dentes na nave
+dev.teeth_count    = 5
+dev.teeth_damage   = 9
+dev.teeth_speed    = 70
+
+dev.latch_drain    = 0.45     # banquete: segundos entre as mordidas contínuas...
+dev.latch_radius   = 6        # ... deste raio
+dev.latch_break    = 0.1      # fração da vida em dano que o arranca do planeta
+dev.latch_cooldown = 20       # arrancado, segundos até poder agarrar de novo
+dev.torn_stun      = 4
+
+dev.regurgitate    = 14       # rochas que ele devolve ao morrer (chovem sobre as crateras)
+
 # --- Núcleo Rompe-Mundos (a recompensa) ----------------------------------------
 # Derrotado, o boss deixa o núcleo dele: o botão direito passa a carregar um
 # raio que atravessa todos os inimigos numa linha.

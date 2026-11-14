@@ -9,6 +9,7 @@ typedef enum {
     BOSS_BREAKER,     // Rompe-Mundos: canhão que corta uma fatia do planeta
     BOSS_HIVE,        // Colmeia Lunar: agarrada à Lua, solta drones e empurra a Lua
     BOSS_WORM,        // Verme do Núcleo: cava túneis dentro do planeta e salta para fora
+    BOSS_DEVOURER,    // Devorador: o final; suga rochas, morde o planeta, muda com o HP dele
     BOSS_TYPE_COUNT
 } BossType;
 

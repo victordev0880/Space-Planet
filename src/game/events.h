@@ -92,6 +92,14 @@ typedef enum {
     EV_WORM_CORE,      // o Verme mordeu o núcleo           (pos = mordida)
     EV_WORM_NODULE,    // um nódulo do dorso foi destruído  (value = quantos sobram)
     EV_TUNNEL,         // a nave atravessou o planeta (núcleo do Verme) (pos = saída)
+    EV_DEV_AIM,        // o Devorador marcou a mordida      (pos = ponto no chão; value = segundos)
+    EV_DEV_BITE,       // ... mordeu                        (pos = ponto)
+    EV_DEV_MISS,       // ... errou (olhos acertados)
+    EV_DEV_BROKEN,     // ... quebrou os dentes num escudo
+    EV_DEV_SWALLOW,    // ... engoliu uma rocha             (value = fração da vida curada)
+    EV_DEV_LATCH,      // ... agarrou o planeta (banquete)
+    EV_DEV_TORN,       // ... foi arrancado do planeta
+    EV_DEV_TEETH,      // ... cuspiu uma rajada de dentes
     EV_TYPE_COUNT
 } EventType;
 

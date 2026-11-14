@@ -467,6 +467,19 @@ typedef struct {
     float worm_swim_depth, worm_swim_time, worm_furrow_radius;
     // Núcleo do Verme (a recompensa): o Túnel, na tecla X.
     float tunnel_cooldown, tunnel_altitude, tunnel_time;
+
+    // Devorador, o chefe final (data/bosses.txt).
+    float dev_hp, dev_points, dev_enter_time, dev_spawn_distance, dev_scale, dev_altitude, dev_speed;
+    float dev_vortex_range, dev_vortex_pull, dev_heal_fragment, dev_heal_meteor, dev_heal_ore;
+    float dev_bite_interval[2];      // segundos entre mordidas: faminto, frenético
+    float dev_aim_time, dev_aim_altitude, dev_dive_time, dev_chew_time, dev_rise_time;
+    float dev_bite_radius, dev_bite_depth, dev_bite_spread;
+    float dev_flinch, dev_flinch_stun, dev_broken_stun, dev_throat_armor;
+    float dev_frenzy_hp, dev_feast_hp;
+    float dev_teeth_interval, dev_teeth_damage, dev_teeth_speed;
+    int   dev_teeth_count;
+    float dev_latch_drain, dev_latch_radius, dev_latch_break, dev_latch_cooldown, dev_torn_stun;
+    int   dev_regurgitate;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4

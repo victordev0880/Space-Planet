@@ -1013,6 +1013,96 @@ static void synth_tunnel(float *out, int n)
     }
 }
 
+// --- Devorador ---------------------------------------------------------------------
+
+// Rugido: serras graves desafinadas, com um rosnado (modulação rápida) e ar.
+static void roar(float *out, int n, float from, float to, float growl)
+{
+    LowPass lp = { 0 };
+    float phase = 0.0f, length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float rasp = 1.0f + growl * sinf(2.0f * PI * 31.0f * t);
+        phase += sweep(from, to, t, length) * rasp / SAMPLE_RATE;
+        float v = saw(phase) + 0.7f * saw(phase * 1.007f) + 0.5f * saw(phase * 0.5f) + 0.4f * noise();
+        out[i] = lowpass(&lp, v, 700.0f + 900.0f * sinf(PI * u)) * sinf(PI * fminf(u * 1.4f, 1.0f));
+    }
+}
+
+static void synth_dev_aim(float *out, int n)
+{
+    // A mira: um rugido que sobe e um alarme por cima.
+    roar(out, n, 55.0f, 95.0f, 0.12f);
+    float alarm = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        alarm += ((fmodf(t, 0.4f) < 0.2f) ? 740.0f : 590.0f) / SAMPLE_RATE;
+        out[i] += 0.25f * square(alarm) * fminf(t * 2.0f, 1.0f);
+    }
+}
+
+static void synth_dev_bite(float *out, int n)
+{
+    // A mordida: o planeta estalando entre os dentes.
+    explosion(out, n, 1400.0f, 1.8f, 40.0f, 0.04f);
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float crack = (noise() > 0.985f - 0.02f * expf(-t * 3.0f)) ? noise() : 0.0f;
+        out[i] += 0.6f * crack;
+    }
+}
+
+static void synth_dev_screech(float *out, int n)
+{
+    // Errou (ou foi arrancado): um guincho de dor, agudo e rasgado.
+    roar(out, n, 420.0f, 180.0f, 0.25f);
+}
+
+static void synth_dev_broken(float *out, int n)
+{
+    // Dentes quebrados no escudo: estilhaços e o guincho.
+    roar(out, n, 380.0f, 150.0f, 0.3f);
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float x = noise();
+        out[i] += 1.2f * (x - lowpass(&lp, x, 3500.0f)) * envelope(t, 0.001f, 5.0f);
+    }
+}
+
+static void synth_dev_gulp(float *out, int n)
+{
+    // Engoliu: um "glup" grave descendo.
+    float phase = 0.0f;
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(220.0f, 60.0f, t, 0.35f) / SAMPLE_RATE;
+        out[i] = lowpass(&lp, sine(phase) + 0.4f * noise(), 600.0f) * envelope(t, 0.01f, 6.0f) * 1.5f;
+    }
+}
+
+static void synth_dev_roar(float *out, int n)
+{
+    // Chegada e banquete: o rugido grande.
+    roar(out, n, 70.0f, 40.0f, 0.18f);
+}
+
+static void synth_dev_teeth(float *out, int n)
+{
+    // Rajada de dentes: cuspidas secas em sequência.
+    memset(out, 0, sizeof(float) * (size_t)n);
+    LowPass lp = { 0 };
+    for (int k = 0; k < 5; k++) {
+        int start = (int)((float)k * 0.05f * SAMPLE_RATE);
+        for (int i = start; i < n; i++) {
+            float t = (float)(i - start) / SAMPLE_RATE;
+            if (t > 0.15f) break;
+            out[i] += lowpass(&lp, noise(), 2200.0f) * 1.6f * envelope(t, 0.001f, 30.0f);
+        }
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -1100,6 +1190,13 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_WORM_CORE]       = { synth_worm_core,       1.40f, 0.90f, 1 },
     [SND_WORM_NODULE]     = { synth_worm_nodule,     0.90f, 0.85f, 2 },
     [SND_TUNNEL]          = { synth_tunnel,          0.90f, 0.70f, 1 },
+    [SND_DEV_AIM]         = { synth_dev_aim,         2.00f, 0.90f, 1 },
+    [SND_DEV_BITE]        = { synth_dev_bite,        2.20f, 1.00f, 1 },
+    [SND_DEV_SCREECH]     = { synth_dev_screech,     1.20f, 0.85f, 1 },
+    [SND_DEV_BROKEN]      = { synth_dev_broken,      1.40f, 0.95f, 1 },
+    [SND_DEV_GULP]        = { synth_dev_gulp,        0.50f, 0.70f, 2 },
+    [SND_DEV_ROAR]        = { synth_dev_roar,        2.40f, 0.90f, 1 },
+    [SND_DEV_TEETH]       = { synth_dev_teeth,       0.45f, 0.55f, 2 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -1329,6 +1426,15 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_WORM_CORE:       s = SND_WORM_CORE; positional = false; break;
         case EV_WORM_NODULE:     s = SND_WORM_NODULE; floor = 0.5f; break;
         case EV_TUNNEL:          s = SND_TUNNEL; positional = false; break;
+        // Devorador.
+        case EV_DEV_AIM:         s = SND_DEV_AIM; positional = false; break;
+        case EV_DEV_BITE:        s = SND_DEV_BITE; floor = 0.6f; break;
+        case EV_DEV_MISS:
+        case EV_DEV_TORN:        s = SND_DEV_SCREECH; floor = 0.6f; break;
+        case EV_DEV_BROKEN:      s = SND_DEV_BROKEN; floor = 0.6f; break;
+        case EV_DEV_SWALLOW:     s = SND_DEV_GULP; floor = 0.4f; break;
+        case EV_DEV_LATCH:       s = SND_DEV_ROAR; positional = false; break;
+        case EV_DEV_TEETH:       s = SND_DEV_TEETH; floor = 0.3f; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

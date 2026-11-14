@@ -40,4 +40,11 @@ float worm_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, u
 float worm_core_factor(const Boss *b, const Tuning *t);
 void  worm_new_phase(Boss *b, const Tuning *t);
 
+void  devourer_spawn(Boss *b, const BossContext *ctx, Vector3 dir);
+void  devourer_enter(Boss *b, const BossContext *ctx);
+void  devourer_fight(Boss *b, const BossContext *ctx);
+int   devourer_parts(const Boss *b, const Tuning *t, BossPart *out);
+float devourer_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, uint32_t tick);
+float devourer_core_factor(const Boss *b, const Tuning *t);
+
 #endif

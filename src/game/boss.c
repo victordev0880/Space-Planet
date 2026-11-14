@@ -14,6 +14,7 @@ const char *boss_name(BossType type)
     switch (type) {
     case BOSS_HIVE: return "COLMEIA LUNAR";
     case BOSS_WORM: return "VERME DO NÚCLEO";
+    case BOSS_DEVOURER: return "DEVORADOR";
     default:        return "ROMPE-MUNDOS";
     }
 }
@@ -23,6 +24,7 @@ float boss_enter_time(const Boss *b, const Tuning *t)
     switch ((BossType)b->type) {
     case BOSS_HIVE: return t->hive_enter_time;
     case BOSS_WORM: return t->worm_enter_time;
+    case BOSS_DEVOURER: return t->dev_enter_time;
     default:        return t->breaker_enter_time;
     }
 }
@@ -32,6 +34,7 @@ float boss_points(BossType type, const Tuning *t)
     switch (type) {
     case BOSS_HIVE: return t->hive_points;
     case BOSS_WORM: return t->worm_points;
+    case BOSS_DEVOURER: return t->dev_points;
     default:        return t->breaker_points;
     }
 }
@@ -41,6 +44,7 @@ float boss_xp(BossType type, const Tuning *t)
     switch (type) {
     case BOSS_HIVE: return t->hive_xp;
     case BOSS_WORM: return t->worm_xp;
+    case BOSS_DEVOURER: return 0.0f;   // o último: não há mais nada a ganhar
     default:        return t->breaker_xp;
     }
 }
@@ -95,6 +99,7 @@ int boss_parts(const Boss *b, const Tuning *t, BossPart *out)
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_parts(b, t, out);
     case BOSS_WORM: return worm_parts(b, t, out);
+    case BOSS_DEVOURER: return devourer_parts(b, t, out);
     default:        return breaker_parts(b, t, out);
     }
 }
@@ -105,6 +110,7 @@ float boss_core_factor(const Boss *b, const Tuning *t)
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_core_factor(b, t);
     case BOSS_WORM: return worm_core_factor(b, t);
+    case BOSS_DEVOURER: return devourer_core_factor(b, t);
     default:        return breaker_core_factor(b, t);
     }
 }
@@ -135,6 +141,7 @@ void boss_spawn(Boss *b, BossType type, const BossContext *ctx, Vector3 dir)
     switch (type) {
     case BOSS_HIVE: hive_spawn(b, ctx, Vector3Normalize(dir)); break;
     case BOSS_WORM: worm_spawn(b, ctx, Vector3Normalize(dir)); break;
+    case BOSS_DEVOURER: devourer_spawn(b, ctx, Vector3Normalize(dir)); break;
     default:        breaker_spawn(b, ctx, Vector3Normalize(dir)); break;
     }
 }
@@ -206,6 +213,7 @@ void boss_tick(Boss *b, const BossContext *ctx)
         switch ((BossType)b->type) {
         case BOSS_HIVE: hive_enter(b, ctx); break;
         case BOSS_WORM: worm_enter(b, ctx); break;
+        case BOSS_DEVOURER: devourer_enter(b, ctx); break;
         default:        breaker_enter(b, ctx); break;
         }
         break;
@@ -213,6 +221,7 @@ void boss_tick(Boss *b, const BossContext *ctx)
         switch ((BossType)b->type) {
         case BOSS_HIVE: hive_fight(b, ctx); break;
         case BOSS_WORM: worm_fight(b, ctx); break;
+        case BOSS_DEVOURER: devourer_fight(b, ctx); break;
         default:        breaker_fight(b, ctx); break;
         }
         break;
@@ -226,6 +235,7 @@ void boss_tick(Boss *b, const BossContext *ctx)
 
 static void update_phase(Boss *b, const Tuning *t, Events *events, uint32_t tick)
 {
+    if (b->type == BOSS_DEVOURER) return;   // o humor dele segue o HP do planeta (boss_devourer.c)
     float marks[2];
     boss_phase_marks((BossType)b->type, t, marks);
     float ratio = b->hp / fmaxf(b->hp_max, 1e-3f);
@@ -262,6 +272,7 @@ float boss_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, u
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_hit(b, t, id, amount, events, tick);
     case BOSS_WORM: return worm_hit(b, t, id, amount, events, tick);
+    case BOSS_DEVOURER: return devourer_hit(b, t, id, amount, events, tick);
     default:        return breaker_hit(b, t, id, amount, events, tick);
     }
 }

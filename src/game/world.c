@@ -53,6 +53,15 @@ static const Rgb8 SHIELD_SPARK      = { 130, 210, 255 };
 #define MOON_RETURN     0.01f    // sem a Colmeia, a Lua recupera este tanto da distância por segundo
 #define WORM_CRATER_FROM 12.0f   // as crateras do Verme são "impactos" vindos deste tanto acima do chão
 #define WORM_DUST        6       // poeira de cada tremor em cima do Verme
+#define DEV_BITE_FROM    20.0f   // a mordida do Devorador é um "impacto" vindo deste tanto acima do chão
+#define DEV_BITE_JOLT    9.0f
+#define DEV_BROKEN_JOLT  5.0f
+#define DEV_GULP         0.55f   // engole o que chegar a este tanto (em escalas) da boca
+#define DEV_SWIRL_DRAG   0.8f    // as rochas sugadas perdem velocidade de lado (espiral, não órbita)
+#define DEV_REGURGITATE_BASE 6   // na morte, devolve isto mais o que engoliu (até dev.regurgitate)
+#define DEV_RAIN_HEIGHT  30.0f   // as rochas devolvidas caem desta altura...
+#define DEV_RAIN_STEP    4.0f    // ... uma um pouco mais alta que a outra (chegam em sequência)
+#define DEV_RAIN_SPEED   6.0f
 static const Rgb8 WORM_DUST_COLOR = { 140, 118, 96 };
 
 // ---------------------------------------------------------------------------
@@ -85,8 +94,8 @@ static CamPose free_pose(const World *w, const Tuning *t)
 }
 
 // Anda da nave até `to` e devolve o último ponto livre antes do primeiro
-// obstáculo (terreno ou Lua).
-static Vector3 clear_camera_path(const World *w, Vector3 from, Vector3 to, float clearance)
+// obstáculo (terreno, Lua ou o corpo do chefe, em `hull`).
+static Vector3 clear_camera_path(const World *w, Vector3 from, Vector3 to, float clearance, const BossPart *hull, int hull_count)
 {
     // Densidade que o campo tem a `clearance` de distância da superfície.
     float blocked = VOXEL_ISO - clearance * VOXEL_DENSITY_PER_UNIT;
@@ -96,6 +105,9 @@ static Vector3 clear_camera_path(const World *w, Vector3 from, Vector3 to, float
         Vector3 point = Vector3Lerp(from, to, (float)i / CHASE_PATH_STEPS);
         if (planet_sample(&w->planet, point) >= blocked) return last_free;
         if (Vector3Distance(point, w->moon.pos) < moon_reach) return last_free;
+        for (int k = 0; k < hull_count; k++) {
+            if (Vector3Distance(point, hull[k].center) < hull[k].radius + clearance) return last_free;
+        }
         last_free = point;
     }
     return to;
@@ -103,16 +115,29 @@ static Vector3 clear_camera_path(const World *w, Vector3 from, Vector3 to, float
 
 // Lugar da câmera: o desejado, recuado se houver terreno no caminho. Se o
 // recuo a deixaria colada na nave (dentro do modelo, com a nave pousada no
-// chão ou no fundo de um buraco), ela sobe por cima da nave.
+// chão ou no fundo de um buraco), ela sobe por cima da nave. Os chefes são
+// enormes: a câmera também não entra no corpo deles (por dentro, a tela vira
+// uma parede de polígonos).
 static Vector3 place_chase_camera(const World *w, const Tuning *t, Vector3 ship, Vector3 desired)
 {
-    Vector3 pos = clear_camera_path(w, ship, desired, t->chase_clearance);
+    // Só as peças sólidas que não envolvem a própria nave (colada no casco,
+    // a câmera ficaria presa nela).
+    BossPart parts[BOSS_PARTS_MAX], hull[BOSS_PARTS_MAX];
+    int hull_count = 0;
+    if (boss_active(&w->boss)) {
+        int count = boss_parts(&w->boss, t, parts);
+        for (int k = 0; k < count; k++) {
+            bool wraps_ship = Vector3Distance(ship, parts[k].center) < parts[k].radius + t->chase_clearance;
+            if (parts[k].solid && !wraps_ship) hull[hull_count++] = parts[k];
+        }
+    }
+    Vector3 pos = clear_camera_path(w, ship, desired, t->chase_clearance, hull, hull_count);
     if (Vector3Distance(pos, ship) >= t->chase_distance * CHASE_MIN_FRACTION) return pos;
 
     Vector3 up = Vector3Normalize(ship);
     Vector3 above = Vector3Add(ship, Vector3Add(Vector3Scale(up, t->chase_distance),
                                                 Vector3Scale(Vector3Subtract(desired, ship), 0.4f)));
-    Vector3 lifted = clear_camera_path(w, ship, above, t->chase_clearance);
+    Vector3 lifted = clear_camera_path(w, ship, above, t->chase_clearance, hull, hull_count);
     return (Vector3Distance(lifted, ship) > Vector3Distance(pos, ship)) ? lifted : pos;
 }
 
@@ -636,6 +661,95 @@ static void tick_worm_requests(World *w, const Tuning *t)
     }
 }
 
+// O Devorador: a mordida (um escudo local no ponto quebra os dentes dele) e o
+// redemoinho, que puxa rochas e minério para a boca e cura quem engole.
+static void tick_devourer_requests(World *w, const Tuning *t, float dt)
+{
+    Boss *b = &w->boss;
+    uint32_t tick = (uint32_t)w->tick;
+    if (b->dev.bite_now) {
+        Vector3 dir = b->dev.bite_dir;
+        Terrain terrain = planet_terrain(&w->planet.params, dir);
+        Vector3 ground = Vector3Scale(dir, w->planet.params.radius + (terrain.land ? terrain.elevation : 0.0f));
+        bool blocked = shielded(w, t, ground, t->dev_bite_radius);
+        if (!blocked) {
+            world_impact(w, t, Vector3Add(ground, Vector3Scale(dir, DEV_BITE_FROM)), Vector3Negate(dir), t->dev_bite_radius,
+                         t->dev_bite_depth);
+        }
+        world_jolt(w, blocked ? DEV_BROKEN_JOLT : DEV_BITE_JOLT);
+        devourer_bite_result(b, t, blocked, &w->events, tick);
+    }
+    if (b->state != BOSS_FIGHT) return;
+
+    Vector3 mouth = devourer_mouth(b, t);
+    float gulp = b->scale * DEV_GULP;
+    for (int i = 0; i < ROCKS_MAX; i++) {
+        Rock *k = &w->rocks.items[i];
+        if (!k->alive || k->kind == ROCK_SPORE || i == w->rocks.towed) continue;   // a rocha no raio trator resiste
+        Vector3 to = Vector3Subtract(mouth, k->pos);
+        float distance = Vector3Length(to);
+        if (distance > t->dev_vortex_range) continue;
+        if (distance < gulp + k->radius) {
+            float heal = (k->kind == ROCK_METEOR) ? t->dev_heal_meteor : t->dev_heal_fragment;
+            devourer_swallow(b, heal, true);
+            events_push(&w->events, tick, EV_DEV_SWALLOW, k->kind, k->pos, heal);
+            k->alive = false;
+            continue;
+        }
+        // Sugada: solta da órbita e voa em espiral até a boca.
+        if (k->state != ROCK_FLYBY && k->state != ROCK_THROWN) k->state = ROCK_FLYBY;
+        Vector3 dir = Vector3Scale(to, 1.0f / distance);
+        k->vel = Vector3Add(Vector3Scale(k->vel, 1.0f - Clamp(DEV_SWIRL_DRAG * dt, 0.0f, 1.0f)),
+                            Vector3Scale(dir, t->dev_vortex_pull * dt * (1.0f + 2.0f * (1.0f - distance / t->dev_vortex_range))));
+    }
+    for (int i = 0; i < ORE_MAX; i++) {
+        Ore *o = &w->rocks.ore[i];
+        if (!o->alive) continue;
+        Vector3 to = Vector3Subtract(mouth, o->pos);
+        float distance = Vector3Length(to);
+        if (distance > t->dev_vortex_range) continue;
+        if (distance < gulp) {
+            devourer_swallow(b, t->dev_heal_ore, false);
+            o->alive = false;
+            continue;
+        }
+        o->vel = Vector3Add(o->vel, Vector3Scale(to, t->dev_vortex_pull * dt / distance));
+    }
+}
+
+// Morto, o Devorador devolve o que comeu: rochas chovem sobre as crateras
+// (as maiores primeiro) e consertam o planeta ao tocar o chão.
+static void devourer_regurgitate(World *w, const Tuning *t)
+{
+    int count = w->boss.dev.eaten + DEV_REGURGITATE_BASE;
+    if (count > t->dev_regurgitate) count = t->dev_regurgitate;
+    float radius = w->planet.params.radius;
+
+    // As cicatrizes abertas, da maior para a menor (ordenação por inserção:
+    // são poucas).
+    int order[REPAIR_SCARS], scars = 0;
+    for (int s = 0; s < REPAIR_SCARS; s++) {
+        if (!w->repair.scars[s].used) continue;
+        int at = scars++;
+        while (at > 0 && w->repair.scars[order[at - 1]].radius < w->repair.scars[s].radius) {
+            order[at] = order[at - 1];
+            at--;
+        }
+        order[at] = s;
+    }
+    for (int i = 0; i < count; i++) {
+        // Uma rocha em cada cicatriz, das maiores para as menores (dando a
+        // volta se sobrarem rochas); sem cicatrizes, um ponto sorteado.
+        Vector3 dir = (scars > 0) ? w->repair.scars[order[i % scars]].dir : rng_unit_vec3(&w->rng);
+        Vector3 ground = Vector3Scale(dir, radius);
+        Rock *k = rocks_spawn_fragment(&w->rocks, &w->rng, t, radius, ground, VMAT_GRASS);
+        if (k == NULL) break;
+        k->state = ROCK_FALLING;
+        k->pos = k->pos_prev = Vector3Scale(dir, radius + DEV_RAIN_HEIGHT + DEV_RAIN_STEP * (float)i);
+        k->vel = Vector3Scale(dir, -DEV_RAIN_SPEED);
+    }
+}
+
 // O boss pensa; o mundo executa o que ele pede (cortes no planeta, drones,
 // explosões da morte) e, se ele acabou de cair, paga a recompensa.
 static void tick_boss(World *w, const Tuning *t)
@@ -651,6 +765,7 @@ static void tick_boss(World *w, const Tuning *t)
     }
     b->hive.spore_count = 0;
     if (b->type == BOSS_WORM) tick_worm_requests(w, t);
+    if (b->type == BOSS_DEVOURER) tick_devourer_requests(w, t, 1.0f / (float)t->sim_hz);
     // A Colmeia empurra a Lua; sem ela, a Lua volta devagar à órbita.
     float dt = 1.0f / (float)t->sim_hz;
     if (boss_active(b) && b->type == BOSS_HIVE) w->moon.scale = b->hive.moon_scale;
@@ -662,6 +777,7 @@ static void tick_boss(World *w, const Tuning *t)
     }
     if (!b->defeated) return;
     b->defeated = false;
+    if (b->type == BOSS_DEVOURER) devourer_regurgitate(w, t);
     particles_explosion(&w->particles, &w->rng, b->pos, b->vel, b->scale * 1.6f, BOSS_BLAST_HOT, BOSS_BLAST_GLOW,
                         BOSS_BLAST_DEBRIS);
     world_jolt(w, BOSS_BLAST_JOLT * 4.0f);
@@ -669,7 +785,9 @@ static void tick_boss(World *w, const Tuning *t)
     score_kill(&w->score, t, boss_points((BossType)b->type, t));
     w->score.bosses++;
     world_give_xp(w, t, boss_xp((BossType)b->type, t));
-    // A recompensa: o núcleo do boss (cada um dá uma habilidade).
+    // A recompensa: o núcleo do boss (cada um dá uma habilidade). O Devorador
+    // é o último: a recompensa dele é a chuva de rochas (e a vitória).
+    if (b->type == BOSS_DEVOURER) return;
     bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : (b->type == BOSS_WORM) ? &w->tunnel.owned : &w->ability.owned;
     if (!*owned) {
         *owned = true;
@@ -1394,6 +1512,12 @@ uint64_t world_hash(const World *w)
             HASH(h, w->boss.hive.thr_hp);
             HASH(h, w->boss.hive.moon_scale);
             HASH(h, w->boss.hive.inflating);
+        }
+        if (w->boss.type == BOSS_DEVOURER) {
+            HASH(h, w->boss.type);
+            HASH(h, w->boss.dev.eaten);
+            HASH(h, w->boss.dev.flinch);
+            HASH(h, w->boss.phase);
         }
         if (w->boss.type == BOSS_WORM) {
             HASH(h, w->boss.type);

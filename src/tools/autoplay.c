@@ -555,6 +555,13 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
             Vector3 axis = (Vector3LengthSqr(b->axis) > 0.5f) ? b->axis : (Vector3){ 0.0f, 1.0f, 0.0f };
             Vector3 radial = Vector3Normalize(b->pos);
             Vector3 ahead = Vector3Normalize(Vector3CrossProduct(axis, radial));
+            if (b->type == BOSS_DEVOURER) {
+                // O Devorador muda de rumo o tempo todo: os eixos são os do
+                // corpo dele ("atrás" negativo põe a câmera diante da boca).
+                radial = Vector3RotateByQuaternion((Vector3){ 0.0f, 1.0f, 0.0f }, b->rot);
+                ahead = Vector3RotateByQuaternion((Vector3){ 0.0f, 0.0f, -1.0f }, b->rot);
+                axis = Vector3CrossProduct(ahead, radial);
+            }
             Vector3 pos = Vector3Add(b->pos, Vector3Scale(radial, frame->cam_pos.x));
             pos = Vector3Add(pos, Vector3Scale(ahead, -frame->cam_pos.y));
             pos = Vector3Add(pos, Vector3Scale(axis, frame->cam_pos.z));

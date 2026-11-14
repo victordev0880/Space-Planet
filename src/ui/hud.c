@@ -55,6 +55,8 @@ static const Color THRUSTER_COLOR      = { 255, 140, 60, 255 };
 static const Color WORM_COLOR          = { 255, 160, 90, 255 };
 static const Color STINGER_COLOR       = { 255, 90, 200, 255 };
 static const Color TUNNEL_COLOR        = { 255, 180, 110, 255 };
+static const Color EYE_COLOR           = { 255, 230, 120, 255 };
+static const Color SWIRL_COLOR         = { 200, 140, 255, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -729,6 +731,64 @@ static int worm_alerts(const World *w, const Tuning *t, int center_x, int y, flo
     return y;
 }
 
+// Avisos do Devorador: a mordida marcada, a garganta exposta, o banquete.
+static int devourer_alerts(const World *w, const Tuning *t, int center_x, int y, float now)
+{
+    const Boss *b = &w->boss;
+    const DevourerState *d = &b->dev;
+    switch ((DevourerAction)b->action) {
+    case DEV_AIM: {
+        float blink = (sinf(now * 22.0f) > 0.0f) ? 0.5f : 0.0f;
+        text_centered(hud_keys("ELE VAI MORDER: ACERTE OS OLHOS, OU PONHA UM ESCUDO (5) NO ALVO!",
+                               "ELE VAI MORDER: ACERTE OS OLHOS, OU PONHA UM ESCUDO NO ALVO!"),
+                      center_x, y, ALERT_SIZE + 4, mix_color(BOSS_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 10;
+        float flinch = Clamp(d->flinch / fmaxf(t->dev_flinch, 1e-3f), 0.0f, 1.0f);
+        draw_bar(center_x - 80, y, 160, 6, flinch, EYE_COLOR);   // quanto falta para ele errar
+        y += 14;
+        break;
+    }
+    case DEV_DIVE:
+        text_centered("MERGULHANDO!", center_x, y, ALERT_SIZE + 6, mix_color(BOSS_COLOR, WHITE, 0.4f));
+        y += ALERT_SIZE + 12;
+        break;
+    case DEV_CHEW:
+    case DEV_STUN: {
+        const char *msg = (b->action == DEV_CHEW) ? "MASTIGANDO: A GARGANTA ESTÁ EXPOSTA!" : "ATORDOADO: ATAQUE A GARGANTA!";
+        text_centered(TextFormat("%s (%.0f s)", msg, (double)ceilf(b->timer)), center_x, y, ALERT_SIZE + 6,
+                      mix_color(CORE_OPEN_COLOR, WHITE, 0.25f + 0.25f * sinf(now * 8.0f)));
+        y += ALERT_SIZE + 12;
+        break;
+    }
+    case DEV_LATCH: {
+        float torn = Clamp(d->latch_damage / fmaxf(t->dev_latch_break * b->hp_max, 1e-3f), 0.0f, 1.0f);
+        float blink = (sinf(now * 12.0f) > 0.0f) ? 0.45f : 0.0f;
+        text_centered(TextFormat("BANQUETE: ELE ESTÁ DEVORANDO O PLANETA! ARRANQUE-O (%.0f%%)", (double)torn * 100.0), center_x,
+                      y, ALERT_SIZE + 6, mix_color(BOSS_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 12;
+        break;
+    }
+    default: {
+        // Rochas no redemoinho: dá para roubar.
+        Vector3 mouth = devourer_mouth(b, t);
+        bool pulling = false;
+        for (int i = 0; i < ROCKS_MAX && !pulling; i++) {
+            const Rock *k = &w->rocks.items[i];
+            pulling = k->alive && k->kind != ROCK_SPORE && i != w->rocks.towed
+                   && Vector3Distance(k->pos, mouth) < t->dev_vortex_range;
+        }
+        if (pulling) {
+            text_centered(hud_keys("O REDEMOINHO ENGOLE ROCHAS PARA SE CURAR: ROUBE-AS COM O RAIO TRATOR (F)",
+                                   "O REDEMOINHO ENGOLE ROCHAS PARA SE CURAR: ROUBE-AS COM O RAIO TRATOR (X)"),
+                          center_x, y, ALERT_SIZE, with_alpha(SWIRL_COLOR, 0.75f + 0.25f * sinf(now * 5.0f)));
+            y += ALERT_SIZE + 8;
+        }
+        break;
+    }
+    }
+    return y;
+}
+
 static void draw_alerts(const World *w, const Tuning *t, int center_x)
 {
     const Enemies *e = &w->enemies;
@@ -757,6 +817,8 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
         y = hive_alerts(w, t, center_x, y, now);
     } else if (boss_vulnerable(b) && b->type == BOSS_WORM) {
         y = worm_alerts(w, t, center_x, y, now);
+    } else if (boss_vulnerable(b) && b->type == BOSS_DEVOURER) {
+        y = devourer_alerts(w, t, center_x, y, now);
     } else if (boss_vulnerable(b)) {
         if (b->action == BREAKER_CHARGE) {
             float left = b->timer;
@@ -845,11 +907,17 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
         text_centered(name, sw / 2, y + 18, BANNER_SIZE + 6, with_alpha(BOSS_COLOR, fade));
         const char *hint = (e->sub == BOSS_HIVE) ? "ela se agarrou à Lua: estoure as bolsas para abrir o coração"
                          : (e->sub == BOSS_WORM) ? "ele nada dentro do planeta: ataque quando ele saltar para fora"
+                         : (e->sub == BOSS_DEVOURER) ? "ele engole rochas para se curar e morde o planeta; escudos locais quebram os dentes dele"
                                                  : "quando ele carregar o canhão, destrua os 4 capacitores";
         text_centered(hint, sw / 2, y + BANNER_SIZE + 34, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
         break;
     }
     case EV_BOSS_PHASE:
+        if (e->sub == BOSS_DEVOURER) {
+            text_centered(TextFormat("%s  -  %s", name, devourer_mood_name((int)e->value)), sw / 2, y, BANNER_SIZE - 14,
+                          with_alpha(BOSS_COLOR, fade));
+            break;
+        }
         text_centered(TextFormat("%s  -  FASE %d", name, (int)e->value), sw / 2, y, BANNER_SIZE - 14,
                       with_alpha(BOSS_COLOR, fade));
         break;
@@ -857,6 +925,10 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
         text_centered(TextFormat("%s DESTRUÍDO", name), sw / 2, y, BANNER_SIZE - 10, with_alpha(PRIZE_COLOR, fade));
         text_centered(TextFormat("+%s", format_points((int64_t)e->value)), sw / 2, y + BANNER_SIZE, LABEL_SIZE + 4,
                       with_alpha(PRIZE_COLOR, fade));
+        if (e->sub == BOSS_DEVOURER) {
+            text_centered("ele devolve o que engoliu: as rochas caem sobre as crateras e consertam o planeta", sw / 2,
+                          y + BANNER_SIZE + LABEL_SIZE + 14, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+        }
         break;
     default:   // EV_REWARD
         if (e->sub == BOSS_WORM) {
@@ -1227,8 +1299,12 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
     int x = sw / 2 - BOSS_BAR_WIDTH / 2, y = top + 30;
     DrawRectangle(x - 12, top, BOSS_BAR_WIDTH + 24, BOSS_PANEL_HEIGHT, FRAME_COLOR);
     ui_draw_text(boss_name((BossType)b->type), x, top + 6, LABEL_SIZE, BOSS_COLOR);
-    const char *phase = TextFormat("FASE %d", b->phase);
-    ui_draw_text(phase, x + BOSS_BAR_WIDTH - ui_measure_text(phase, LABEL_SIZE), top + 6, LABEL_SIZE, TEXT_COLOR);
+    // O Devorador não tem fases pela vida: o humor dele segue o planeta.
+    bool devourer = b->type == BOSS_DEVOURER;
+    const char *phase = devourer ? devourer_mood_name(b->phase) : TextFormat("FASE %d", b->phase);
+    Color phase_color = (devourer && b->phase >= DEV_FEAST) ? mix_color(BOSS_COLOR, WHITE, (sinf(now * 10.0f) > 0.0f) ? 0.4f : 0.0f)
+                                                             : TEXT_COLOR;
+    ui_draw_text(phase, x + BOSS_BAR_WIDTH - ui_measure_text(phase, LABEL_SIZE), top + 6, LABEL_SIZE, phase_color);
     // Na entrada, a barra enche (e ele ainda é invulnerável).
     float fill = b->hp / fmaxf(b->hp_max, 1e-3f);
     if (b->state == BOSS_ENTER) fill *= 1.0f - Clamp(b->timer / boss_enter_time(b, t), 0.0f, 1.0f);
@@ -1238,9 +1314,13 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
     // Marcas das fases.
     float marks[2];
     boss_phase_marks((BossType)b->type, t, marks);
-    for (int k = 0; k < 2; k++) {
+    for (int k = 0; k < 2 && !devourer; k++) {
         int mx = x + (int)((float)BOSS_BAR_WIDTH * marks[k]);
         DrawRectangle(mx - 1, y - 3, 2, 18, MARKER_COLOR);
+    }
+    if (devourer && b->state == BOSS_FIGHT) {
+        const char *ate = TextFormat("ENGOLIU %d", b->dev.eaten);
+        ui_draw_text(ate, x + BOSS_BAR_WIDTH - ui_measure_text(ate, SMALL_SIZE + 4), y + 15, SMALL_SIZE + 4, SWIRL_COLOR);
     }
     // Alvos: um quadradinho por alvo, aceso enquanto vivo.
     if (boss_capacitors_armed(b)) {
@@ -1296,7 +1376,12 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         if (!project(camera, part->center, &p) || !on_screen(p)) continue;
         if (part->role == PART_CORE) {
             DrawCircleLines((int)p.x, (int)p.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
-            text_centered(b->type == BOSS_HIVE ? "CORAÇÃO" : "NÚCLEO", (int)p.x, (int)p.y - 34, 18, CORE_OPEN_COLOR);
+            const char *label = (b->type == BOSS_HIVE) ? "CORAÇÃO" : (b->type == BOSS_WORM) ? "BOCA"
+                              : (b->type == BOSS_DEVOURER) ? "GARGANTA" : "NÚCLEO";
+            text_centered(label, (int)p.x, (int)p.y - 34, 18, CORE_OPEN_COLOR);
+        } else if (b->type == BOSS_DEVOURER) {
+            diamond(p, 10.0f + 3.0f * sinf(now * 14.0f), EYE_COLOR);
+            text_centered("OLHO", (int)p.x, (int)p.y - 30, 16, EYE_COLOR);
         } else if (b->type == BOSS_WORM) {
             bool tail = part->id >= WORM_NODULES;
             diamond(p, (tail ? 10.0f : 7.0f) + 2.0f * sinf(now * 10.0f), tail ? STINGER_COLOR : WORM_COLOR);

@@ -8,6 +8,7 @@
 #include "core/vmath.h"
 #include "render/hive_render.h"
 #include "render/worm_render.h"
+#include "render/devourer_render.h"
 #include "render/lowpoly.h"
 
 // --- modelos ------------------------------------------------------------------
@@ -216,6 +217,10 @@ void boss_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Cam
         worm_draw(w, t, alpha, glow, camera);
         return;
     }
+    if (b->type == BOSS_DEVOURER) {
+        devourer_draw(w, t, alpha, glow, camera);
+        return;
+    }
     if (!built) build_hull();
     float time = (float)w->tick / (float)t->sim_hz;
     BossPose p = boss_pose(b, t, alpha);
@@ -368,6 +373,7 @@ void boss_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D g
     Vector3 eye = camera.position;
     hive_effects_draw(w, t, alpha, glow, camera);
     worm_effects_draw(w, t, alpha, glow, camera);
+    devourer_effects_draw(w, t, alpha, glow, camera);
     bool fighting = boss_active(b) && b->state == BOSS_FIGHT && b->type == BOSS_BREAKER;
     bool charging = fighting && b->action == BREAKER_CHARGE;
     bool firing = fighting && b->action == BREAKER_FIRE;

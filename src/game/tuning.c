@@ -628,6 +628,44 @@ static const TuneField BOSS_FIELDS[] = {
     F("tunnel.cooldown",          tunnel_cooldown,          0,    600),
     F("tunnel.altitude",          tunnel_altitude,          1,    200),
     F("tunnel.time",              tunnel_time,              0,    10),
+    F("dev.hp",                   dev_hp,                   1,    100000),
+    F("dev.points",               dev_points,               0,    10000000),
+    F("dev.enter_time",           dev_enter_time,           0.1,  60),
+    F("dev.spawn_distance",       dev_spawn_distance,       1.5,  20),
+    F("dev.scale",                dev_scale,                1,    100),
+    F("dev.altitude",             dev_altitude,             5,    1000),
+    F("dev.speed",                dev_speed,                0,    500),
+    F("dev.vortex_range",         dev_vortex_range,         0,    2000),
+    F("dev.vortex_pull",          dev_vortex_pull,          0,    1000),
+    F("dev.heal_fragment",        dev_heal_fragment,        0,    1),
+    F("dev.heal_meteor",          dev_heal_meteor,          0,    1),
+    F("dev.heal_ore",             dev_heal_ore,             0,    1),
+    F("dev.bite_interval_1",      dev_bite_interval[0],     0.5,  600),
+    F("dev.bite_interval_2",      dev_bite_interval[1],     0.5,  600),
+    F("dev.aim_time",             dev_aim_time,             0.2,  30),
+    F("dev.aim_altitude",         dev_aim_altitude,         5,    500),
+    F("dev.dive_time",            dev_dive_time,            0.1,  10),
+    F("dev.chew_time",            dev_chew_time,            0.1,  30),
+    F("dev.rise_time",            dev_rise_time,            0.1,  30),
+    F("dev.bite_radius",          dev_bite_radius,          1,    60),
+    F("dev.bite_depth",           dev_bite_depth,           0.5,  60),
+    F("dev.bite_spread",          dev_bite_spread,          0,    180),
+    F("dev.flinch",               dev_flinch,               0.1,  100000),
+    F("dev.flinch_stun",          dev_flinch_stun,          0.1,  60),
+    F("dev.broken_stun",          dev_broken_stun,          0.1,  60),
+    F("dev.throat_armor",         dev_throat_armor,         0,    1),
+    F("dev.frenzy_hp",            dev_frenzy_hp,            0,    1),
+    F("dev.feast_hp",             dev_feast_hp,             0,    1),
+    F("dev.teeth_interval",       dev_teeth_interval,       0.2,  60),
+    F("dev.teeth_damage",         dev_teeth_damage,         0,    10000),
+    F("dev.teeth_speed",          dev_teeth_speed,          1,    1000),
+    I("dev.teeth_count",          dev_teeth_count,          0,    16),
+    F("dev.latch_drain",          dev_latch_drain,          0.05, 60),
+    F("dev.latch_radius",         dev_latch_radius,         0.5,  60),
+    F("dev.latch_break",          dev_latch_break,          0,    1),
+    F("dev.latch_cooldown",       dev_latch_cooldown,       0,    600),
+    F("dev.torn_stun",            dev_torn_stun,            0.1,  60),
+    I("dev.regurgitate",          dev_regurgitate,          0,    32),
 };
 
 #undef I
@@ -792,6 +830,10 @@ bool tuning_bosses_from_config(Tuning *out, const Config *bosses_cfg, char *err,
     }
     if (t.hive_phase_3 >= t.hive_phase_2) {
         snprintf(err, err_len, "%s: hive.phase_3 precisa ser menor que hive.phase_2", BOSSES_FILE);
+        return false;
+    }
+    if (t.dev_feast_hp >= t.dev_frenzy_hp) {
+        snprintf(err, err_len, "%s: dev.feast_hp precisa ser menor que dev.frenzy_hp", BOSSES_FILE);
         return false;
     }
     if (t.worm_phase_3 >= t.worm_phase_2) {

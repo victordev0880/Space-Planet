@@ -1,0 +1,71 @@
+# Roteiro do marco 11 (Devorador, o chefe final): a chegada, o redemoinho
+# sugando rochas, a mira (o círculo vermelho no chão), o mergulho e a
+# mordida, a garganta exposta, o piloto automático lutando, o banquete (o
+# planeta derrubado abaixo de 60% por crateras do roteiro), a morte e as
+# rochas devolvidas chovendo sobre as crateras.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/devourer1.txt"
+#
+# Ele chega pela direção (0.2 0.9 0.4). "cam boss acima atrás lado" segue ele, nos eixos do corpo
+# dele ("atrás" negativo: diante da boca).
+
+frames 7800
+seed 21
+
+at 0    waves off
+at 0    ship 150 90 90  26 116 52
+at 0    boss devourer 0.2 0.9 0.4
+# Rochas em órbita perto de onde ele vai rondar (o redemoinho vai sugá-las).
+at 300  rock fragment 20 115 40
+at 300  rock fragment -15 120 30
+at 300  rock fragment 35 105 -10
+at 300  rock meteor 60 110 20 -6 0 0
+
+# --- chegada e ronda --------------------------------------------------------------
+at 200  shot devourer1_01_chegando
+at 300  cam boss 10 -55 15
+at 301  shot devourer1_02_rugindo
+at 302  view ship
+at 600  cam boss 30 20 50
+at 601  shot devourer1_03_redemoinho
+at 602  view ship
+
+# --- a mira, o mergulho e a mordida -------------------------------------------------
+at 800  cam boss 0 10 70
+at 801  shot devourer1_04_mira
+at 802  view ship
+at 940  cam boss -5 -50 25
+at 941  shot devourer1_05_mira_fim
+at 942  view ship
+at 1000 cam boss 5 0 60
+at 1001 shot devourer1_06_mergulho
+at 1002 view ship
+at 1080 cam boss 10 10 55
+at 1081 shot devourer1_07_mastigando
+at 1082 view ship
+
+# --- o piloto automático luta --------------------------------------------------------
+at 1300 autopilot on
+at 2000 shot devourer1_08_luta
+at 2600 shot devourer1_09_luta
+
+# --- o banquete: o planeta abaixo de 60% --------------------------------------------
+at 3000 barrage 45 15 9
+at 3002 barrage 45 15 9
+at 3200 shot devourer1_10_planeta_ferido
+at 3700 cam boss 10 0 60
+at 3701 shot devourer1_11_banquete
+at 3702 view ship
+at 4300 shot devourer1_12_banquete
+
+# --- a morte e as rochas devolvidas ----------------------------------------------------
+at 5000 bosshp 0
+at 5060 cam boss 40 20 40
+at 5061 shot devourer1_13_morte
+at 5062 view ship
+at 5240 autopilot off
+at 5240 ship 45 150 80  0 0 0
+at 5290 shot devourer1_14_chuva
+at 5420 shot devourer1_15_chuva
+at 6400 shot devourer1_16_consertado
+at 7799 shot devourer1_17_fim

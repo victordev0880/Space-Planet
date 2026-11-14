@@ -189,6 +189,54 @@ typedef struct {
     float   ship_damage;                 // pedido: dano na nave (a erupção pegou ela)
 } WormState;
 
+// --- Devorador (o chefe final) ---------------------------------------------------
+// Uma bocarra colossal. Um redemoinho em volta dela suga rochas e minério
+// (cada rocha engolida cura); o raio trator disputa as rochas com ele. De
+// tempos em tempos escolhe um ponto do planeta e o marca (AIM: um círculo
+// vermelho no chão e os olhos acesos), mergulha (DIVE) e morde (CHEW, com a
+// garganta exposta). Acertar os olhos a tempo o faz errar; um escudo local no
+// ponto da mordida quebra os dentes dele (STUN longo, garganta aberta). O
+// comportamento muda com o HP do PLANETA: faminto, frenético (mordidas mais
+// rápidas, rajadas de dentes na nave) e, abaixo da metade, o banquete (LATCH:
+// agarrado ao planeta, devorando sem parar, garganta sempre aberta; um tanto
+// de dano o arranca). Morto, devolve tudo o que comeu, chovendo sobre as crateras.
+typedef enum {
+    DEV_PROWL,    // ronda o planeta, sugando rochas
+    DEV_AIM,      // marcou o ponto da mordida (o aviso)
+    DEV_DIVE,     // mergulhando
+    DEV_CHEW,     // mordeu: mastiga, garganta exposta
+    DEV_RISE,     // volta à altura de ronda
+    DEV_STUN,     // atordoado (errou, quebrou os dentes ou foi arrancado)
+    DEV_LATCH,    // banquete: agarrado ao planeta
+} DevourerAction;
+
+typedef enum { DEV_HUNGRY = 1, DEV_FRENZY = 2, DEV_FEAST = 3 } DevourerMood;   // o "phase" dele
+
+extern const Vector3 DEV_EYE[2];
+extern const float   DEV_EYE_RADIUS;
+extern const Vector3 DEV_THROAT;
+extern const float   DEV_THROAT_RADIUS;
+
+typedef struct {
+    float   jaw;                // 0 = fechada, 1 = escancarada (desenho e peças)
+    float   jaw_target;
+    Vector3 bite_dir;           // direção (do centro) do ponto da mordida
+    Vector3 hover;              // de onde ele mergulha
+    float   bite_wait;          // segundos até marcar a próxima mordida
+    float   flinch;             // dano nos olhos durante a mira (a partir de dev.flinch, ele erra)
+    float   eye_flash[2];
+    float   teeth_wait;         // frenético: até a próxima rajada de dentes
+    float   latch_damage;       // dano tomado agarrado (a partir de dev.latch_break, é arrancado)
+    float   latch_cooldown;     // depois de arrancado, segundos até poder agarrar de novo
+    float   drain_wait;         // banquete: até a próxima mordida contínua
+    int     eaten;              // rochas engolidas (devolvidas na morte)
+    float   orbit_angle;        // ronda: posição na órbita
+    Vector3 orbit_axis;
+    // Pedidos ao mundo neste passo.
+    bool    bite_now;           // morder agora em bite_dir (o mundo confere o escudo)
+    float   heal_pending;       // vida a recuperar (o mundo soma as rochas engolidas)
+} DevourerState;
+
 // --- o boss ---------------------------------------------------------------------
 typedef struct {
     uint8_t      type;          // BossType
@@ -221,6 +269,7 @@ typedef struct {
     BreakerState breaker;
     HiveState    hive;
     WormState    worm;
+    DevourerState dev;
 } Boss;
 
 typedef struct {
@@ -299,5 +348,14 @@ Vector3 worm_segment_forward(const Boss *b, int k);
 Vector3 worm_nodule_point(const Boss *b, const Tuning *t, int n);
 int     worm_nodules_left(const Boss *b);
 bool    worm_underground(const Boss *b, const Planet *planet);   // a cabeça está dentro do planeta
+
+// --- Devorador ------------------------------------------------------------------------
+// A boca dele (para onde o redemoinho puxa) no mundo.
+Vector3 devourer_mouth(const Boss *b, const Tuning *t);
+// O mundo conta o resultado da mordida: `blocked` = um escudo local segurou.
+void    devourer_bite_result(Boss *b, const Tuning *t, bool blocked, Events *events, uint32_t tick);
+// Uma rocha (ou cristal) foi engolida: cura `fraction` da vida máxima.
+void    devourer_swallow(Boss *b, float fraction, bool rock);
+const char *devourer_mood_name(int mood);
 
 #endif
