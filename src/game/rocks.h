@@ -38,6 +38,7 @@ typedef struct {
     bool       alive;
     uint8_t    kind;        // RockKind
     uint8_t    state;       // RockState
+    uint8_t    owner;       // a reboque: de que jogador (online; 0 no jogo solo)
     uint8_t    shape;       // desenho, de 0 a ROCK_SHAPES - 1
     uint8_t    material;    // fragmento: o material da superfície de onde saiu (a cor do "topo")
     Vector3    pos, pos_prev, vel;
@@ -85,6 +86,8 @@ typedef struct {
 typedef struct {
     const Planet *planet;
     const Ship   *ship;     // NULL = sem nave (a rocha a reboque se solta)
+    const Ship   *ships[SHIPS_MAX];   // online: a nave de cada jogador (NULL = fora); vazio = só `ship`
+    int           ship_count;
     Events       *events;
     const Tuning *t;
     uint32_t      tick;

@@ -140,14 +140,39 @@ static void deposit(Rocks *r, int index)
     k->alive = false;
 }
 
+// A nave de quem reboca a rocha (online: a do dono dela).
+static const Ship *owner_ship(const RockContext *ctx, const Rock *k)
+{
+    if (ctx->ship_count <= 0) return ctx->ship;
+    return (k->owner < ctx->ship_count) ? ctx->ships[k->owner] : NULL;
+}
+
+// A nave viva mais perto de `pos` (para o minério), ou NULL.
+static const Ship *nearest_ship(const RockContext *ctx, Vector3 pos)
+{
+    if (ctx->ship_count <= 0) return ctx->ship;
+    const Ship *best = NULL;
+    float best_d = 0.0f;
+    for (int i = 0; i < ctx->ship_count; i++) {
+        const Ship *s = ctx->ships[i];
+        if (s == NULL || !s->alive) continue;
+        float d = Vector3DistanceSqr(s->pos, pos);
+        if (best == NULL || d < best_d) {
+            best = s;
+            best_d = d;
+        }
+    }
+    return best;
+}
+
 static void tick_towed(Rocks *r, int index, const RockContext *ctx)
 {
     Rock *k = &r->items[index];
     const Tuning *t = ctx->t;
-    const Ship *s = ctx->ship;
+    const Ship *s = owner_ship(ctx, k);
     if (s == NULL || !s->alive) {
         k->state = ROCK_FALLING;
-        r->towed = -1;
+        if (r->towed == index) r->towed = -1;   // (de outro jogador: ele confere ao assumir a vez)
         events_push(ctx->events, ctx->tick, EV_TRACTOR_BREAK, k->kind, k->pos, 0.0f);
         return;
     }
@@ -167,7 +192,7 @@ static void tick_towed(Rocks *r, int index, const RockContext *ctx)
 
     if (Vector3Distance(k->pos, s->pos) > t->tractor_break + k->radius) {
         k->state = ROCK_FALLING;
-        r->towed = -1;
+        if (r->towed == index) r->towed = -1;   // (de outro jogador: ele confere ao assumir a vez)
         events_push(ctx->events, ctx->tick, EV_TRACTOR_BREAK, k->kind, k->pos, 1.0f);
     }
 }
@@ -190,7 +215,6 @@ static void tick_falling(Rock *k, const RockContext *ctx)
 static void tick_ore(Rocks *r, const RockContext *ctx)
 {
     const Tuning *t = ctx->t;
-    const Ship *s = ctx->ship;
     float dt = ctx->dt;
     r->collected = 0;
     for (int i = 0; i < ORE_MAX; i++) {
@@ -204,6 +228,7 @@ static void tick_ore(Rocks *r, const RockContext *ctx)
             continue;
         }
         bool pulled = false;
+        const Ship *s = nearest_ship(ctx, o->pos);
         if (s != NULL && s->alive) {
             Vector3 to = Vector3Subtract(s->pos, o->pos);
             float distance = Vector3Length(to);

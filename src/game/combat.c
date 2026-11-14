@@ -106,10 +106,16 @@ static bool playing(const World *w)
 }
 
 // XP e essência de um abate; avisa quando a nave sobe de nível.
+// (Online, o XP é do time: todos ganham, cada um escolhe as próprias cartas.)
 static void gain_xp(World *w, const Tuning *t, EnemyType type, float xp, Vector3 where)
 {
     if (evolution_gain(&w->evo, t, type, xp) > 0) {
         events_push(&w->events, (uint32_t)w->tick, EV_LEVEL_UP, (uint8_t)type, where, (float)w->evo.level);
+    }
+    for (int p = 0; p < w->player_count; p++) {
+        if (p == w->current) continue;
+        Evolution *e = &w->players[p].evo;
+        if (evolution_gain(e, t, type, xp) > 0) events_push(&w->events, (uint32_t)w->tick, EV_LEVEL_UP, (uint8_t)type, where, (float)e->level);
     }
 }
 
@@ -408,6 +414,8 @@ static bool reflect(World *w, const Tuning *t, Shot *s, Vector3 point)
     s->crater_radius = 0.0f;
     s->pierce = 0;
     s->last_hit = -1;
+    s->source = BOLT_PLAYER;
+    s->owner = (uint8_t)w->current;   // agora é tiro de quem refletiu
     particles_sparks(&w->particles, &w->rng, point, back, 12, 16.0f, SHIELD_SPARK);
     events_push(&w->events, (uint32_t)w->tick, EV_REFLECT, 0, point, 0.0f);
     return true;
@@ -638,14 +646,14 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
 }
 
 // Tiro de plasma ou bomba: acerta a nave, o planeta ou a Lua.
-static void resolve_enemy_shot(World *w, const Tuning *t, int index)
+static void resolve_enemy_shot(World *w, const Tuning *t, int index, bool check_ship, bool check_world)
 {
     Shot *s = &w->shots.items[index];
     Vector3 a = s->pos_prev, b = s->pos;
     Ship *ship = &w->ship;
     bool bomb = (s->kind == SHOT_BOMB);
 
-    if (ship->alive && w->ship_active) {
+    if (check_ship && ship->alive && w->ship_active) {
         float reach = bomb ? t->ship_radius + t->bomber_bomb_radius : t->ship_radius * SHIP_HIT_SCALE;
         float hit = segment_sphere(a, b, ship->pos, reach);
         // No dash o tiro atravessa a nave: é a esquiva perfeita.
@@ -661,6 +669,7 @@ static void resolve_enemy_shot(World *w, const Tuning *t, int index)
         }
     }
 
+    if (!check_world) return;   // (online: o planeta e a Lua ficam para a passada final)
     Vector3 travel = Vector3Subtract(b, a);
     float length = Vector3Length(travel);
     Vector3 ground;
@@ -1219,21 +1228,50 @@ void combat_resolve(World *w, const Tuning *t)
     for (int i = 0; i < p->pool.capacity; i++) {
         if (!pool_alive(&p->pool, i)) continue;
         if (p->items[i].kind == SHOT_BOLT) resolve_bolt(w, t, i);
-        else                               resolve_enemy_shot(w, t, i);
+        else                               resolve_enemy_shot(w, t, i, true, true);
     }
     resolve_rams(w, t);
+}
+
+void combat_resolve_for(World *w, const Tuning *t, int owner, bool world_part)
+{
+    Projectiles *p = &w->shots;
+    for (int i = 0; i < p->pool.capacity; i++) {
+        if (!pool_alive(&p->pool, i)) continue;
+        Shot *s = &p->items[i];
+        if (s->kind == SHOT_BOLT) {
+            if (owner >= 0 && s->owner == owner) resolve_bolt(w, t, i);
+        } else {
+            resolve_enemy_shot(w, t, i, owner >= 0, world_part);
+        }
+    }
+    if (owner >= 0) resolve_rams(w, t);
 }
 
 // ---------------------------------------------------------------------------
 //  Mortes
 // ---------------------------------------------------------------------------
 
+#define SWEEP_ALL     (-2)   // jogo solo: todas as mortes
+#define SWEEP_NOBODY  (-1)   // online: as que não foram de jogador (bateu, explodiu sozinho)
+
 void combat_sweep(World *w, const Tuning *t)
+{
+    combat_sweep_for(w, t, SWEEP_ALL);
+}
+
+void combat_sweep_for(World *w, const Tuning *t, int killer)
 {
     Enemies *e = &w->enemies;
     for (int i = 0; i < e->pool.capacity; i++) {
         if (!pool_alive(&e->pool, i) || e->items[i].hp > 0.0f) continue;
         Enemy *en = &e->items[i];
+        // Online: cada abate é processado na vez de quem abateu (com as
+        // evoluções dele); o resto, numa passada própria.
+        if (killer != SWEEP_ALL) {
+            bool by_player = (en->death == DEATH_PLAYER);
+            if (by_player ? (en->killer != killer) : (killer != SWEEP_NOBODY)) continue;
+        }
         EnemyType type = (EnemyType)en->type;
         const Blast *blast = &BLASTS[type];
         bool detonated = (en->death == DEATH_DETONATE);
@@ -1241,12 +1279,15 @@ void combat_sweep(World *w, const Tuning *t)
         particles_explosion(&w->particles, &w->rng, en->pos, en->vel, size, blast->hot, blast->glow, blast->debris);
 
         if (detonated) {
-            // Kamikaze junto da nave: o dano cai com a distância.
-            const Ship *s = &w->ship;
-            float d = Vector3Distance(s->pos, en->pos);
-            if (s->alive && d < t->kamikaze_blast_radius) {
+            // Kamikaze junto da nave: o dano cai com a distância (online,
+            // em todas as naves por perto).
+            for (int p = 0; p < w->player_count; p++) {
+                const Ship *s = world_ship(w, p);
+                float d = Vector3Distance(s->pos, en->pos);
+                if (!s->alive || d >= t->kamikaze_blast_radius) continue;
                 float falloff = Clamp(1.0f - d / t->kamikaze_blast_radius, DETONATE_MIN, 1.0f);
-                combat_damage_ship(w, t, t->enemy[type].ram_damage * falloff, en->pos);
+                if (w->player_count == 1) combat_damage_ship(w, t, t->enemy[type].ram_damage * falloff, en->pos);
+                else                      world_hurt_player(w, t, p, t->enemy[type].ram_damage * falloff, en->pos);
             }
             events_push(&w->events, (uint32_t)w->tick, EV_DETONATE, (uint8_t)type, en->pos, 0.0f);
         } else if (en->death == DEATH_PLAYER && playing(w)) {

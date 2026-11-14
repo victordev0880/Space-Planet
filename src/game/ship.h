@@ -34,6 +34,8 @@
 
 // Onde fica o bocal do motor direito, em eixos da nave (o esquerdo é o
 // espelho, com x negativo). Daqui saem o rastro e o brilho dos motores.
+#define SHIPS_MAX     4        // naves numa partida (o online junta até 4 jogadores)
+
 #define SHIP_ENGINE_X 0.62f
 #define SHIP_ENGINE_Y (-0.02f)
 #define SHIP_ENGINE_Z 1.26f

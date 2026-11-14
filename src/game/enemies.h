@@ -105,6 +105,7 @@ typedef struct {
     uint8_t    slot;          // Enxame: posição no bando
     uint8_t    pass;          // Enxame: passada em que está
     uint8_t    death;         // DeathCause
+    uint8_t    killer;        // jogador que o derrubou (online; 0 no jogo solo)
     uint8_t    variant;       // variação de cor (só desenho)
 } Enemy;
 
@@ -131,13 +132,16 @@ typedef struct {
     CarveRequest carves[CARVES_CAPACITY];   // pedidos do passo atual
     int          carve_count;
     int          forced_variant;            // ferramenta de roteiro: -1 = sorteia a variação de cada grupo
+    uint8_t      damage_owner;              // online: o jogador da vez (fica como `killer` de quem ele derrubar)
 } Enemies;
 
 // Tudo de que os inimigos precisam para pensar em um passo.
 typedef struct {
     const Planet *planet;
     const Moon   *moon;
-    const Ship   *ship;     // NULL = ignoram a nave
+    const Ship   *ship;     // NULL = ignoram a nave (no passo, a nave mais perto de cada inimigo)
+    const Ship   *ships[SHIPS_MAX];   // todas as naves (online); vazio = só `ship`
+    int           ship_count;
     Projectiles  *shots;    // onde os tiros deles nascem
     Events       *events;
     Rng          *rng;

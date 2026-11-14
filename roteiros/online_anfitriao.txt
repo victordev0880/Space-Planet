@@ -1,0 +1,14 @@
+# Roteiro do marco 12 (online), lado do anfitrião. Com o do cliente:
+#
+#   terra --autoplay roteiros/online_anfitriao.txt --host 2
+#   terra --autoplay roteiros/online_cliente.txt --join 127.0.0.1
+#
+# As duas janelas jogam com o piloto automático; no passo 1800 cada uma
+# escreve o hash da partida no log ("online: jogador N, passo 1800, hash X"):
+# os dois têm de ser iguais (a mesma partida nos dois computadores).
+frames 6000
+seed 5
+at 0    autopilot on
+at 700  shot online_anfitriao_01
+at 1500 shot online_anfitriao_02
+at 3200 shot online_anfitriao_03

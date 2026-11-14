@@ -12,6 +12,7 @@
 #include <math.h>
 #include <stdarg.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include "audio/audio.h"
@@ -32,6 +33,7 @@
 #include "ui/font.h"
 #include "ui/hud.h"
 #include "ui/menus.h"
+#include "net/session.h"
 
 static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media", "grande", "enorme" };
 
@@ -56,6 +58,8 @@ static const char *const CRATER_NAMES[CRATER_SIZE_COUNT] = { "pequena", "media",
 // Transições entre telas: escurece, troca no escuro (recomeçar a partida
 // trava alguns décimos de segundo, e no escuro isso não aparece) e clareia.
 #define FADE_OUT_TIME 0.35f
+#define NET_CATCHUP    2      // online: passos a mais por quadro para alcançar quem está adiantado
+#define NET_CHECK_TICK 1800   // online (teste): o hash deste passo vai para o log, para comparar as janelas
 #define FADE_IN_TIME  0.70f
 #define TITLE_YAW     20.0f   // graus: no título, a câmera vira e o planeta fica à direita
 #define TITLE_PAN     3.0f    // rapidez do giro da câmera ao entrar e sair do título
@@ -73,6 +77,8 @@ typedef struct {
     bool        no_shaders;      // desenha sem shaders próprios
     bool        verbose;
     bool        mute;            // sem som (o autoplay é sempre mudo)
+    int         host_players;    // --host N: abre uma sala e começa sozinha quando houver N jogadores
+    const char *join_ip;         // --join IP: entra direto na sala desse IP
 } Options;
 
 // ---------------------------------------------------------------------------
@@ -115,6 +121,8 @@ static void print_usage(void)
            "  --mute                 sem som\n"
            "  --music-wav <arquivo>  grava num .wav a musica passando por todos os climas\n"
            "                         (titulo, calmaria, horda, boss, perigo, pausa, fim)\n"
+           "  --host <N>             online: abre uma sala e comeca quando houver N jogadores\n"
+           "  --join <IP>            online: entra direto na sala desse IP (ex.: 127.0.0.1)\n"
            "  --verbose              mostra as mensagens informativas do raylib\n"
            "  --help                 mostra esta ajuda\n");
 }
@@ -127,6 +135,8 @@ static bool parse_options(int argc, char **argv, Options *opt)
     opt->no_shaders = false;
     opt->verbose = false;
     opt->mute = false;
+    opt->host_players = 0;
+    opt->join_ip = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "--autoplay") == 0 && i + 1 < argc) {
@@ -137,6 +147,10 @@ static bool parse_options(int argc, char **argv, Options *opt)
             opt->realtime = true;
         } else if (strcmp(argv[i], "--no-shaders") == 0) {
             opt->no_shaders = true;
+        } else if (strcmp(argv[i], "--host") == 0 && i + 1 < argc) {
+            opt->host_players = atoi(argv[++i]);
+        } else if (strcmp(argv[i], "--join") == 0 && i + 1 < argc) {
+            opt->join_ip = argv[++i];
         } else if (strcmp(argv[i], "--mute") == 0) {
             opt->mute = true;
         } else if (strcmp(argv[i], "--verbose") == 0) {
@@ -427,6 +441,21 @@ int main(int argc, char **argv)
         world_set_view(&world, &tuning, CAM_ORBIT);
         renderer.yaw_offset = TITLE_YAW;
     }
+    // Online (marco 12): a sessão de rede, e se a partida na tela é online.
+    static NetSession net;
+    bool online = false;
+    if (opt.host_players > 1) {
+        session_host(&net, 0);
+        menu.host = true;
+        menu_open(&menu, SCREEN_LOBBY);
+    } else if (opt.join_ip != NULL) {
+        NetAddress address;
+        if (udp_parse(opt.join_ip, &address)) session_join(&net, address);
+        menu.host = false;
+        menu_open(&menu, SCREEN_LOBBY);
+    }
+    uint64_t online_hash_at = 0;   // (teste) o hash no passo NET_CHECK_TICK, para comparar as janelas
+
     bool fresh = true;   // a partida do mundo ainda não começou: "jogar" não precisa recomeçar
     bool autoplay_pad = false;   // roteiro pediu as dicas do controle ("pad on")
     bool quit = false;
@@ -485,7 +514,7 @@ int main(int argc, char **argv)
                 menu_open(&menu, SCREEN_PAUSE);
                 audio_play_ui(&audio, &tuning, SND_UI_BACK);
             } else {
-                command = MENU_TO_TITLE;
+                command = online ? MENU_LEAVE_ONLINE : MENU_TO_TITLE;
             }
         } else {
             sample = platform_poll_input(cursor_captured && skip_mouse_frames == 0, &settings, &tuning);
@@ -499,7 +528,7 @@ int main(int argc, char **argv)
             if (world.state != GAME_PLAYING) {
                 int choice = platform_end_choice();
                 if (choice == 1) sample.held |= ACT_BIT(ACT_RESET);
-                if (choice == 2) command = MENU_TO_TITLE;
+                if (choice == 2) command = online ? MENU_LEAVE_ONLINE : MENU_TO_TITLE;
             }
         }
         menu.gamepad = autoplay ? autoplay_pad : platform_using_gamepad();
@@ -523,11 +552,89 @@ int main(int argc, char **argv)
         case MENU_TO_TITLE:
         case MENU_QUIT:
             if (command != MENU_TO_TITLE) audio_play_ui(&audio, &tuning, command == MENU_QUIT ? SND_UI_BACK : SND_UI_START);
+            if (online && command == MENU_QUIT) session_close(&net);
             fade.dir = +1;
             fade.then = command;
             break;
+        case MENU_HOST:
+            session_host(&net, 0);
+            menu.host = true;
+            menu_open(&menu, SCREEN_LOBBY);
+            break;
+        case MENU_JOIN: {
+            NetAddress address;
+            if (udp_parse(menu.ip, &address)) {
+                session_join(&net, address);
+            } else {
+                memset(&net, 0, sizeof net);
+                net.phase = SESSION_CLOSED;
+                snprintf(net.status, sizeof net.status, "IP inválido: use algo como 26.12.34.56");
+            }
+            menu.host = false;
+            menu_open(&menu, SCREEN_LOBBY);
+            break;
+        }
+        case MENU_START_ONLINE:
+            if (net.host && net.phase == SESSION_LOBBY && net.players >= 2) {
+                session_start(&net, (uint64_t)(GetTime() * 1e6) ^ (uint64_t)tuning.sim_seed, GetTime());
+            } else if (net.host) {
+                snprintf(net.status, sizeof net.status, "espere pelo menos um amigo entrar");
+            }
+            break;
+        case MENU_LEAVE_ONLINE:
+            // Sai da sala (ou da partida) e volta ao título, no jogo solo.
+            session_close(&net);
+            online = false;
+            menu.online = false;
+            world_set_players(&world, &tuning, 1, 0);
+            audio_play_ui(&audio, &tuning, SND_UI_BACK);
+            fade.dir = +1;
+            fade.then = MENU_TO_TITLE;
+            break;
         default:
             break;
+        }
+
+        // Online: a sessão anda a cada quadro (na sala e na partida).
+        if (net.phase != SESSION_OFF) {
+            double now = GetTime();
+            session_poll(&net, now);
+            menu.lobby_players = net.players;
+            static double last_debug = 0.0;
+            if (getenv("TERRA_NET_DEBUG") != NULL && now - last_debug > 1.0) {
+                last_debug = now;
+                fprintf(stderr, "net: fase %d next %u local_next %u bundled %u backlog %d heard %.2f tick %llu\n", (int)net.phase,
+                        net.ls.next, net.local_next, net.bundled, session_backlog(&net), now - net.heard[net.host ? 1 : 0],
+                        (unsigned long long)world.tick);
+            }
+            static char last_status[96];
+            if (strcmp(last_status, net.status) != 0) {   // o log conta o que aconteceu na sessão
+                snprintf(last_status, sizeof last_status, "%s", net.status);
+                fprintf(stderr, "online: %s (jogadores %d, fase %d)\n", net.status, net.players, (int)net.phase);
+            }
+            // --host N: começa sozinha quando a sala enche (testes com duas janelas).
+            if (net.host && net.phase == SESSION_LOBBY && opt.host_players > 1 && net.players >= opt.host_players) {
+                session_start(&net, seed, now);
+            }
+            // Começou: todos zeram o mundo com a mesma seed e entram na partida.
+            if (net.phase == SESSION_PLAYING && !online) {
+                world_start_online(&world, &tuning, net.seed, net.players, net.local);
+                render_apply_tuning(&renderer, &world, &tuning);
+                online = true;
+                menu.online = true;
+                fresh = false;
+                new_best = false;
+                menu_open(&menu, SCREEN_GAME);
+                input_resync(&tracker, autoplay ? 0u : platform_poll_input(false, &settings, &tuning).held);
+                fixed_loop_init(&loop, tuning.sim_hz, tuning.sim_max_steps);
+                audio_play_ui(&audio, &tuning, SND_UI_START);
+            }
+            // A conexão caiu (ou a sala fechou): a sala mostra o motivo, com "sair".
+            if (net.phase == SESSION_CLOSED && online) {
+                online = false;
+                menu.online = false;
+                menu_open(&menu, SCREEN_LOBBY);
+            }
         }
         if (!autoplay && IsKeyPressed(KEY_F11)) {   // tela cheia, de qualquer lugar
             settings.fullscreen = !settings.fullscreen;
@@ -540,10 +647,36 @@ int main(int argc, char **argv)
         bool frozen = menu_freezes_game(&menu) || fade.alpha >= 1.0f;
         int steps = frozen ? 0 : one_step_per_frame ? 1 : fixed_loop_advance(&loop, frame_seconds);
         uint32_t pressed = 0u;
-        for (int i = 0; i < steps; i++) {
-            InputState state = input_tick(&tracker);
-            pressed |= state.pressed;
-            world_tick(&world, &state, &tuning);
+        if (online) {
+            // Lockstep: o meu comando vai para a rede (vale alguns passos à
+            // frente), e cada passo só roda com os comandos de todos. Se os
+            // outros estão adiantados, corre um pouco para alcançá-los.
+            double now = GetTime();
+            for (int i = 0; i < steps + NET_CATCHUP; i++) {
+                if (net.local_next < net.ls.next + NET_DELAY) {
+                    InputState mine = input_tick(&tracker);
+                    if (menu.screen != SCREEN_GAME) memset(&mine, 0, sizeof mine);   // menu aberto: a nave fica parada
+                    session_push(&net, &mine, now);
+                }
+                if (i >= steps && session_backlog(&net) < 2) break;
+                if (!session_ready(&net)) break;
+                InputState all[NET_MAX_PLAYERS];
+                session_take(&net, all);
+                pressed |= all[world.local].pressed;
+                world_tick_all(&world, all, &tuning);
+                if (world.tick % 120u == 0u) session_report_hash(&net, (uint32_t)world.tick, world_hash(&world));
+                if (world.tick == NET_CHECK_TICK) {
+                    online_hash_at = world_hash(&world);
+                    fprintf(stderr, "online: jogador %d, passo %d, hash %016llx\n", net.local, NET_CHECK_TICK,
+                            (unsigned long long)online_hash_at);
+                }
+            }
+        } else {
+            for (int i = 0; i < steps; i++) {
+                InputState state = input_tick(&tracker);
+                pressed |= state.pressed;
+                world_tick(&world, &state, &tuning);
+            }
         }
         float alpha = one_step_per_frame ? 1.0f : (float)fixed_loop_alpha(&loop);
         double sim_ms = (GetTime() - start) * 1000.0;
@@ -566,7 +699,7 @@ int main(int argc, char **argv)
         }
         last_state = world.state;
         uint64_t notice_until = world.tick + (uint64_t)(tuning.sim_hz * 2);
-        if ((pressed & ACT_BIT(ACT_RESET)) && world.state != GAME_PLAYING) {
+        if (!online && (pressed & ACT_BIT(ACT_RESET)) && world.state != GAME_PLAYING) {   // (online, o mundo recomeça sozinho)
             if (autoplay) {
                 fade.alpha = 1.0f;   // sem transição: o roteiro recomeça na hora
                 fade.dir = +1;
@@ -712,7 +845,18 @@ int main(int argc, char **argv)
             hud_draw(&world, play_tuning, &hud);
             cards_draw(&world, play_tuning, GetTime());
         }
-        MenuView view = { best_score };
+        MenuView view;
+        memset(&view, 0, sizeof view);
+        view.best_score = best_score;
+        if (menu.screen == SCREEN_LOBBY) {
+            static char ips[4][24];
+            static int ip_count = -1;
+            if (ip_count < 0) ip_count = udp_local_ips(ips, 4);   // (uma vez só: perguntar ao sistema custa)
+            memcpy(view.ips, ips, sizeof view.ips);
+            view.ip_count = ip_count;
+            view.port = NET_DEFAULT_PORT;
+            view.net_status = net.status;
+        }
         menu_draw(&menu, &world, &settings, &view);
         debug_overlay_draw(&overlay, &world, &info);
         if (fade.alpha > 0.0f) {

@@ -276,6 +276,7 @@ typedef struct {
 
     // pontuação
     float waves_hp_growth;   // vida extra dos inimigos a cada horda (fração da vida do tipo)
+    float coop_hp, coop_count, coop_boss_hp;   // online: a mais por jogador além do primeiro
     float score_combo_window;
     float score_combo_step;
     float score_combo_max;

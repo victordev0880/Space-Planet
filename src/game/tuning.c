@@ -262,6 +262,9 @@ static const TuneField FIELDS[] = {
     F("combat.marker_distance", combat_marker_distance, 0,      5000),
 
     F("waves.hp_growth",        waves_hp_growth,        0,      1),
+    F("coop.hp",                coop_hp,                0,      5),
+    F("coop.count",             coop_count,             0,      5),
+    F("coop.boss_hp",           coop_boss_hp,           0,      5),
     F("score.combo_window",     score_combo_window,     0.1,    30),
     F("score.combo_step",       score_combo_step,       0,      5),
     F("score.combo_max",        score_combo_max,        1,      50),

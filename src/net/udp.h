@@ -20,6 +20,8 @@ typedef struct {
 typedef struct {
     bool     open;
     intptr_t handle;
+    int      drop_every;   // teste: joga fora um pacote a cada tantos enviados (0 = nenhum)
+    int      sent;
 } UdpSocket;
 
 // Abre e prende numa porta (0 = qualquer uma livre).
@@ -38,6 +40,9 @@ bool udp_parse(const char *text, NetAddress *out);
 const char *udp_format(NetAddress a);
 
 bool udp_same(NetAddress a, NetAddress b);
+
+// Teste: os próximos sockets só escutam no 127.0.0.1 (sem acionar o firewall).
+void udp_loopback_only(bool on);
 
 // Os IPs desta máquina (para o anfitrião passar aos amigos). Devolve quantos.
 int udp_local_ips(char out[][24], int max);

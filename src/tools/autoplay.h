@@ -101,6 +101,7 @@ typedef enum {
 typedef enum {
     AP_SCREEN_KEEP = -1,
     AP_SCREEN_GAME, AP_SCREEN_TITLE, AP_SCREEN_PAUSE, AP_SCREEN_OPTIONS, AP_SCREEN_CONTROLS,
+    AP_SCREEN_ONLINE, AP_SCREEN_JOIN, AP_SCREEN_LOBBY,   // (na mesma ordem de Screen, em ui/menus.h)
     AP_SCREEN_COUNT
 } AutoplayScreen;
 

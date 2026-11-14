@@ -379,6 +379,7 @@ static void autoplay_shipped_scripts_are_deterministic(void)
         "roteiros/voo.txt",      "roteiros/combate.txt", "roteiros/inimigos.txt", "roteiros/modelos.txt",
         "roteiros/evolucao.txt", "roteiros/onda1.txt",   "roteiros/boss1.txt",   "roteiros/conserto.txt", "roteiros/defesas.txt",
         "roteiros/menus.txt",    "roteiros/radar.txt",   "roteiros/hive1.txt",   "roteiros/worm1.txt",   "roteiros/devourer1.txt",
+        "roteiros/online_anfitriao.txt", "roteiros/online_cliente.txt",
     };
     Tuning t = test_tuning();
 

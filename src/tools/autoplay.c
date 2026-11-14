@@ -244,12 +244,12 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         }
         e.cmd = AP_ROCK;
     } else if (strcmp(cmd, "menu") == 0) {
-        static const char *const SCREENS[AP_SCREEN_COUNT] = { "game", "title", "pause", "options", "controls" };
+        static const char *const SCREENS[AP_SCREEN_COUNT] = { "game", "title", "pause", "options", "controls", "online", "join", "lobby" };
         e.count = -1;
         for (int i = 0; i < AP_SCREEN_COUNT && count == 4; i++) {
             if (strcmp(tokens[3], SCREENS[i]) == 0) e.count = i;
         }
-        if (e.count < 0) return fail(ap, line_no, "esperado: at <quadro> menu game|title|pause|options|controls");
+        if (e.count < 0) return fail(ap, line_no, "esperado: at <quadro> menu game|title|pause|options|controls|online|join|lobby");
         e.cmd = AP_MENU;
     } else if (strcmp(cmd, "pad") == 0) {
         if (count == 4 && strcmp(tokens[3], "on") == 0)       e.count = 1;

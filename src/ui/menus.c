@@ -4,6 +4,7 @@
 
 #include <math.h>
 #include <stdio.h>
+#include <string.h>
 
 #include "core/vmath.h"
 #include "ui/font.h"
@@ -25,7 +26,8 @@ static const Color EDGE      = { 70, 84, 120, 255 };
 #define TIP_TIME      7.0f   // segundos de cada dica na pausa
 
 typedef enum {
-    BTN_PLAY, BTN_RESUME, BTN_RESTART, BTN_CONTROLS, BTN_OPTIONS, BTN_TO_TITLE, BTN_QUIT, BTN_BACK
+    BTN_PLAY, BTN_RESUME, BTN_RESTART, BTN_CONTROLS, BTN_OPTIONS, BTN_TO_TITLE, BTN_QUIT, BTN_BACK,
+    BTN_ONLINE, BTN_HOST, BTN_JOIN, BTN_CONNECT, BTN_START, BTN_LEAVE
 } Button;
 
 typedef struct {
@@ -53,25 +55,50 @@ static void add(Item *items, int *n, Rectangle r, const char *label, bool settin
     (*n)++;
 }
 
-static int build_items(Screen screen, Item items[MENU_MAX_ITEMS])
+static int build_items(const Menu *m, Item items[MENU_MAX_ITEMS])
 {
     int n = 0;
-    switch (screen) {
+    switch (m->screen) {
     case SCREEN_TITLE: {
-        static const char *const LABELS[] = { "JOGAR", "CONTROLES", "OPÇÕES", "SAIR" };
-        static const Button IDS[] = { BTN_PLAY, BTN_CONTROLS, BTN_OPTIONS, BTN_QUIT };
-        float y = fmaxf(sh() * 0.50f, 330.0f);
-        for (int i = 0; i < 4; i++) add(items, &n, (Rectangle){ title_left() - 18.0f, y + 54.0f * (float)i, 340.0f, 46.0f },
+        static const char *const LABELS[] = { "JOGAR", "JOGAR ONLINE", "CONTROLES", "OPÇÕES", "SAIR" };
+        static const Button IDS[] = { BTN_PLAY, BTN_ONLINE, BTN_CONTROLS, BTN_OPTIONS, BTN_QUIT };
+        float y = fmaxf(sh() * 0.48f, 320.0f);
+        for (int i = 0; i < 5; i++) add(items, &n, (Rectangle){ title_left() - 18.0f, y + 52.0f * (float)i, 340.0f, 44.0f },
                                         LABELS[i], false, IDS[i]);
         break;
     }
     case SCREEN_PAUSE: {
-        static const char *const LABELS[] = { "CONTINUAR", "RECOMEÇAR", "CONTROLES", "OPÇÕES", "MENU PRINCIPAL",
-                                              "SAIR DO JOGO" };
-        static const Button IDS[] = { BTN_RESUME, BTN_RESTART, BTN_CONTROLS, BTN_OPTIONS, BTN_TO_TITLE, BTN_QUIT };
+        // Online a partida não para, e sair da pausa é sair da sala.
+        static const char *const SOLO[] = { "CONTINUAR", "RECOMEÇAR", "CONTROLES", "OPÇÕES", "MENU PRINCIPAL", "SAIR DO JOGO" };
+        static const Button SOLO_IDS[] = { BTN_RESUME, BTN_RESTART, BTN_CONTROLS, BTN_OPTIONS, BTN_TO_TITLE, BTN_QUIT };
+        static const char *const ONLINE[] = { "CONTINUAR", "CONTROLES", "OPÇÕES", "SAIR DA PARTIDA" };
+        static const Button ONLINE_IDS[] = { BTN_RESUME, BTN_CONTROLS, BTN_OPTIONS, BTN_LEAVE };
+        int count = m->online ? 4 : 6;
         float y = sh() * 0.5f - 130.0f;
-        for (int i = 0; i < 6; i++) add(items, &n, (Rectangle){ sw() * 0.5f - 190.0f, y + 50.0f * (float)i, 380.0f, 44.0f },
+        for (int i = 0; i < count; i++) {
+            add(items, &n, (Rectangle){ sw() * 0.5f - 190.0f, y + 50.0f * (float)i, 380.0f, 44.0f },
+                m->online ? ONLINE[i] : SOLO[i], false, m->online ? ONLINE_IDS[i] : SOLO_IDS[i]);
+        }
+        break;
+    }
+    case SCREEN_ONLINE: {
+        static const char *const LABELS[] = { "CRIAR SALA", "ENTRAR NUMA SALA", "VOLTAR" };
+        static const Button IDS[] = { BTN_HOST, BTN_JOIN, BTN_BACK };
+        float y = sh() * 0.5f - 20.0f;
+        for (int i = 0; i < 3; i++) add(items, &n, (Rectangle){ sw() * 0.5f - 200.0f, y + 54.0f * (float)i, 400.0f, 46.0f },
                                         LABELS[i], false, IDS[i]);
+        break;
+    }
+    case SCREEN_JOIN: {
+        float y = sh() * 0.5f + 40.0f;
+        add(items, &n, (Rectangle){ sw() * 0.5f - 200.0f, y, 400.0f, 46.0f }, "CONECTAR", false, BTN_CONNECT);
+        add(items, &n, (Rectangle){ sw() * 0.5f - 200.0f, y + 54.0f, 400.0f, 46.0f }, "VOLTAR", false, BTN_BACK);
+        break;
+    }
+    case SCREEN_LOBBY: {
+        float y = sh() - 170.0f;
+        if (m->host) add(items, &n, (Rectangle){ sw() * 0.5f - 200.0f, y, 400.0f, 46.0f }, "COMEÇAR", false, BTN_START);
+        add(items, &n, (Rectangle){ sw() * 0.5f - 200.0f, y + 54.0f, 400.0f, 46.0f }, "SAIR DA SALA", false, BTN_LEAVE);
         break;
     }
     case SCREEN_OPTIONS: {
@@ -106,17 +133,21 @@ static Rectangle slider_rect(Rectangle row)
 
 void menu_open(Menu *m, Screen screen)
 {
-    Screen parent = m->parent;
-    bool gamepad = m->gamepad;
+    Menu keep = *m;   // o que sobrevive à troca de tela
     *m = (Menu){ 0 };
     m->screen = screen;
-    m->parent = parent;
-    m->gamepad = gamepad;
+    m->parent = keep.parent;
+    m->gamepad = keep.gamepad;
+    m->online = keep.online;
+    m->host = keep.host;
+    m->lobby_players = keep.lobby_players;
+    memcpy(m->ip, keep.ip, sizeof m->ip);
     m->dragging = -1;
 }
 
 bool menu_freezes_game(const Menu *m)
 {
+    if (m->online) return false;   // online a partida segue (os outros estão jogando)
     if (m->screen == SCREEN_PAUSE) return true;
     if (m->screen == SCREEN_OPTIONS || m->screen == SCREEN_CONTROLS) return m->parent == SCREEN_PAUSE;
     return false;
@@ -136,7 +167,7 @@ static void open_parent(Menu *m)
     menu_open(m, m->parent);
     // Volta com o cursor no item que abriu a tela filha.
     Item items[MENU_MAX_ITEMS];
-    int n = build_items(m->screen, items);
+    int n = build_items(m, items);
     Button wanted = (child == SCREEN_OPTIONS) ? BTN_OPTIONS : BTN_CONTROLS;
     for (int i = 0; i < n; i++) {
         if (!items[i].setting && items[i].id == (int)wanted) m->cursor = i;
@@ -158,6 +189,14 @@ static MenuCommand go_back(Menu *m)
         return MENU_NONE;
     case SCREEN_PAUSE:
         return MENU_RESUME;
+    case SCREEN_ONLINE:
+        menu_open(m, SCREEN_TITLE);
+        return MENU_NONE;
+    case SCREEN_JOIN:
+        menu_open(m, SCREEN_ONLINE);
+        return MENU_NONE;
+    case SCREEN_LOBBY:
+        return MENU_LEAVE_ONLINE;
     default:
         m->sound = MENU_SOUND_NONE;
         return MENU_NONE;
@@ -176,6 +215,12 @@ static MenuCommand press_button(Menu *m, Button b)
     case BTN_CONTROLS: open_child(m, SCREEN_CONTROLS); return MENU_NONE;
     case BTN_OPTIONS:  open_child(m, SCREEN_OPTIONS); return MENU_NONE;
     case BTN_BACK:     return go_back(m);
+    case BTN_ONLINE:   menu_open(m, SCREEN_ONLINE); return MENU_NONE;
+    case BTN_HOST:     return MENU_HOST;
+    case BTN_JOIN:     menu_open(m, SCREEN_JOIN); return MENU_NONE;
+    case BTN_CONNECT:  return (m->ip[0] != 0) ? MENU_JOIN : MENU_NONE;
+    case BTN_START:    return MENU_START_ONLINE;
+    case BTN_LEAVE:    return MENU_LEAVE_ONLINE;
     }
     return MENU_NONE;
 }
@@ -194,8 +239,33 @@ MenuCommand menu_update(Menu *m, const MenuInput *in, Settings *settings, float 
     if (in->gamepad) m->gamepad = true;
     else if (in->mouse_moved || in->click) m->gamepad = false;
 
+    // O campo do IP: dígitos, ponto e dois-pontos; Backspace apaga; Ctrl+V cola.
+    // Aqui só o Esc volta (o Backspace é do texto).
+    bool typing = (m->screen == SCREEN_JOIN);
+    if (typing) {
+        size_t len = strlen(m->ip);
+        for (int i = 0; i < in->char_count; i++) {
+            char c = in->chars[i];
+            if (((c >= '0' && c <= '9') || c == '.' || c == ':') && len + 1 < sizeof m->ip) {
+                m->ip[len++] = c;
+                m->ip[len] = '\0';
+                m->sound = MENU_SOUND_MOVE;
+            }
+        }
+        if (in->paste != NULL) {
+            for (const char *p = in->paste; *p != '\0' && len + 1 < sizeof m->ip; p++) {
+                if ((*p >= '0' && *p <= '9') || *p == '.' || *p == ':') m->ip[len++] = *p;
+            }
+            m->ip[len] = '\0';
+        }
+        if (in->erase && len > 0) {
+            m->ip[len - 1] = '\0';
+            m->sound = MENU_SOUND_MOVE;
+        }
+    }
+
     Item items[MENU_MAX_ITEMS];
-    int n = build_items(m->screen, items);
+    int n = build_items(m, items);
     if (n == 0) return MENU_NONE;
     if (m->cursor >= n) m->cursor = n - 1;
 
@@ -227,7 +297,7 @@ MenuCommand menu_update(Menu *m, const MenuInput *in, Settings *settings, float 
         m->cursor = (m->cursor + (in->down ? 1 : n - 1)) % n;
         m->sound = MENU_SOUND_MOVE;
     }
-    if (in->back) return go_back(m);
+    if (typing ? in->escape : in->back) return go_back(m);
 
     const Item *it = &items[m->cursor];
     bool clicked = in->click && under == m->cursor;
@@ -514,15 +584,102 @@ static void draw_controls(const Menu *m, const Item *items, int n)
     draw_hint(m, "Esc volta", "B volta", alpha);
 }
 
+// --- online ---------------------------------------------------------------------
+
+static void draw_online_backdrop(float alpha)
+{
+    DrawRectangle(0, 0, (int)sw(), (int)sh(), fade((Color){ 0, 2, 10, 240 }, alpha));
+}
+
+static void draw_online(const Menu *m, const Item *items, int n)
+{
+    float alpha = Clamp(m->age / 0.25f, 0.0f, 1.0f);
+    draw_online_backdrop(alpha);
+    float top = items[0].rect.y;
+    text_centered("JOGAR ONLINE", sw() * 0.5f, top - 190.0f, HEADING_SIZE, fade(TEXT, alpha));
+    text_centered("até 4 amigos defendendo o mesmo planeta. quanto mais gente, mais inimigos.", sw() * 0.5f, top - 110.0f, 20,
+                  fade(DIM, alpha));
+    text_centered("um cria a sala; os outros entram com o IP dele (na mesma rede, ou pelo Radmin VPN / ZeroTier).",
+                  sw() * 0.5f, top - 82.0f, 18, fade(DIM, alpha * 0.85f));
+    for (int i = 0; i < n; i++) draw_button(&items[i], m->glow[i], alpha, true);
+    draw_hint(m, "W/S escolhem   ·   Enter confirma   ·   Esc volta", "direcional escolhe   ·   A confirma   ·   B volta", alpha);
+}
+
+static void draw_join(const Menu *m, const Item *items, int n)
+{
+    float alpha = Clamp(m->age / 0.25f, 0.0f, 1.0f);
+    draw_online_backdrop(alpha);
+    float top = items[0].rect.y;
+    text_centered("ENTRAR NUMA SALA", sw() * 0.5f, top - 220.0f, HEADING_SIZE - 8, fade(TEXT, alpha));
+    text_centered("digite o IP que o anfitrião vê na tela da sala dele", sw() * 0.5f, top - 150.0f, 20, fade(DIM, alpha));
+    // O campo de texto, com o cursor piscando.
+    Rectangle field = { sw() * 0.5f - 220.0f, top - 100.0f, 440.0f, 56.0f };
+    draw_panel(field, alpha);
+    DrawRectangleLinesEx(field, 2.0f, fade(ACCENT, alpha * 0.8f));
+    const char *shown = (m->ip[0] != '\0') ? m->ip : "ex.: 26.12.34.56";
+    float width = (float)ui_measure_text(shown, ITEM_SIZE);
+    float x = field.x + (field.width - width) * 0.5f;
+    text_at(shown, x, middle(field, ITEM_SIZE), ITEM_SIZE, fade(m->ip[0] != '\0' ? TEXT : DIM, alpha));
+    if (m->ip[0] != '\0' && fmodf(m->age, 1.0f) < 0.55f) {
+        DrawRectangle((int)(x + width + 4.0f), (int)(field.y + 12.0f), 3, (int)(field.height - 24.0f), fade(ACCENT, alpha));
+    }
+    for (int i = 0; i < n; i++) draw_button(&items[i], m->glow[i], alpha, true);
+    draw_hint(m, "digite o IP   ·   Ctrl+V cola   ·   Enter conecta   ·   Esc volta", "B volta", alpha);
+}
+
+static const Color SLOT_COLORS[4] = {
+    { 120, 220, 255, 255 }, { 255, 170, 90, 255 }, { 150, 255, 140, 255 }, { 240, 130, 255, 255 },
+};
+
+static void draw_lobby(const Menu *m, const MenuView *view, const Item *items, int n)
+{
+    float alpha = Clamp(m->age / 0.25f, 0.0f, 1.0f);
+    draw_online_backdrop(alpha);
+    float cx = sw() * 0.5f;
+    text_centered(m->host ? "SUA SALA" : "NA SALA", cx, 70.0f, HEADING_SIZE, fade(TEXT, alpha));
+    if (view->net_status != NULL) text_centered(view->net_status, cx, 146.0f, 22, fade(ACCENT, alpha));
+
+    // Quatro vagas, acesas conforme os jogadores entram.
+    float slot_w = 170.0f, gap = 20.0f;
+    float x0 = cx - (4.0f * slot_w + 3.0f * gap) * 0.5f;
+    for (int i = 0; i < 4; i++) {
+        Rectangle r = { x0 + (float)i * (slot_w + gap), 200.0f, slot_w, 120.0f };
+        bool here = i < m->lobby_players;
+        draw_panel(r, alpha);
+        DrawRectangleLinesEx(r, here ? 2.5f : 1.0f, fade(here ? SLOT_COLORS[i] : EDGE, alpha));
+        text_centered(TextFormat("J%d", i + 1), r.x + r.width * 0.5f, r.y + 22.0f, 40, fade(here ? SLOT_COLORS[i] : DIM, alpha));
+        const char *label = !here ? "vaga" : (i == 0) ? "anfitrião" : "conectado";
+        text_centered(label, r.x + r.width * 0.5f, r.y + 76.0f, 18, fade(here ? TEXT : DIM, alpha * (here ? 1.0f : 0.6f)));
+    }
+
+    // O anfitrião vê os IPs para passar aos amigos.
+    float y = 350.0f;
+    if (m->host) {
+        text_centered("passe aos amigos um destes IPs (a porta é a padrão):", cx, y, 20, fade(DIM, alpha));
+        for (int i = 0; i < view->ip_count; i++) {
+            text_centered(view->ips[i], cx, y + 32.0f + 34.0f * (float)i, ITEM_SIZE, fade(TEXT, alpha));
+        }
+        if (view->ip_count == 0) text_centered("(não achei o IP desta máquina)", cx, y + 32.0f, 20, fade(DIM, alpha));
+        text_centered(TextFormat("porta UDP %d  ·  com Radmin VPN ou ZeroTier, use o IP que eles mostram", view->port), cx,
+                      y + 40.0f + 34.0f * (float)(view->ip_count > 0 ? view->ip_count : 1), 16, fade(DIM, alpha * 0.8f));
+    } else {
+        text_centered("quando todos estiverem aqui, o anfitrião começa a partida", cx, y, 20, fade(DIM, alpha));
+    }
+    for (int i = 0; i < n; i++) draw_button(&items[i], m->glow[i], alpha, true);
+}
+
 void menu_draw(const Menu *m, const World *w, const Settings *settings, const MenuView *view)
 {
     Item items[MENU_MAX_ITEMS];
-    int n = build_items(m->screen, items);
+    int n = build_items(m, items);
     switch (m->screen) {
     case SCREEN_TITLE:    if (n > 0) draw_title(m, view, items, n); break;
     case SCREEN_PAUSE:    if (n > 0) draw_pause(m, w, items, n); break;
     case SCREEN_OPTIONS:  if (n > 0) draw_options(m, settings, items, n); break;
     case SCREEN_CONTROLS: if (n > 0) draw_controls(m, items, n); break;
+    case SCREEN_ONLINE:   if (n > 0) draw_online(m, items, n); break;
+    case SCREEN_JOIN:     if (n > 0) draw_join(m, items, n); break;
+    case SCREEN_LOBBY:    if (n > 0) draw_lobby(m, view, items, n); break;
     default: break;
     }
 }

@@ -317,6 +317,14 @@ combat.marker_distance  = 70     # inimigos mais longe que isto ganham um marcad
 # Acompanha a nave, que fica mais forte com as evoluções.
 waves.hp_growth = 0.025
 
+# --- online (cooperativo) ---------------------------------------------------
+# Por jogador além do primeiro, a mais: vida dos inimigos, tamanho dos grupos
+# e vida dos bosses. Com 4 jogadores: grupos 2,35x, inimigos 1,6x, bosses 2,8x.
+# Os grupos maiores chegam pelos mesmos lados: o time precisa se dividir.
+coop.hp      = 0.2
+coop.count   = 0.45
+coop.boss_hp = 0.6
+
 # --- pontuação --------------------------------------------------------------
 # Abates seguidos, cada um a menos de combo_window segundos do anterior,
 # aumentam o multiplicador de pontos.

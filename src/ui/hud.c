@@ -1272,8 +1272,32 @@ static const char *enemy_label(const World *w, const Tuning *t, const Enemy *en,
     }
 }
 
+// Online: uma etiqueta acima de cada companheiro (J1 a J4, na cor dele).
+static const Color PLAYER_COLORS[SHIPS_MAX] = {
+    { 120, 220, 255, 255 }, { 255, 170, 90, 255 }, { 150, 255, 140, 255 }, { 240, 130, 255, 255 },
+};
+
+static void draw_teammates(const World *w, Camera3D camera)
+{
+    for (int p = 0; p < w->player_count; p++) {
+        if (p == w->local) continue;
+        const Ship *s = &w->players[p].ship;
+        Vector2 at;
+        if (!s->alive || !project(camera, Vector3Add(s->pos, Vector3Scale(Vector3Normalize(s->pos), 2.2f)), &at)) continue;
+        Color c = PLAYER_COLORS[p];
+        const char *name = TextFormat("J%d", p + 1);
+        DrawTriangle((Vector2){ at.x, at.y + 6.0f }, (Vector2){ at.x + 6.0f, at.y - 2.0f }, (Vector2){ at.x - 6.0f, at.y - 2.0f },
+                     with_alpha(c, 0.9f));
+        text_centered(name, (int)at.x, (int)at.y - 26, LABEL_SIZE - 4, c);
+        // A vida dele, numa barrinha embaixo do nome.
+        float hull = s->hull / fmaxf(world_tuning(w)->ship_hull_max, 1e-3f);
+        draw_bar((int)at.x - 16, (int)at.y - 6, 32, 3, hull, with_alpha(c, 0.8f));
+    }
+}
+
 static void draw_markers(const World *w, const Tuning *t, Camera3D camera)
 {
+    if (w->player_count > 1) draw_teammates(w, camera);
     float now = seconds(w, t);
     const Enemies *e = &w->enemies;
     for (int i = 0; i < e->pool.capacity; i++) {

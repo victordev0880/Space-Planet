@@ -446,8 +446,28 @@ static Steer think(Enemies *e, int index, const EnemyContext *ctx)
     }
 }
 
-void enemies_tick(Enemies *e, const EnemyContext *ctx)
+// Online: cada inimigo enxerga a nave viva mais perto dele (no jogo solo, a única).
+static void pick_ship(EnemyContext *ctx, Vector3 pos)
 {
+    if (ctx->ship_count <= 0) return;
+    const Ship *best = NULL;
+    float best_d = 0.0f;
+    for (int i = 0; i < ctx->ship_count; i++) {
+        const Ship *s = ctx->ships[i];
+        if (s == NULL || !s->alive) continue;
+        float d = Vector3DistanceSqr(s->pos, pos);
+        if (best == NULL || d < best_d) {
+            best = s;
+            best_d = d;
+        }
+    }
+    ctx->ship = best;
+}
+
+void enemies_tick(Enemies *e, const EnemyContext *shared)
+{
+    EnemyContext local = *shared;
+    EnemyContext *ctx = &local;
     const Tuning *t = ctx->t;
     float dt = ctx->dt;
     e->carve_count = 0;
@@ -467,6 +487,7 @@ void enemies_tick(Enemies *e, const EnemyContext *ctx)
         en->pos_prev = en->pos;
         en->rot_prev = en->rot;
         if (en->hp <= 0.0f) continue;   // morto, esperando ser removido
+        pick_ship(ctx, en->pos);
 
         const EnemyStats *stats = &t->enemy[en->type];
         en->age += dt;
@@ -516,6 +537,7 @@ bool enemies_damage(Enemies *e, int index, float amount, DeathCause cause)
     if (en->hp > 0.0f) return false;
     en->hp = 0.0f;
     en->death = (uint8_t)cause;
+    en->killer = e->damage_owner;
     return true;
 }
 

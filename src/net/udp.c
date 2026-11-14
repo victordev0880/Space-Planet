@@ -32,6 +32,13 @@ static bool start_winsock(void)
 static bool start_winsock(void) { return true; }
 #endif
 
+static bool loopback_only = false;
+
+void udp_loopback_only(bool on)
+{
+    loopback_only = on;
+}
+
 bool udp_open(UdpSocket *s, uint16_t port)
 {
     memset(s, 0, sizeof *s);
@@ -45,7 +52,7 @@ bool udp_open(UdpSocket *s, uint16_t port)
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
     addr.sin_family = AF_INET;
-    addr.sin_addr.s_addr = htonl(INADDR_ANY);
+    addr.sin_addr.s_addr = htonl(loopback_only ? INADDR_LOOPBACK : INADDR_ANY);
     addr.sin_port = htons(port);
     if (bind(h, (struct sockaddr *)&addr, sizeof addr) != 0) {
         CLOSE_SOCKET(h);
@@ -71,6 +78,7 @@ void udp_close(UdpSocket *s)
 bool udp_send(UdpSocket *s, NetAddress to, const void *data, size_t size)
 {
     if (!s->open) return false;
+    if (s->drop_every > 0 && ++s->sent % s->drop_every == 0) return true;   // (teste: "perdido" no caminho)
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof addr);
     addr.sin_family = AF_INET;

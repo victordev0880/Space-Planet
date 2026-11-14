@@ -46,11 +46,13 @@ typedef struct {
     uint8_t pierce;          // tiro da nave: inimigos que ainda pode atravessar (evolução)
     int16_t last_hit;        // ... e o último que atravessou (-1 = nenhum), para não acertá-lo de novo
     int16_t homing;          // ferrão da Ninhada: o inimigo que ele persegue (-1 = o mais perto)
+    uint8_t owner;           // jogador de quem é o tiro (online; 0 no jogo solo)
 } Shot;
 
 typedef struct {
     Pool  pool;
-    Shot *items;   // array paralelo ao pool
+    Shot   *items;          // array paralelo ao pool
+    uint8_t spawn_owner;    // dono dos tiros que nascerem agora (o mundo troca a cada jogador)
 } Projectiles;
 
 bool projectiles_init(Projectiles *p, Arena *arena);

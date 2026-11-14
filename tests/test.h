@@ -55,5 +55,6 @@ void suite_hive(void);
 void suite_worm(void);
 void suite_devourer(void);
 void suite_net(void);
+void suite_coop(void);
 
 #endif

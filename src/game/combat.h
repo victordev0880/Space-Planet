@@ -66,6 +66,13 @@ void combat_boss(World *w, const Tuning *t);
 void combat_resolve(World *w, const Tuning *t);
 void combat_sweep(World *w, const Tuning *t);
 
+// Online: as mesmas coisas por jogador. `combat_resolve_for` resolve os tiros
+// de `owner` e o que acerta a nave dele (owner -1: nenhum); com `world_part`,
+// também o que cai no planeta e na Lua. `combat_sweep_for` processa os abates
+// de `killer` (-1: as mortes que não foram de jogador).
+void combat_resolve_for(World *w, const Tuning *t, int owner, bool world_part);
+void combat_sweep_for(World *w, const Tuning *t, int killer);
+
 // Alvo da ajuda de mira, se houver algum dentro do cone à frente do nariz.
 bool combat_aim_assist(const World *w, const Tuning *t, AimAssist *out);
 

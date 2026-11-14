@@ -206,6 +206,13 @@ MenuInput platform_menu_input(void)
     in.right = key_hit(KEY_RIGHT) || key_hit(KEY_D);
     in.confirm = IsKeyPressed(KEY_ENTER) || IsKeyPressed(KEY_KP_ENTER) || IsKeyPressed(KEY_SPACE);
     in.back = IsKeyPressed(KEY_ESCAPE) || IsKeyPressed(KEY_BACKSPACE);
+    in.escape = IsKeyPressed(KEY_ESCAPE);
+    in.erase = key_hit(KEY_BACKSPACE);
+    for (int c = GetCharPressed(); c > 0 && in.char_count < (int)sizeof in.chars; c = GetCharPressed()) {
+        if (c < 128) in.chars[in.char_count++] = (char)c;
+    }
+    bool ctrl = IsKeyDown(KEY_LEFT_CONTROL) || IsKeyDown(KEY_RIGHT_CONTROL);
+    if (ctrl && IsKeyPressed(KEY_V)) in.paste = GetClipboardText();
 
     in.mouse = GetMousePosition();
     in.mouse_moved = (last_mouse.x >= 0.0f) && Vector2Distance(in.mouse, last_mouse) > 0.5f;
@@ -233,6 +240,7 @@ MenuInput platform_menu_input(void)
         in.right |= hit[3];
         in.confirm |= confirm;
         in.back |= back;
+        in.escape |= back;
         in.gamepad = hit[0] || hit[1] || hit[2] || hit[3] || confirm || back;
     }
     return in;

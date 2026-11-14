@@ -1,7 +1,7 @@
 # Telas fora da partida: título, opções e controles (a partir do título),
 # a partida, a pausa e as opções a partir dela, a volta ao jogo e, por fim,
 # as dicas na tela com o controle em uso (pad on).
-frames 700
+frames 1150
 seed 1234
 
 at 0   menu title
@@ -30,3 +30,11 @@ at 610 menu controls
 at 640 shot menus_10_tabela_controle
 at 650 menu game
 at 699 shot menus_11_loja_controle
+
+# --- online (marco 12) -----------------------------------------------------------
+at 1000 menu online
+at 1030 shot menus_10_online
+at 1040 menu join
+at 1070 shot menus_11_entrar
+at 1080 menu lobby
+at 1110 shot menus_12_sala

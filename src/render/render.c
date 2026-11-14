@@ -206,6 +206,13 @@ void render_scene(Renderer *r, const World *w, const Tuning *t, float alpha, boo
     if (w->ship_active) {
         ship_draw(&w->ship, &w->evo, &w->planet, t, alpha, time, glow, camera);
         if (w->ship.alive) allies_draw(&w->allies, &w->planet, t, alpha, glow, camera);
+        // Online: as naves (e os aliados) dos outros jogadores.
+        for (int p = 0; p < w->player_count; p++) {
+            if (p == w->current) continue;
+            const Player *pl = &w->players[p];
+            ship_draw(&pl->ship, &pl->evo, &w->planet, t, alpha, time, glow, camera);
+            if (pl->ship.alive) allies_draw(&pl->allies, &w->planet, t, alpha, glow, camera);
+        }
     }
     projectiles_draw(w, t, alpha, glow, camera);
     boss_effects_draw(w, t, alpha, glow, camera);

@@ -11,6 +11,10 @@
 
 // Alcance máximo do raio de um impacto, em unidades do mundo.
 #define IMPACT_RAY_LENGTH 5000.0f
+#define PLAYER_SPAWN_APART 14.0f   // online: cada jogador nasce este tanto (graus) adiante do anterior
+
+static void player_store(World *w, int p);
+static void player_load(World *w, int p);
 #define CARVE_DEBRIS      0.3f     // destroços de uma escavação, em proporção a uma cratera do mesmo tamanho
 
 // --- câmera em terceira pessoa ---
@@ -576,7 +580,135 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     w->view.rot = QuaternionIdentity();
     w->view.fov = t->camera_fov;
     world_set_view(w, t, CAM_SHIP);
+    w->player_count = 1;
+    w->local = 0;
+    w->current = 0;
+    w->rocks.towed = -1;
+    player_store(w, 0);
     return true;
+}
+
+// ---------------------------------------------------------------------------
+//  Jogadores (online)
+// ---------------------------------------------------------------------------
+
+static void player_store(World *w, int p)
+{
+    Player *pl = &w->players[p];
+    pl->ship = w->ship;
+    pl->frozen_input = w->frozen_input;
+    pl->hit_marker = w->hit_marker;
+    pl->kill_marker = w->kill_marker;
+    pl->ability = w->ability;
+    pl->brood = w->brood;
+    pl->tunnel = w->tunnel;
+    pl->suicide_wait = w->suicide_wait;
+    pl->building = w->building;
+    pl->missiles = w->missiles;
+    pl->focus = w->focus;
+    pl->dodge_used = w->dodge_used;
+    pl->beam_ticks = w->beam_ticks;
+    pl->evo = w->evo;
+    pl->allies = w->allies;
+    pl->cards_at = w->cards_at;
+    pl->towed = w->rocks.towed;
+}
+
+// O tuning efetivo do jogador da vez: o base com as evoluções dele, e o peso
+// da rocha que ele reboca.
+static void tune_current(World *w)
+{
+    if (w->base == NULL) return;
+    evolution_tune(&w->evo, w->base, &w->eff);
+    float load = rocks_tow_load(&w->rocks, &w->eff);
+    if (load > 0.0f) {
+        float keep = 1.0f - w->eff.tractor_slow * load;
+        w->eff.ship_speed_max *= keep;
+        w->eff.ship_thrust *= keep;
+    }
+}
+
+static void player_load(World *w, int p)
+{
+    const Player *pl = &w->players[p];
+    w->ship = pl->ship;
+    w->frozen_input = pl->frozen_input;
+    w->hit_marker = pl->hit_marker;
+    w->kill_marker = pl->kill_marker;
+    w->ability = pl->ability;
+    w->brood = pl->brood;
+    w->tunnel = pl->tunnel;
+    w->suicide_wait = pl->suicide_wait;
+    w->building = pl->building;
+    w->missiles = pl->missiles;
+    w->focus = pl->focus;
+    w->dodge_used = pl->dodge_used;
+    w->beam_ticks = pl->beam_ticks;
+    w->evo = pl->evo;
+    w->allies = pl->allies;
+    w->cards_at = pl->cards_at;
+    w->rocks.towed = pl->towed;
+    // A rocha dele pode ter caído (ou quebrado) enquanto não era a vez dele.
+    if (w->rocks.towed >= 0) {
+        const Rock *k = &w->rocks.items[w->rocks.towed];
+        if (!k->alive || k->state != ROCK_TOWED || k->owner != p) w->rocks.towed = -1;
+    }
+    w->current = p;
+    w->shots.spawn_owner = (uint8_t)p;
+    w->enemies.damage_owner = (uint8_t)p;
+    tune_current(w);
+}
+
+void world_use_player(World *w, int p)
+{
+    if (p == w->current || p < 0 || p >= w->player_count) return;
+    player_store(w, w->current);
+    player_load(w, p);
+}
+
+const Ship *world_ship(const World *w, int p)
+{
+    return (p == w->current) ? &w->ship : &w->players[p].ship;
+}
+
+void world_hurt_player(World *w, const Tuning *t, int p, float amount, Vector3 point)
+{
+    int was = w->current;
+    world_use_player(w, p);
+    combat_damage_ship(w, (w->base != NULL) ? &w->eff : t, amount, point);
+    world_use_player(w, was);
+}
+
+// Cada jogador nasce num lugar um pouco diferente (girado em volta do eixo do
+// planeta), para as naves não nascerem uma dentro da outra.
+static void spawn_apart(Ship *s, int p)
+{
+    if (p == 0) return;
+    Quaternion turn = QuaternionFromAxisAngle((Vector3){ 0.0f, 1.0f, 0.0f }, (float)p * PLAYER_SPAWN_APART * DEG2RAD);
+    s->pos = s->pos_prev = Vector3RotateByQuaternion(s->pos, turn);
+    s->rot = s->rot_prev = QuaternionNormalize(QuaternionMultiply(turn, s->rot));
+}
+
+void world_set_players(World *w, const Tuning *t, int count, int local)
+{
+    if (count < 1) count = 1;
+    if (count > SHIPS_MAX) count = SHIPS_MAX;
+    if (local < 0 || local >= count) local = 0;
+    // O modelo é o jogador da vez, como está (logo depois de world_init ou
+    // world_restart: nave nova, sem evoluções).
+    player_store(w, w->current);
+    Player fresh = w->players[w->current];
+    ship_spawn(&fresh.ship, t, &w->planet);
+    evolution_reset(&fresh.evo);
+    allies_reset(&fresh.allies);
+    fresh.towed = -1;
+    for (int p = 0; p < SHIPS_MAX; p++) {
+        w->players[p] = fresh;
+        spawn_apart(&w->players[p].ship, p);
+    }
+    w->player_count = count;
+    w->local = local;
+    player_load(w, local);
 }
 
 // ---------------------------------------------------------------------------
@@ -591,6 +723,7 @@ bool world_in_play(const World *w)
 EnemyContext world_enemy_context(World *w, const Tuning *t)
 {
     EnemyContext c;
+    memset(&c, 0, sizeof c);
     c.planet = &w->planet;
     c.moon = &w->moon;
     c.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
@@ -600,9 +733,32 @@ EnemyContext world_enemy_context(World *w, const Tuning *t)
     c.t = t;
     c.tick = (uint32_t)w->tick;
     c.dt = 1.0f / (float)t->sim_hz;
-    // A cada horda, um pouco mais de vida (sem hordas, como na primeira).
+    // A cada horda, um pouco mais de vida (sem hordas, como na primeira); e
+    // mais com mais jogadores.
     c.hp_scale = 1.0f + t->waves_hp_growth * (float)(w->waves_enabled ? w->director.wave : 0);
+    if (w->player_count > 1) {
+        c.hp_scale *= 1.0f + t->coop_hp * (float)(w->player_count - 1);
+        for (int p = 0; p < w->player_count; p++) c.ships[p] = w->ship_active ? world_ship(w, p) : NULL;
+        c.ship_count = w->player_count;
+    }
     return c;
+}
+
+// O jogador cuja nave (viva) está mais perto de `pos` (o 0 se ninguém está vivo).
+static int nearest_player(const World *w, Vector3 pos)
+{
+    int best = 0;
+    float best_d = -1.0f;
+    for (int p = 0; p < w->player_count; p++) {
+        const Ship *s = world_ship(w, p);
+        if (!s->alive) continue;
+        float d = Vector3DistanceSqr(s->pos, pos);
+        if (best_d < 0.0f || d < best_d) {
+            best_d = d;
+            best = p;
+        }
+    }
+    return best;
 }
 
 int world_spawn(World *w, const Tuning *t, EnemyType type, int count, Vector3 center)
@@ -630,10 +786,15 @@ void world_clear_enemies(World *w)
 BossContext world_boss_context(World *w, const Tuning *t)
 {
     BossContext c;
+    memset(&c, 0, sizeof c);
     c.planet = &w->planet;
     c.moon = &w->moon;
     c.drones = w->enemies.alive_by_type[ENEMY_SWARM];
     c.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
+    if (w->player_count > 1 && w->ship_active) {   // online: o boss enxerga a nave mais perto dele
+        const Ship *s = world_ship(w, nearest_player(w, w->boss.pos));
+        c.ship = s->alive ? s : NULL;
+    }
     c.shots = &w->shots;
     c.events = &w->events;
     c.rng = &w->rng;
@@ -647,6 +808,11 @@ void world_spawn_boss(World *w, const Tuning *t, BossType type, Vector3 dir)
 {
     BossContext ctx = world_boss_context(w, t);
     boss_spawn(&w->boss, type, &ctx, dir);
+    if (w->player_count > 1) {   // online: mais vida com mais jogadores
+        float scale = 1.0f + t->coop_boss_hp * (float)(w->player_count - 1);
+        w->boss.hp *= scale;
+        w->boss.hp_max *= scale;
+    }
 }
 
 // O Verme: crateras de saída e de mergulho, trechos do túnel que desmoronam,
@@ -662,7 +828,10 @@ static void tick_worm_requests(World *w, const Tuning *t)
     // Um pouco maior que a mordida, para cobrir o túnel entre duas mordidas.
     float refill = sqrtf(t->worm_tunnel_radius * t->worm_tunnel_radius + 0.25f * t->worm_tunnel_spacing * t->worm_tunnel_spacing);
     for (int i = 0; i < m->restore_count; i++) planet_restore(&w->planet, m->restores[i], refill + 0.5f);
-    if (m->ship_damage > 0.0f && w->ship.alive && w->ship_active) combat_damage_ship(w, t, m->ship_damage, w->ship.pos);
+    if (m->ship_damage > 0.0f && w->ship_active) {   // quem o Verme viu (o mais perto dele)
+        int p = nearest_player(w, w->boss.pos);
+        if (world_ship(w, p)->alive) world_hurt_player(w, t, p, m->ship_damage, world_ship(w, p)->pos);
+    }
     if (m->dust_now && worm_underground(&w->boss, &w->planet)) {
         // Tremor: poeira subindo do chão em cima da cabeça.
         Vector3 up = Vector3Normalize(w->boss.pos);
@@ -799,15 +968,21 @@ static void tick_boss(World *w, const Tuning *t)
     if (w->state != GAME_PLAYING) return;
     score_kill(&w->score, t, boss_points((BossType)b->type, t));
     w->score.bosses++;
-    world_give_xp(w, t, boss_xp((BossType)b->type, t));
-    // A recompensa: o núcleo do boss (cada um dá uma habilidade). O Devorador
-    // é o último: a recompensa dele é a chuva de rochas (e a vitória).
-    if (b->type == BOSS_DEVOURER) return;
-    bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : (b->type == BOSS_WORM) ? &w->tunnel.owned : &w->ability.owned;
-    if (!*owned) {
-        *owned = true;
-        events_push(&w->events, (uint32_t)w->tick, EV_REWARD, b->type, w->ship.pos, 0.0f);
+    // A recompensa vai para todos os jogadores: o XP e o núcleo do boss (cada
+    // um dá uma habilidade). O Devorador é o último: a recompensa dele é a
+    // chuva de rochas (e a vitória).
+    int was = w->current;
+    for (int p = 0; p < w->player_count; p++) {
+        world_use_player(w, p);
+        world_give_xp(w, t, boss_xp((BossType)b->type, t));
+        if (b->type == BOSS_DEVOURER) continue;
+        bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : (b->type == BOSS_WORM) ? &w->tunnel.owned : &w->ability.owned;
+        if (!*owned) {
+            *owned = true;
+            if (p == 0) events_push(&w->events, (uint32_t)w->tick, EV_REWARD, b->type, w->ship.pos, 0.0f);
+        }
     }
+    world_use_player(w, was);
 }
 
 void world_set_plan(World *w, const WavePlan *plan)
@@ -864,6 +1039,31 @@ void world_restart(World *w, const Tuning *t)
     if (w->waves_enabled) director_start(&w->director, &w->plan);
     else                  director_stop(&w->director);
     world_set_view(w, t, CAM_SHIP);
+    w->rocks.towed = -1;
+    world_set_players(w, t, w->player_count, w->local);   // todos recomeçam (no jogo solo, só o 0)
+}
+
+void world_start_online(World *w, const Tuning *t, uint64_t seed, int players, int local)
+{
+    // Tudo o que entra no hash volta ao começo, a partir da mesma seed: os
+    // computadores podem ter passado tempos diferentes no título (ou jogado
+    // outra partida antes), e a partida online tem de começar idêntica.
+    world_restart(w, t);
+    rng_seed(&w->rng, seed, 1u);
+    w->tick = 0;
+    w->state_tick = 0;
+    moon_init(&w->moon, t, w->planet.params.radius);
+    particles_clear(&w->particles);
+    memset(w->impacts, 0, sizeof w->impacts);
+    w->impact_count = 0;
+    memset(&w->events, 0, sizeof w->events);
+    w->jolt_count = 0;
+    w->jolt_strength = 0.0f;
+    w->hitstop = 0;
+    w->meteor_queue_wait = 0.0f;
+    world_set_waves(w, true);
+    world_set_players(w, t, players, local);
+    world_set_view(w, t, CAM_SHIP);
 }
 
 // Faz a sequência de hordas andar: solta os grupos na hora e paga o bônus
@@ -891,7 +1091,10 @@ static void run_director(World *w, const InputState *in, const Tuning *t, float 
             world_spawn_boss(w, t, (BossType)(g->type - WAVE_BOSS_BASE), wave_group_direction(g));
             continue;
         }
-        world_spawn(w, t, (EnemyType)g->type, g->count, Vector3Scale(wave_group_direction(g), distance));
+        // Online: grupos maiores com mais jogadores.
+        int count = g->count;
+        if (w->player_count > 1) count = (int)lroundf((float)count * (1.0f + t->coop_count * (float)(w->player_count - 1)));
+        world_spawn(w, t, (EnemyType)g->type, count, Vector3Scale(wave_group_direction(g), distance));
     }
     if (step.wave_cleared) {
         float bonus = (planet_hp(&w->planet) >= t->score_planet_bonus_hp) ? t->score_planet_bonus : 0.0f;
@@ -923,6 +1126,7 @@ static void hold_still(World *w)
 {
     w->ship.pos_prev = w->ship.pos;
     w->ship.rot_prev = w->ship.rot;
+    w->ship.bank_prev = w->ship.bank;
     Enemies *e = &w->enemies;
     for (int i = 0; i < e->pool.capacity; i++) {
         if (!pool_alive(&e->pool, i)) continue;
@@ -945,6 +1149,18 @@ static void hold_still(World *w)
     }
     for (int i = 0; i < ORE_MAX; i++) w->rocks.ore[i].pos_prev = w->rocks.ore[i].pos;
     for (int i = 0; i < DEFENSES_MAX; i++) w->defenses.items[i].pos_prev = w->defenses.items[i].pos;
+    // Os outros jogadores (online): as naves e os aliados deles.
+    for (int other = 0; other < w->player_count; other++) {
+        if (other == w->current) continue;
+        Player *pl = &w->players[other];
+        pl->ship.pos_prev = pl->ship.pos;
+        pl->ship.rot_prev = pl->ship.rot;
+        pl->ship.bank_prev = pl->ship.bank;
+        for (int i = 0; i < ALLIES_MAX; i++) {
+            pl->allies.items[i].pos_prev = pl->allies.items[i].pos;
+            pl->allies.items[i].rot_prev = pl->allies.items[i].rot;
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -983,7 +1199,8 @@ void world_spawn_meteor(World *w, const Tuning *t)
     float radius = w->planet.params.radius;
     // Passa do lado da nave: o ponto mais perto do planeta fica a até
     // meteor_aim graus da direção dela, vista do centro.
-    Vector3 side = (Vector3Length(w->ship.pos) > 1e-3f) ? Vector3Normalize(w->ship.pos) : rng_unit_vec3(&w->rng);
+    const Ship *near = (w->player_count > 1) ? world_ship(w, (int)rng_below(&w->rng, (uint32_t)w->player_count)) : &w->ship;
+    Vector3 side = (Vector3Length(near->pos) > 1e-3f) ? Vector3Normalize(near->pos) : rng_unit_vec3(&w->rng);
     float angle = rng_range(&w->rng, 0.0f, t->meteor_aim) * DEG2RAD;
     Vector3 dir = Vector3Normalize(Vector3RotateByAxisAngle(side, perpendicular(&w->rng, side), angle));
     Vector3 pass = Vector3Scale(dir, radius + rng_range(&w->rng, t->meteor_pass_min, t->meteor_pass_max));
@@ -1062,6 +1279,7 @@ static void tick_tractor(World *w, const InputState *in, const Tuning *t)
         return;
     }
     rocks_grab(&w->rocks, index);
+    w->rocks.items[index].owner = (uint8_t)w->current;
     events_push(&w->events, tick, EV_TRACTOR_GRAB, w->rocks.items[index].kind, w->rocks.items[index].pos, 0.0f);
 }
 
@@ -1202,7 +1420,8 @@ static void tick_shop(World *w, const InputState *in, const Tuning *t)
     }
     uint32_t tick = (uint32_t)w->tick;
     for (int k = 0; k < DEF_TYPE_COUNT; k++) {
-        bool picked = (in->pressed & ACT_BIT(ACT_BUY1 + k)) || (w->building && (in->pressed & ACT_BIT(ACT_CARD1 + k)));
+        bool picked = (in->pressed & ACT_BIT(ACT_BUY1 + k))
+                   || (w->building && !w->evo.choosing && (in->pressed & ACT_BIT(ACT_CARD1 + k)));   // (com cartas abertas, 1 2 3 são delas)
         if (!picked) continue;
         DefenseType type = (DefenseType)k;
         int cost = defense_cost(t, type);
@@ -1241,8 +1460,13 @@ static void tick_defenses(World *w, const Tuning *t, float dt)
 static void tick_rocks(World *w, const Tuning *t, float dt)
 {
     RockContext ctx;
+    memset(&ctx, 0, sizeof ctx);
     ctx.planet = &w->planet;
     ctx.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
+    if (w->player_count > 1) {
+        for (int p = 0; p < w->player_count; p++) ctx.ships[p] = w->ship_active ? world_ship(w, p) : NULL;
+        ctx.ship_count = w->player_count;
+    }
     ctx.events = &w->events;
     ctx.t = t;
     ctx.tick = (uint32_t)w->tick;
@@ -1254,7 +1478,7 @@ static void tick_rocks(World *w, const Tuning *t, float dt)
         events_push(&w->events, (uint32_t)w->tick, EV_ORE, 0, w->ship.pos, (float)w->rocks.collected);
     }
     tick_repairs(w, t, dt);
-    rock_collisions(w, t);
+    if (w->player_count == 1) rock_collisions(w, t);   // (online, cada jogador na vez dele)
 
     // Brasas soltas pelos meteoros em voo.
     for (int i = 0; i < ROCKS_MAX; i++) {
@@ -1371,27 +1595,43 @@ static void hold_input(InputState *frozen, const InputState *in)
     frozen->look_dy += in->look_dy;
 }
 
+// Um passo parado (cartas na tela, hit-stop): nada anda, o relógio sim.
+static void freeze_step(World *w)
+{
+    w->view_prev = w->view;
+    hold_still(w);
+    w->moon.pos_prev = w->moon.pos;
+    w->tick++;
+    player_store(w, w->current);
+}
+
 void world_tick(World *w, const InputState *in, const Tuning *base)
 {
-    // Daqui em diante vale o tuning com as evoluções. Uma rocha a reboque pesa:
-    // a nave acelera menos e chega a uma velocidade menor.
-    evolution_tune(&w->evo, base, &w->eff);
-    float load = rocks_tow_load(&w->rocks, &w->eff);
-    if (load > 0.0f) {
-        float keep = 1.0f - w->eff.tractor_slow * load;
-        w->eff.ship_speed_max *= keep;
-        w->eff.ship_thrust *= keep;
-    }
+    InputState all[SHIPS_MAX];
+    memset(all, 0, sizeof all);
+    all[w->local] = *in;
+    world_tick_all(w, all, base);
+}
+
+void world_tick_all(World *w, const InputState in[], const Tuning *base)
+{
+    int n = w->player_count;
+    bool solo = (n == 1);
+    w->base = base;
+    // Entre os passos os campos são do jogador local (e roteiros e testes mexem
+    // neles): primeiro, eles voltam para a lista. Daqui em diante vale o tuning
+    // com as evoluções de quem tem a vez.
+    player_store(w, w->current);
+    if (w->current != w->local) player_load(w, w->local);
+    tune_current(w);
     const Tuning *t = &w->eff;
     float dt = 1.0f / (float)t->sim_hz;
 
-    // Cartas de evolução na tela: a partida congela até a escolha.
-    if (w->evo.choosing) {
-        choose_card(w, in, t);
-        w->view_prev = w->view;
-        hold_still(w);
-        w->moon.pos_prev = w->moon.pos;
-        w->tick++;
+    // Jogo solo: cartas de evolução na tela congelam a partida até a escolha.
+    // (Online, cada um escolhe as suas com a partida andando.)
+    if (solo && w->evo.choosing) {
+        choose_card(w, &in[0], t);
+        freeze_step(w);
         return;
     }
 
@@ -1399,25 +1639,44 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
     // tempo de jogo continua (as animações e o tremor de câmera seguem).
     if (w->hitstop > 0) {
         w->hitstop--;
-        hold_input(&w->frozen_input, in);
-        w->view_prev = w->view;
-        hold_still(w);
-        w->moon.pos_prev = w->moon.pos;
-        w->tick++;
+        for (int p = 0; p < n; p++) {
+            world_use_player(w, p);
+            hold_input(&w->frozen_input, &in[p]);
+        }
+        world_use_player(w, w->local);
+        freeze_step(w);
         return;
     }
-    InputState input = *in;
-    input.pressed |= w->frozen_input.pressed;
-    input.released |= w->frozen_input.released;
-    input.look_dx += w->frozen_input.look_dx;
-    input.look_dy += w->frozen_input.look_dy;
-    memset(&w->frozen_input, 0, sizeof w->frozen_input);
+
+    // O comando de cada um, mais o que ele fez durante o último congelamento.
+    InputState input[SHIPS_MAX];
+    uint32_t anyone = 0u;   // teclas que alguém apertou (Enter chama a horda para todos)
+    for (int p = 0; p < n; p++) {
+        world_use_player(w, p);
+        input[p] = in[p];
+        input[p].pressed |= w->frozen_input.pressed;
+        input[p].released |= w->frozen_input.released;
+        input[p].look_dx += w->frozen_input.look_dx;
+        input[p].look_dy += w->frozen_input.look_dy;
+        memset(&w->frozen_input, 0, sizeof w->frozen_input);
+        anyone |= input[p].pressed;
+    }
+    world_use_player(w, w->local);
+    const InputState *mine = &input[w->local];
+
+    // Online, a partida acabou e alguém apertou R: todos recomeçam no mesmo
+    // passo (no jogo solo quem recomeça é o aplicativo, com a transição).
+    if (!solo && w->state != GAME_PLAYING && (anyone & ACT_BIT(ACT_RESET))) {
+        world_restart(w, base);
+        world_set_waves(w, true);
+    }
 
     bool snap = false;
     w->view_prev = w->view;
 
     // F2 alterna entre a câmera livre e a câmera em que se estava.
-    if (input.pressed & ACT_BIT(ACT_FREECAM)) {
+    // (Online, não: a câmera livre congela a partida, e só neste computador.)
+    if (solo && (mine->pressed & ACT_BIT(ACT_FREECAM))) {
         if (w->cam_mode != CAM_FREE) {
             enter_free_camera(w);   // parte de onde a outra câmera estava
         } else {
@@ -1430,19 +1689,35 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
 
     // A partida só anda na câmera de jogo. Nas outras ela fica congelada.
     if (world_in_play(w)) {
-        ShipEvents ev = ship_tick(&w->ship, &input, &w->planet, &w->moon, t, dt);
-        ship_effects(w, &ev);
-        if (ev.dashed) combat_dash_blast(w, t);
-        tick_tractor(w, &input, t);
-        tick_shop(w, &input, t);
-        combat_fire(w, &input, t, dt);
-        combat_ability(w, &input, t, dt);
-        combat_brood(w, &input, t, dt);
-        combat_suicide(w, t, dt);
-        combat_missiles(w, &input, t, dt);
-        combat_tunnel(w, &input, t, dt);
-        tick_allies(w, t, dt);
-        run_director(w, &input, t, dt);
+        // A vez de cada jogador: a nave, a arma, as habilidades, a construção.
+        bool respawned = false;
+        for (int p = 0; p < n; p++) {
+            world_use_player(w, p);
+            const InputState *me = &input[p];
+            if (!solo && w->evo.choosing) choose_card(w, me, t);
+            ShipEvents ev = ship_tick(&w->ship, me, &w->planet, &w->moon, t, dt);
+            ship_effects(w, &ev);
+            if (ev.dashed) combat_dash_blast(w, t);
+            tick_tractor(w, me, t);
+            tick_shop(w, me, t);
+            combat_fire(w, me, t, dt);
+            combat_ability(w, me, t, dt);
+            combat_brood(w, me, t, dt);
+            combat_suicide(w, t, dt);
+            combat_missiles(w, me, t, dt);
+            combat_tunnel(w, me, t, dt);
+            tick_allies(w, t, dt);
+            if (p == w->local && ev.respawned) respawned = true;
+        }
+        // A parte de todos roda sempre na vez do jogador 0: tem de dar o mesmo
+        // resultado em todos os computadores (que têm "locais" diferentes).
+        world_use_player(w, 0);
+
+        // O mundo de todos: hordas, inimigos, boss, rochas, defesas.
+        InputState director;   // (só as teclas que alguém apertou: o mesmo em todos os computadores)
+        memset(&director, 0, sizeof director);
+        director.pressed = anyone;
+        run_director(w, &director, t, dt);
         tick_meteors(w, t, dt);
 
         EnemyContext ctx = world_enemy_context(w, t);
@@ -1456,24 +1731,45 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         combat_spores(w, t);
         tick_defenses(w, t, dt);
         projectiles_move(&w->shots, dt);
-        combat_resolve(w, t);
-        combat_boss(w, t);
-        combat_sweep(w, t);
-        open_cards(w, t);
 
+        // Acertos: os tiros de cada jogador (com as evoluções dele) e o que
+        // acerta a nave dele; depois, o que sobra cai no planeta.
+        if (solo) {
+            combat_resolve(w, t);
+            combat_boss(w, t);
+            combat_sweep(w, t);
+        } else {
+            for (int p = 0; p < n; p++) {
+                world_use_player(w, p);
+                combat_resolve_for(w, t, p, false);
+                combat_boss(w, t);
+                rock_collisions(w, t);
+            }
+            combat_resolve_for(w, t, -1, true);
+            for (int p = 0; p < n; p++) {
+                world_use_player(w, p);
+                combat_sweep_for(w, t, p);
+            }
+            combat_sweep_for(w, t, -1);   // quem bateu ou explodiu sozinho
+        }
+        for (int p = 0; p < n; p++) {
+            world_use_player(w, p);
+            open_cards(w, t);
+            w->hit_marker = fmaxf(w->hit_marker - dt, 0.0f);
+            w->kill_marker = fmaxf(w->kill_marker - dt, 0.0f);
+        }
+        world_use_player(w, w->local);
         score_tick(&w->score, dt);
-        w->hit_marker = fmaxf(w->hit_marker - dt, 0.0f);
-        w->kill_marker = fmaxf(w->kill_marker - dt, 0.0f);
 
-        tick_chase_camera(w, t, dt, snap || ev.respawned);
-        if (ev.respawned) snap = true;
+        tick_chase_camera(w, t, dt, snap || respawned);
+        if (respawned) snap = true;
     } else {
         hold_still(w);
         if (w->cam_mode == CAM_ORBIT) {
             w->orbit_angle += t->orbit_speed * DEG2RAD * dt;
             w->view = orbit_pose(w->orbit_angle, t);
         } else if (w->cam_mode == CAM_FREE) {
-            tick_free_camera(w, &input, t, dt);
+            tick_free_camera(w, mine, t, dt);
         } else {
             tick_chase_camera(w, t, dt, snap);   // câmera de jogo com a nave fora de cena
         }
@@ -1485,6 +1781,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
     check_collapse(w, t);
     update_game_state(w);
     w->tick++;
+    player_store(w, w->current);   // a lista fica em dia (o hash do online a lê)
 }
 
 CamPose world_view(const World *w, float alpha)
@@ -1530,25 +1827,33 @@ static uint64_t hash_quat(uint64_t h, Quaternion q)
 uint64_t world_hash(const World *w)
 {
     uint64_t h = 14695981039346656037ULL;
+    // Online, só o que é igual em todos os computadores: nada da câmera nem
+    // dos campos do jogador local (a lista `players` é a cópia de todos).
+    bool online = w->player_count > 1;
     int mode = (int)w->cam_mode;
     HASH(h, w->tick);
     HASH(h, w->rng.state);
     HASH(h, w->rng.inc);
-    HASH(h, mode);
-    HASH(h, w->orbit_angle);
-    h = hash_vec3(h, w->free_vel);
-    h = hash_vec3(h, w->view.pos);
-    h = hash_quat(h, w->view.rot);
-    HASH(h, w->view.fov);
+    if (!online) {
+        HASH(h, mode);
+        HASH(h, w->orbit_angle);
+        h = hash_vec3(h, w->free_vel);
+        h = hash_vec3(h, w->view.pos);
+        h = hash_quat(h, w->view.rot);
+        HASH(h, w->view.fov);
+    }
 
-    h = hash_vec3(h, w->ship.pos);
-    h = hash_vec3(h, w->ship.vel);
-    h = hash_vec3(h, w->ship.fall);
-    h = hash_quat(h, w->ship.rot);
-    HASH(h, w->ship.hull);
-    HASH(h, w->ship.shield);
-    HASH(h, w->ship.energy);
-    HASH(h, w->ship.sling);
+    for (int p = 0; p < (online ? w->player_count : 1); p++) {
+        const Ship *ship = online ? &w->players[p].ship : &w->ship;
+        h = hash_vec3(h, ship->pos);
+        h = hash_vec3(h, ship->vel);
+        h = hash_vec3(h, ship->fall);
+        h = hash_quat(h, ship->rot);
+        HASH(h, ship->hull);
+        HASH(h, ship->shield);
+        HASH(h, ship->energy);
+        HASH(h, ship->sling);
+    }
     HASH(h, w->jolt_count);
     HASH(h, w->moon.angle);
 
@@ -1606,16 +1911,24 @@ uint64_t world_hash(const World *w)
     }
     // Só entram no resumo quando existem (os roteiros antigos não mudam de hash).
     if (w->moon.scale < 1.0f) HASH(h, w->moon.scale);
-    if (w->brood.owned) HASH(h, w->brood.cooldown);
-    HASH(h, w->ability.owned);
-    HASH(h, w->evo.level);
-    HASH(h, w->evo.xp);
-    HASH(h, w->evo.rank);
-    HASH(h, w->evo.choosing);
-    for (int i = 0; i < ALLIES_MAX; i++) {
-        if (w->allies.items[i].alive) h = hash_vec3(h, w->allies.items[i].pos);
+    for (int p = 0; p < (online ? w->player_count : 1); p++) {
+        const Player *pl = &w->players[p];
+        const Brood *brood = online ? &pl->brood : &w->brood;
+        const Ability *ability = online ? &pl->ability : &w->ability;
+        const Evolution *evo = online ? &pl->evo : &w->evo;
+        const Allies *allies = online ? &pl->allies : &w->allies;
+        if (brood->owned) HASH(h, brood->cooldown);
+        HASH(h, ability->owned);
+        HASH(h, evo->level);
+        HASH(h, evo->xp);
+        HASH(h, evo->rank);
+        HASH(h, evo->choosing);
+        for (int i = 0; i < ALLIES_MAX; i++) {
+            if (allies->items[i].alive) h = hash_vec3(h, allies->items[i].pos);
+        }
+        int towed = online ? pl->towed : w->rocks.towed;
+        HASH(h, towed);
     }
-    HASH(h, w->rocks.towed);
     HASH(h, w->rocks.delivered);
     for (int i = 0; i < ROCKS_MAX; i++) {
         if (!w->rocks.items[i].alive) continue;

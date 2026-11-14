@@ -105,6 +105,31 @@ typedef enum {
     GAME_LOST,     // colapso planetário
 } GameState;
 
+// Tudo o que é de um jogador (online, marco 12). O mundo guarda uma cópia de
+// cada um em `players`; os campos de mesmo nome do World (ship, evo,
+// missiles...) são sempre os do jogador `current`. A cada passo o mundo
+// assume a vez de cada jogador (copia o dele para os campos), roda a parte
+// dele, e devolve. No jogo solo há só o jogador 0, e tudo funciona como antes.
+// Fora do passo, os campos são os do jogador `local` (o desta tela).
+typedef struct {
+    Ship       ship;
+    InputState frozen_input;
+    float      hit_marker, kill_marker;
+    Ability    ability;
+    Brood      brood;
+    Tunnel     tunnel;
+    float      suicide_wait;
+    bool       building;
+    Missiles   missiles;
+    float      focus;
+    bool       dodge_used;
+    int        beam_ticks;
+    Evolution  evo;
+    Allies     allies;
+    uint64_t   cards_at;
+    int        towed;       // rocha no raio trator (índice; -1 = nenhuma)
+} Player;
+
 typedef struct {
     uint64_t  tick;         // quantos passos de lógica já rodaram
     Rng       rng;
@@ -175,6 +200,13 @@ typedef struct {
     Vector3   free_vel;     // velocidade da câmera livre
     CamPose   view;         // pose depois do último passo
     CamPose   view_prev;    // pose um passo antes (para interpolar)
+
+    // --- jogadores (online) ---
+    Player    players[SHIPS_MAX];
+    int       player_count;   // 1 no jogo solo
+    int       local;          // o jogador desta tela
+    int       current;        // de quem são os campos de jogador agora (ver Player)
+    const Tuning *base;       // o tuning base do passo em curso (para o efetivo de cada jogador)
 } World;
 
 // Cria o mundo e gera o planeta, reservando a grade na arena. Retorna false
@@ -182,8 +214,31 @@ typedef struct {
 bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena);
 
 // Um passo de lógica. `t` é o tuning base (o dos arquivos); a partir dele o
-// mundo monta o efetivo, com as evoluções, e usa esse.
+// mundo monta o efetivo, com as evoluções, e usa esse. `in` é o comando do
+// jogador local (no online, os outros ficam parados: use world_tick_all).
 void world_tick(World *w, const InputState *in, const Tuning *t);
+
+// Um passo com o comando de cada jogador (`in[0]` a `in[player_count - 1]`).
+void world_tick_all(World *w, const InputState in[], const Tuning *t);
+
+// Partida para `count` jogadores (1 a SHIPS_MAX); esta tela é a do `local`.
+// Recomeça a nave e a evolução de todos; chamar logo depois de world_init ou
+// world_restart. A dificuldade cresce com o número de jogadores.
+void world_set_players(World *w, const Tuning *t, int count, int local);
+
+// Começa a partida online: tudo do zero a partir de `seed` (o anfitrião
+// sorteia e manda), com as hordas ligadas, para `players` jogadores.
+void world_start_online(World *w, const Tuning *t, uint64_t seed, int players, int local);
+
+// Assume a vez do jogador `p`: os campos de jogador do World passam a ser os
+// dele (os do anterior são guardados).
+void world_use_player(World *w, int p);
+
+// A nave do jogador `p` (a dos campos, se for a vez dele).
+const Ship *world_ship(const World *w, int p);
+
+// O jogador `p` leva dano (assume a vez dele e volta).
+void world_hurt_player(World *w, const Tuning *t, int p, float amount, Vector3 point);
 
 // O tuning efetivo (base + evoluções) do último passo: é o que vale para a
 // nave e para quem a desenha (barras de casco e escudo, alcance da arma).
