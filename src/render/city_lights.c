@@ -1,4 +1,5 @@
 #include "raylib.h"
+#include <stddef.h>
 #include "rlgl.h"
 
 #include "render/city_lights.h"

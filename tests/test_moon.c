@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "game/moon.h"

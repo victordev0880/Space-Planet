@@ -1,5 +1,6 @@
 // Testes do marco 11: o Devorador, o chefe final.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "game/combat.h"

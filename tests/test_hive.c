@@ -1,5 +1,6 @@
 // Testes do marco 11: a Colmeia Lunar, os esporos e a Ninhada.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "core/input.h"

@@ -1,6 +1,7 @@
 // Testes do marco 7: XP, níveis, cartas ponderadas pelas essências e os
 // efeitos das evoluções.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "core/input.h"

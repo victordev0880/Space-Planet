@@ -13,6 +13,7 @@
 // Bolsas estouradas pela nave deixam esporos (uma a cada duas): o mundo os
 // solta, e o raio trator pode arremessá-los no coração.
 #include "game/boss.h"
+#include <stddef.h>
 
 #include <math.h>
 

@@ -1,5 +1,6 @@
 // Testes do marco 8: o Rompe-Mundos e o núcleo que ele deixa.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "core/input.h"

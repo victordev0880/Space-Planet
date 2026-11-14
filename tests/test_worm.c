@@ -1,5 +1,6 @@
 // Testes do marco 11: o Verme do Núcleo e o Túnel.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "core/input.h"

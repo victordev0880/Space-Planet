@@ -1,4 +1,5 @@
 #include "core/pool.h"
+#include <stddef.h>
 
 bool pool_init(Pool *p, int capacity, Arena *arena)
 {

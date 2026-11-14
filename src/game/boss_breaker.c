@@ -10,6 +10,7 @@
 // fase 3, uma fração maior). Três fases, pela vida: cargas mais curtas,
 // cortes mais longos e, da fase 2 em diante, drones.
 #include "game/boss.h"
+#include <stddef.h>
 
 #include <math.h>
 

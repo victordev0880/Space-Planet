@@ -1,4 +1,5 @@
 #include "test.h"
+#include <stddef.h>
 
 #include "core/config.h"
 #include "game/tuning.h"

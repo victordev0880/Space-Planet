@@ -1,4 +1,5 @@
 #include "game/combat.h"
+#include <stddef.h>
 
 #include <math.h>
 

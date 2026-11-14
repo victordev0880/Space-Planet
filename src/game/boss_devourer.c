@@ -14,6 +14,7 @@
 // planeta, devorando sem parar, garganta sempre aberta, até o planeta morrer
 // ou um tanto de dano arrancá-lo). Consertar o planeta acalma o Devorador.
 #include "game/boss.h"
+#include <stddef.h>
 
 #include <math.h>
 

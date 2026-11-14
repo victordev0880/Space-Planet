@@ -1,4 +1,5 @@
 #include "game/events.h"
+#include <stddef.h>
 
 void events_push(Events *e, uint32_t tick, EventType type, uint8_t sub, Vector3 pos, float value)
 {

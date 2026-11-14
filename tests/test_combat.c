@@ -2,6 +2,7 @@
 #include "test_util.h"
 
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "core/pool.h"
 #include "game/combat.h"

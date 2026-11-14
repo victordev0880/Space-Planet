@@ -1,4 +1,5 @@
 #include "tools/autopilot.h"
+#include <stddef.h>
 
 #include <math.h>
 

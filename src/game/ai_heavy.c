@@ -9,6 +9,7 @@
 // Porta-drones. Orbita mais alto e, de tempos em tempos, acende o hangar e
 // solta um bando de Enxame, que ataca o planeta embaixo dele.
 #include "game/enemy_ai.h"
+#include <stddef.h>
 
 #include <math.h>
 

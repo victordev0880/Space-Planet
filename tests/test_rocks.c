@@ -1,6 +1,7 @@
 // Testes do marco 9: rochas (fragmentos e meteoros), raio trator, conserto,
 // mineração e defesas planetárias.
 #include "test.h"
+#include <stddef.h>
 #include "test_util.h"
 
 #include "core/input.h"
