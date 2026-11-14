@@ -37,3 +37,4 @@ CONTROLES
 
 Código-fonte: o jogo é feito em C com o raylib (licença zlib).
 A fonte Rajdhani é distribuída sob a licença OFL (assets/fonts).
+O código do jogo é livre (licença MIT).

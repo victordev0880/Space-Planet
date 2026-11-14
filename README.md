@@ -66,7 +66,11 @@ make test
 
 As decisões técnicas estão em [`docs/decisoes.md`](docs/decisoes.md).
 
-## Licenças de terceiros
+## Licença
+
+O código do jogo é MIT (veja [`LICENSE`](LICENSE)).
+
+### Terceiros
 
 - [raylib](https://github.com/raysan5/raylib): licença zlib
 - Fonte [Rajdhani](https://fonts.google.com/specimen/Rajdhani): SIL Open Font License (`assets/fonts/Rajdhani-OFL.txt`)

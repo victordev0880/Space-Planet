@@ -10,3 +10,6 @@ vendor/raylib/
 captures/
 save/
 dist/
+
+# Instruções do projeto para o Claude: ficam só nesta máquina
+CLAUDE.md
