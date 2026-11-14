@@ -132,7 +132,7 @@ static void draw_notice(const DebugOverlay *o, const World *w)
 static void draw_hint(const DebugOverlay *o, const World *w, const DebugInfo *info)
 {
     const char *hint = NULL;
-    if (w->evo.choosing) return;   // as cartas de evolução têm as próprias instruções
+    if (w->evo.choosing || w->building) return;   // as cartas e a construção têm as próprias instruções
     bool first_moments = w->director.phase == DIRECTOR_OFF
                       || (w->director.phase == DIRECTOR_PAUSE && w->director.wave == 0);
     if (o->visible) {

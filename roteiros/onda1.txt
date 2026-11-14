@@ -9,9 +9,9 @@
 # O piloto automático é uma ferramenta de teste: persegue o inimigo mais
 # urgente e atira, sem a esperteza de um jogador (não entra em túneis, não
 # desvia de tiros, não usa dash). Uma partida dele é o "pior caso razoável"
-# para o planeta. São 30 minutos de jogo: rodar leva uns 10 a 15 minutos.
+# para o planeta. São 35 minutos de jogo: rodar leva uns 15 minutos.
 
-frames 108000
+frames 126000
 seed 1
 
 at 0     autopilot on
@@ -53,4 +53,9 @@ at 96000  shot onda1_35
 at 99000  shot onda1_36
 at 102000 shot onda1_37
 at 105000 shot onda1_38
-at 107999 shot onda1_39_fim
+at 108000 shot onda1_39
+at 111000 shot onda1_40
+at 114000 shot onda1_41
+at 117000 shot onda1_42
+at 120000 shot onda1_43
+at 125999 shot onda1_44_fim

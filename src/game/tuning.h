@@ -348,6 +348,7 @@ typedef struct {
     float swarm_spacing;
     float swarm_dive_stagger;
     float swarm_drift;
+    float swarm_siege;     // o bando circula a região onde chegou, num círculo deste raio (graus)
 
     // Bombardeiro
     float bomber_altitude;

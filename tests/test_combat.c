@@ -425,7 +425,7 @@ static void bomber_marks_the_target_then_bombs_it(void)
     run(&w, &t, input(0u, 0.0f, 0.0f), t.sim_hz * 5);
     CHECK(saw_event(&w, EV_BOMB_IMPACT));
     CHECK(w.planet.volume < volume);
-    const Impact *impact = world_find_impact(&w, 1u);
+    const Impact *impact = world_find_impact(&w, w.impact_count);   // o mais recente (o histórico é curto)
     CHECK(impact != NULL);
     if (impact != NULL) CHECK(Vector3Distance(impact->pos, target) < 2.0f);
 }
@@ -491,7 +491,7 @@ static void swarm_attack_runs_dig_small_craters(void)
     CHECK(w.enemies.flocks[w.enemies.items[first_enemy(&w)].flock].pass > 0);   // e o alvo andou
 
     // Os tiros caíram perto de onde o bando chegou, não do outro lado do planeta.
-    const Impact *impact = world_find_impact(&w, 1u);
+    const Impact *impact = world_find_impact(&w, w.impact_count);   // o mais recente (o histórico é curto)
     CHECK(impact != NULL);
     if (impact != NULL) CHECK(Vector3DotProduct(Vector3Normalize(impact->pos), Vector3Normalize(from)) > 0.6f);
 }

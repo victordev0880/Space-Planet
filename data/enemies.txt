@@ -27,7 +27,7 @@ enemies.dodge_chance   = 0.35    # chance de desviar a cada vez
 # atirando no solo, passa por cima e sobe já rumo ao próximo ponto, alguns
 # graus adiante. Se a nave chega perto, parte do bando sai para encará-la:
 # fica a uma distância fixa, circulando devagar e atirando.
-swarm.hp              = 3
+swarm.hp              = 5        # (marco 12: 3 -> 5; os drones caíam rápido demais e não pesavam)
 swarm.radius          = 1.6      # raio de colisão (um pouco maior que o modelo: ajuda a acertar)
 swarm.scale           = 1.3      # tamanho do modelo (1 = uns 2.6 de envergadura)
 swarm.speed           = 22
@@ -36,27 +36,28 @@ swarm.points          = 100
 swarm.ram_damage      = 14       # dano na nave ao trombar com ela
 swarm.cruise_altitude = 24       # altura em que o bando viaja
 swarm.attack_altitude = 8        # altura em que sai do mergulho
-swarm.fire_rate       = 3.2      # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
+swarm.fire_rate       = 5        # tiros por segundo no mergulho (cada tiro abre uma cratera pequena)
 swarm.shot_speed      = 55
 swarm.shot_damage     = 6        # dano de um tiro na nave
-swarm.crater_radius   = 3.7
-swarm.crater_depth    = 2.9
-swarm.aggro_range     = 65       # com a nave até esta distância, parte do bando sai para encará-la
+swarm.crater_radius   = 5
+swarm.crater_depth    = 4.2
+swarm.aggro_range     = 42       # com a nave até esta distância, parte do bando sai para encará-la
 swarm.aggro_rate      = 0.9      # tiros por segundo na nave (pela metade enquanto espera no bando)
-swarm.hold_time       = 2.0      # segundos parado no ponto de espera antes de cada passada
+swarm.hold_time       = 0.7      # segundos parado no ponto de espera antes de cada passada
 swarm.engage_distance = 26       # distância em que fica da nave quando a encara
-swarm.engage_time     = 7        # segundos encarando a nave antes de voltar ao bando
-swarm.engage_share    = 0.5      # fração do bando que pode encarar a nave ao mesmo tempo
+swarm.engage_time     = 4        # segundos encarando a nave antes de voltar ao bando
+swarm.engage_share    = 0.25     # fração do bando que pode encarar a nave ao mesmo tempo
 swarm.spacing         = 5        # distância que cada drone mantém dos vizinhos
-swarm.dive_stagger    = 0.35     # segundos entre a passada de um drone e a do seguinte (o bando ataca em fila)
-swarm.drift           = 16       # graus que o alvo do bando anda a cada passada (pouco: as crateras se sobrepõem e cavam fundo)
+swarm.dive_stagger    = 0.22     # segundos entre a passada de um drone e a do seguinte (o bando ataca em fila)
+swarm.drift           = 9        # graus que o alvo do bando anda a cada passada (pouco: as crateras se sobrepõem e cavam fundo)
+swarm.siege           = 12       # cerco: o alvo anda em círculo (deste raio, em graus) em volta de onde o bando chegou
 
 # --- Bombardeiro ------------------------------------------------------------
 # Lento e grande, orbita o planeta soltando bombas. É blindado: tiros na
 # frente e dos lados quase não fazem efeito; o ponto fraco é o motor, que
 # brilha atrás dele. Antes de cada bomba, o lugar onde ela vai cair é marcado
 # no solo, e a bomba pode ser derrubada no ar.
-bomber.hp              = 40
+bomber.hp              = 62
 bomber.radius          = 4.6
 bomber.scale           = 3.0     # 3 vezes o tamanho da nave
 bomber.speed           = 11
@@ -64,15 +65,15 @@ bomber.accel           = 9
 bomber.points          = 1500
 bomber.ram_damage      = 35
 bomber.altitude        = 26      # altura da órbita
-bomber.bomb_interval   = 6       # segundos entre uma bomba e a seguinte
+bomber.bomb_interval   = 3.5     # segundos entre uma bomba e a seguinte
 bomber.bomb_warning    = 1.8     # segundos de aviso (alvo marcado no solo) antes de soltar
 bomber.bomb_speed      = 9       # velocidade com que a bomba sai
 bomber.bomb_accel      = 14      # ... e quanto ela acelera ao cair
-bomber.bomb_hp         = 2       # tiros para derrubar uma bomba
+bomber.bomb_hp         = 4       # tiros para derrubar uma bomba
 bomber.bomb_radius     = 1.5     # raio de colisão da bomba
 bomber.bomb_points     = 150
-bomber.crater_radius   = 13
-bomber.crater_depth    = 10.5
+bomber.crater_radius   = 15
+bomber.crater_depth    = 12.5
 bomber.armor           = 0.25    # fração do dano que atravessa a blindagem
 bomber.weak_mult       = 2.5     # multiplicador do dano no ponto fraco (o motor)
 bomber.weak_radius     = 2.2     # tamanho do ponto fraco
@@ -84,36 +85,36 @@ bomber.turret_damage   = 6
 # --- Kamikaze ---------------------------------------------------------------
 # Esfera de espinhos que acende em vermelho. Se a nave passa perto, trava
 # nela (bipe) e a persegue para explodir junto; senão, mergulha no planeta e
-# abre uma cratera média. Frágil: dois tiros.
-kamikaze.hp            = 2
+# abre uma cratera média. Frágil: três tiros.
+kamikaze.hp            = 3
 kamikaze.radius        = 1.5
 kamikaze.scale         = 1.1
 kamikaze.speed         = 34
 kamikaze.accel         = 42
 kamikaze.points        = 150
 kamikaze.ram_damage    = 22      # dano da explosão, junto da nave (cai com a distância)
-kamikaze.aggro_range   = 85      # trava na nave a esta distância
+kamikaze.aggro_range   = 42      # trava na nave a esta distância
 kamikaze.blast_radius  = 8       # alcance da explosão
-kamikaze.crater_radius = 8
-kamikaze.crater_depth  = 6.5
+kamikaze.crater_radius = 10
+kamikaze.crater_depth  = 8.5
 
 # --- Escavador --------------------------------------------------------------
 # Pousa e cava um túnel reto rumo ao núcleo. Lá dentro ele só pode ser
 # alcançado voando pelo túnel.
-digger.hp             = 16
+digger.hp             = 24
 digger.radius         = 2.4
 digger.scale          = 1.7
 digger.speed          = 18
 digger.accel          = 16
 digger.points         = 700
 digger.ram_damage     = 20
-digger.drill_speed    = 1.8      # quanto desce por segundo
+digger.drill_speed    = 1.9      # quanto desce por segundo
 digger.drill_radius   = 4.8      # raio do túnel (a nave cabe com folga)
 digger.drill_interval = 0.3      # segundos entre duas mordidas da broca
 
 # --- Sifão ------------------------------------------------------------------
 # Paira baixo e drena o solo com um feixe, que anda devagar pela superfície.
-siphon.hp             = 14
+siphon.hp             = 22
 siphon.radius         = 2.6
 siphon.scale          = 1.9
 siphon.speed          = 14
@@ -121,15 +122,15 @@ siphon.accel          = 12
 siphon.points         = 600
 siphon.ram_damage     = 15
 siphon.altitude       = 15
-siphon.drain_radius   = 2.8      # tamanho de cada mordida do feixe
-siphon.drain_interval = 0.32
+siphon.drain_radius   = 4        # tamanho de cada mordida do feixe
+siphon.drain_interval = 0.26
 siphon.wander         = 3        # velocidade com que o feixe anda pelo solo
 
 # --- Atirador ---------------------------------------------------------------
 # Fica longe e carrega tiros fortes contra a nave. Durante a carga, uma linha
 # vermelha liga o cano à nave; no fim ela trava, e um dash ou um desvio
 # escapa do tiro.
-sniper.hp            = 6
+sniper.hp            = 10
 sniper.radius        = 1.9
 sniper.scale         = 1.5
 sniper.speed         = 24
@@ -146,7 +147,7 @@ sniper.shot_damage   = 18
 # --- Escudeiro --------------------------------------------------------------
 # Acompanha os aliados e os cobre com um escudo: os tiros não os atingem
 # enquanto ele estiver vivo e perto. Alvo prioritário.
-shielder.hp            = 12
+shielder.hp            = 18
 shielder.radius        = 2.2
 shielder.scale         = 1.6
 shielder.speed         = 22
@@ -158,7 +159,7 @@ shielder.follow        = 12      # distância que mantém do grupo que protege
 
 # --- Porta-drones -----------------------------------------------------------
 # Nave-mãe lenta e resistente que orbita alto e solta bandos de Enxame.
-carrier.hp              = 70
+carrier.hp              = 100
 carrier.radius          = 6.0
 carrier.scale           = 3.8
 carrier.speed           = 8
@@ -166,7 +167,7 @@ carrier.accel           = 6
 carrier.points          = 2500
 carrier.ram_damage      = 40
 carrier.altitude        = 40
-carrier.launch_interval = 12     # segundos entre dois lançamentos
+carrier.launch_interval = 9      # segundos entre dois lançamentos
 carrier.launch_warning  = 1.5    # o hangar acende este tanto antes de lançar
 carrier.launch_count    = 3      # drones por lançamento
 carrier.max_swarm       = 16     # não lança se já houver tantos drones em cena

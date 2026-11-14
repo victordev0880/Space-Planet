@@ -419,6 +419,42 @@ static void shield_absorbs_craters_inside(void)
     CHECK(w.planet.volume < before);
 }
 
+// Construção (E): a barra abre, 1/2/3 constroem onde a mira toca o planeta
+// (não embaixo da nave), e comprar fecha a barra.
+static void build_mode_places_where_aiming(void)
+{
+    static World w;
+    make_world(&w, &tun);
+    float r = w.planet.params.radius;
+    // A nave alta, olhando para o chão em diagonal: a mira toca o planeta longe
+    // do ponto embaixo dela.
+    Vector3 pos = { 0.0f, r + 8.0f, 0.0f };
+    Vector3 aim = Vector3Normalize((Vector3){ 0.5f, -1.0f, 0.0f });
+    world_place_ship(&w, &tun, pos, Vector3Add(pos, aim), 0.0f);
+    w.ore = tun.turret_cost;
+
+    InputState open = press(ACT_BUILD);
+    world_tick(&w, &open, &tun);
+    CHECK(w.building);
+    Vector3 ground;
+    CHECK(world_build_point(&w, &ground));
+    CHECK(Vector3DotProduct(Vector3Normalize(ground), (Vector3){ 0.0f, 1.0f, 0.0f }) < 0.99f);   // longe de "embaixo"
+
+    InputState pick = press(ACT_CARD1);
+    world_tick(&w, &pick, &tun);
+    CHECK(defenses_count(&w.defenses, DEF_TURRET) == 1 && w.ore == 0);
+    CHECK(!w.building);
+    const Defense *turret = NULL;
+    for (int i = 0; i < DEFENSES_MAX; i++) if (w.defenses.items[i].alive) turret = &w.defenses.items[i];
+    CHECK(turret != NULL);
+    if (turret != NULL) CHECK(Vector3DotProduct(turret->dir, Vector3Normalize(ground)) > 0.999f);
+
+    // Sem a barra aberta, 1/2/3 não constroem nada.
+    w.ore = tun.turret_cost;
+    world_tick(&w, &pick, &tun);
+    CHECK(defenses_count(&w.defenses, DEF_TURRET) == 1);
+}
+
 // O satélite derruba uma bomba que passa perto dele.
 static void satellite_intercepts_bombs(void)
 {
@@ -464,6 +500,7 @@ void suite_rocks(void)
     RUN(buying_costs_ore_and_has_limits);
     RUN(turret_shoots_enemies);
     RUN(shield_absorbs_craters_inside);
+    RUN(build_mode_places_where_aiming);
     RUN(satellite_intercepts_bombs);
     arena_free(&arena);
 }

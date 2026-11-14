@@ -105,6 +105,7 @@ typedef enum {
     EV_MISSILE_LOCK,   // a mira travou um alvo             (value = travas)
     EV_MISSILE_FIRE,   // os mísseis saíram                 (value = quantos)
     EV_PERFECT_DODGE,  // esquiva perfeita: um golpe atravessou o dash
+    EV_BUILD_MODE,     // a barra de construção abriu (sub = 1) ou fechou (0)
     EV_TYPE_COUNT
 } EventType;
 

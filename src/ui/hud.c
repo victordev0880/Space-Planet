@@ -282,18 +282,68 @@ static void draw_planet(const World *w, const Tuning *t, int center_x)
         color = mix_color(color, MARKER_COLOR, blink * 0.5f);
     }
 
-    int x = center_x - BAR_WIDTH / 2;
+    // Marco 12: à esquerda um globo (que racha com a vida), à direita a barra
+    // em segmentos inclinados, com a extinção marcada, e os habitantes em
+    // destaque em cima dela.
+    int x = center_x - BAR_WIDTH / 2 + 26;
     int y = BAR_TOP;
-    const char *people = TextFormat("%s de habitantes", format_population(hp * t->planet_population));
-    DrawRectangle(x - 10, y - 8, BAR_WIDTH + 20, LABEL_SIZE + BAR_HEIGHT + 34, FRAME_COLOR);
-    ui_draw_text("PLANETA", x, y, LABEL_SIZE, TEXT_COLOR);
-    ui_draw_text(people, x + BAR_WIDTH - ui_measure_text(people, LABEL_SIZE), y, LABEL_SIZE, color);
+    DrawRectangleGradientH(x - 70, y - 8, BAR_WIDTH + 90, LABEL_SIZE + BAR_HEIGHT + 34, with_alpha(FRAME_COLOR, 0.0f),
+                           FRAME_COLOR);
+    DrawRectangle(x + 20, y - 8, BAR_WIDTH - 20, LABEL_SIZE + BAR_HEIGHT + 34, FRAME_COLOR);
 
-    int bar_y = y + LABEL_SIZE + 6;
-    draw_bar(x, bar_y, BAR_WIDTH, BAR_HEIGHT, hp, color);
+    Vector2 globe = { (float)(x - 30), (float)(y + 22) };
+    float now = seconds(w, t);
+    // Oceano, três continentes (manchas dentro do disco) e a sombra da noite.
+    DrawCircleV(globe, 21.0f, (Color){ 32, 96, 178, 255 });
+    DrawCircleV((Vector2){ globe.x - 7.0f, globe.y - 6.0f }, 8.0f, (Color){ 74, 150, 82, 255 });
+    DrawCircleV((Vector2){ globe.x - 3.0f, globe.y - 9.0f }, 5.0f, (Color){ 96, 162, 84, 255 });
+    DrawCircleV((Vector2){ globe.x + 8.0f, globe.y + 6.0f }, 6.5f, (Color){ 84, 156, 80, 255 });
+    DrawCircleV((Vector2){ globe.x + 2.0f, globe.y + 12.0f }, 4.0f, (Color){ 150, 140, 96, 255 });
+    DrawCircleV((Vector2){ globe.x, globe.y - 18.0f }, 3.5f, (Color){ 230, 240, 250, 255 });   // gelo do polo
+    DrawCircleSector(globe, 21.5f, 20.0f, 160.0f, 24, (Color){ 4, 8, 20, 120 });
+    float damage = 1.0f - hp;   // rachaduras de lava aparecem conforme ele perde massa
+    for (int k = 0; k < 5; k++) {
+        if (damage < 0.06f + 0.1f * (float)k) break;
+        float a = (float)k * 1.9f + 0.4f;
+        Vector2 from = { globe.x + cosf(a) * 4.0f, globe.y + sinf(a) * 4.0f };
+        Vector2 mid = { globe.x + cosf(a + 0.35f) * 12.0f, globe.y + sinf(a + 0.35f) * 12.0f };
+        Vector2 to = { globe.x + cosf(a - 0.1f) * 20.0f, globe.y + sinf(a - 0.1f) * 20.0f };
+        Color lava = (Color){ 255, (unsigned char)(120 + 60 * sinf(now * 4.0f + (float)k)), 40, 255 };
+        DrawLineEx(from, mid, 2.0f, lava);
+        DrawLineEx(mid, to, 2.0f, lava);
+    }
+    DrawRing(globe, 21.0f, 24.0f, 0.0f, 360.0f, 40, with_alpha(color, 0.9f));
+
+    // Os habitantes, grande, e o nome pequeno.
+    const char *people = format_population(hp * t->planet_population);
+    ui_draw_text(people, x + 30, y - 4, LABEL_SIZE + 6, color);
+    ui_draw_text("DE HABITANTES", x + 38 + ui_measure_text(people, LABEL_SIZE + 6), y + 6, SMALL_SIZE + 2, DIM_COLOR);
+
+    // Barra em segmentos inclinados.
+    int bar_x = x + 30, bar_w = BAR_WIDTH - 40;
+    int bar_y = y + LABEL_SIZE + 10;
+    const int segments = 25;
+    float seg_w = (float)bar_w / (float)segments;
+    for (int i = 0; i < segments; i++) {
+        float left = (float)bar_x + seg_w * (float)i, right = left + seg_w - 3.0f;
+        float slant = 4.0f;
+        float from = (float)i / (float)segments, to = (float)(i + 1) / (float)segments;
+        float lit = Clamp((hp - from) / (to - from), 0.0f, 1.0f);
+        bool below = to <= t->defeat_planet_hp + 1e-4f;   // a parte que já é extinção
+        Color track = below ? with_alpha(DYING, 0.18f) : EMPTY_COLOR;
+        Color fill = (lit >= 1.0f) ? color : with_alpha(color, lit);
+        Vector2 a = { left + slant, (float)bar_y }, b = { right + slant, (float)bar_y };
+        Vector2 c2 = { right, (float)(bar_y + BAR_HEIGHT) }, d = { left, (float)(bar_y + BAR_HEIGHT) };
+        DrawTriangle(a, d, c2, track);
+        DrawTriangle(a, c2, b, track);
+        if (lit > 0.0f) {
+            DrawTriangle(a, d, c2, fill);
+            DrawTriangle(a, c2, b, fill);
+        }
+    }
 
     // Marca do ponto de extinção.
-    int marker_x = x + (int)((float)BAR_WIDTH * t->defeat_planet_hp);
+    int marker_x = bar_x + (int)((float)bar_w * t->defeat_planet_hp);
     DrawRectangle(marker_x - 1, bar_y - 4, 2, BAR_HEIGHT + 8, MARKER_COLOR);
     ui_draw_text("extinção", marker_x - ui_measure_text("extinção", SMALL_SIZE) / 2, bar_y + BAR_HEIGHT + 5, SMALL_SIZE,
              DIM_COLOR);
@@ -334,18 +384,90 @@ static const Color LOCK_COLOR   = { 255, 120, 90, 255 };
 static const Color XP_COLOR     = { 255, 214, 110, 255 };
 #define LEVEL_FLASH 0.8f   // segundos de brilho na barra de nível depois de subir
 
-static void ship_bar(int x, int y, const char *label, float value, float max, Color color)
+// --- o mostrador da nave (marco 12) -----------------------------------------------
+// No canto de baixo à esquerda, um instrumento redondo, como o de um caça:
+// o arco de fora é o escudo, o de dentro o casco; a energia enche a abertura
+// de baixo; no meio, a velocidade. Ao lado, o nível num hexágono (o XP é o
+// contorno enchendo) e as evoluções; em cima, os núcleos dos bosses em
+// mostradores pequenos que enchem ao recarregar.
+#define GAUGE_X     104
+#define GAUGE_Y     102
+#define GAUGE_R     66.0f
+#define GAUGE_START 135.0f      // os arcos vão de 135 a 405 graus (a abertura fica embaixo)
+#define GAUGE_SWEEP 270.0f
+
+static void gauge_arc(Vector2 c, float inner, float outer, float fill, Color color, Color track)
 {
-    ui_draw_text(label, x, y - 5, LABEL_SIZE, color);
-    draw_bar(x + 96, y, SHIP_BAR_WIDTH, SHIP_BAR_HEIGHT, (max > 0.0f) ? value / max : 0.0f, color);
+    DrawRing(c, inner, outer, GAUGE_START, GAUGE_START + GAUGE_SWEEP, 48, track);
+    if (fill > 0.0f) DrawRing(c, inner, outer, GAUGE_START, GAUGE_START + GAUGE_SWEEP * Clamp(fill, 0.0f, 1.0f), 48, color);
 }
 
-// Nível e XP (com um brilho logo depois de subir), e ao lado um quadradinho
-// por nível de evolução, na cor da linha de cada uma.
-static void draw_level(const World *w, const Tuning *t, int x, int y, int pips_x)
+// Mostrador pequeno de um núcleo de boss: enche ao recarregar; pronto, acende.
+static void ability_dial(Vector2 c, const char *key, const char *name, float ready, Color color)
 {
+    bool full = ready >= 0.999f;
+    DrawCircleV(c, 17.0f, (Color){ 8, 10, 18, 220 });
+    if (!full) DrawCircleSector(c, 15.0f, -90.0f, -90.0f + 360.0f * Clamp(ready, 0.0f, 1.0f), 32, with_alpha(color, 0.35f));
+    DrawRing(c, 15.0f, 17.5f, 0.0f, 360.0f, 32, full ? color : with_alpha(color, 0.5f));
+    if (full) DrawCircleV(c, 12.0f, with_alpha(color, 0.25f));
+    text_centered(key, (int)c.x, (int)c.y - 8, LABEL_SIZE - 6, full ? WHITE : DIM_COLOR);
+    text_centered(name, (int)c.x, (int)c.y + 20, SMALL_SIZE, full ? color : DIM_COLOR);
+}
+
+static void draw_gauge(const World *w, const Tuning *t, Vector2 c)
+{
+    const Ship *s = &w->ship;
+    float now = seconds(w, t);
+
+    // Fundo: um disco escuro com um anel fino e as marcas da escala.
+    DrawCircleV(c, GAUGE_R + 10.0f, (Color){ 6, 8, 16, 170 });
+    DrawRing(c, GAUGE_R + 8.0f, GAUGE_R + 9.5f, 0.0f, 360.0f, 64, with_alpha(SHIELD_COLOR, 0.25f));
+    for (int k = 0; k <= 10; k++) {
+        float a = (GAUGE_START + GAUGE_SWEEP * (float)k / 10.0f) * DEG2RAD;
+        Vector2 dir = { cosf(a), sinf(a) };
+        float len = (k % 5 == 0) ? 7.0f : 4.0f;
+        DrawLineEx(Vector2Add(c, Vector2Scale(dir, GAUGE_R + 2.0f)), Vector2Add(c, Vector2Scale(dir, GAUGE_R + 2.0f + len)), 1.5f,
+                   with_alpha(DIM_COLOR, 0.7f));
+    }
+
+    // Escudo (fora) e casco (dentro). O casco baixo pisca em vermelho.
+    float shield = s->shield / fmaxf(t->ship_shield_max, 1e-3f);
+    float hull = s->hull / fmaxf(t->ship_hull_max, 1e-3f);
+    Color hull_color = (hull < HULL_LOW) ? ((sinf(now * BLINK_SPEED * 2.0f) > 0.0f) ? DYING : HULL_COLOR) : HULL_COLOR;
+    gauge_arc(c, GAUGE_R - 8.0f, GAUGE_R, shield, SHIELD_COLOR, with_alpha(SHIELD_COLOR, 0.12f));
+    gauge_arc(c, GAUGE_R - 19.0f, GAUGE_R - 11.0f, hull, hull_color, with_alpha(HULL_COLOR, 0.1f));
+
+    // Energia: enche a abertura de baixo, de um lado ao outro.
+    float energy = s->energy / fmaxf(t->ship_energy_max, 1e-3f);
+    Color energy_color = s->boost_spent ? DIM_COLOR : ENERGY_COLOR;
+    DrawRing(c, GAUGE_R - 6.0f, GAUGE_R, 45.0f, 135.0f, 16, with_alpha(energy_color, 0.12f));
+    DrawRing(c, GAUGE_R - 6.0f, GAUGE_R, 135.0f - 90.0f * Clamp(energy, 0.0f, 1.0f), 135.0f, 16, energy_color);
+
+    // No meio: a velocidade, e embaixo dela a altitude.
+    float speed = Vector3Length(Vector3Add(s->vel, s->fall));
+    text_centered(TextFormat("%.0f", (double)speed), (int)c.x, (int)c.y - 22, LABEL_SIZE + 12, TEXT_COLOR);
+    text_centered("VEL", (int)c.x, (int)c.y + 10, SMALL_SIZE, DIM_COLOR);
+    text_centered(TextFormat("alt %.0f", (double)s->altitude), (int)c.x, (int)c.y + 24, SMALL_SIZE + 2, DIM_COLOR);
+
+    // Os números de escudo e casco, à direita, na ponta dos arcos.
+    int lx = (int)(c.x + GAUGE_R + 18.0f);
+    text(TextFormat("%.0f", (double)s->shield), lx, (int)c.y + 22, LABEL_SIZE - 4, SHIELD_COLOR);
+    text(TextFormat("%.0f", (double)s->hull), lx + 44, (int)c.y + 22, LABEL_SIZE - 4, hull_color);
+    text("escudo", lx, (int)c.y + 44, SMALL_SIZE, DIM_COLOR);
+    text("casco", lx + 44, (int)c.y + 44, SMALL_SIZE, DIM_COLOR);
+
+    // Uma palavra para o que a nave está fazendo de especial, acima dos números.
+    const char *status = NULL;
+    Color status_color = DIM_COLOR;
+    if (s->sling > 0.0f)       { status = "ESTILINGUE"; status_color = SLING_COLOR; }
+    else if (s->drifting)      { status = "DRIFT";      status_color = ENERGY_COLOR; }
+    else if (s->reversing)     { status = "RÉ";         status_color = HULL_COLOR; }
+    else if (s->hover > 0.6f)  { status = "PAIRANDO";   status_color = DIM_COLOR; }
+    else if (s->in_atmosphere) { status = "RASANTE";    status_color = GRAZE_COLOR; }
+    if (status != NULL) text(status, lx, (int)c.y - 2, SMALL_SIZE + 4, status_color);
+
+    // Nível: hexágono com o número; o XP é o contorno enchendo. Brilha ao subir.
     const Evolution *e = &w->evo;
-    float need = evolution_xp_needed(t, e->level);
     float since_up = 99.0f;
     for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
         const GameEvent *ev = events_find(&w->events, id);
@@ -357,17 +479,43 @@ static void draw_level(const World *w, const Tuning *t, int x, int y, int pips_x
             break;
         }
     }
-    Color c = (since_up < LEVEL_FLASH) ? mix_color(XP_COLOR, WHITE, 1.0f - since_up / LEVEL_FLASH) : XP_COLOR;
-    ship_bar(x, y, TextFormat("NÍVEL %d", e->level), e->xp, need, c);
+    Color xp = (since_up < LEVEL_FLASH) ? mix_color(XP_COLOR, WHITE, 1.0f - since_up / LEVEL_FLASH) : XP_COLOR;
+    Vector2 hex = { c.x + GAUGE_R + 40.0f, c.y - 44.0f };
+    float fill = e->xp / fmaxf(evolution_xp_needed(t, e->level), 1e-3f);
+    DrawPoly(hex, 6, 22.0f, 30.0f, (Color){ 8, 10, 18, 220 });
+    DrawRing(hex, 22.0f, 25.0f, -90.0f, 270.0f, 36, with_alpha(XP_COLOR, 0.15f));
+    DrawRing(hex, 22.0f, 25.0f, -90.0f, -90.0f + 360.0f * Clamp(fill, 0.0f, 1.0f), 36, xp);
+    DrawPolyLinesEx(hex, 6, 20.0f, 30.0f, 1.5f, with_alpha(xp, 0.6f));
+    text_centered(TextFormat("%d", e->level), (int)hex.x, (int)hex.y - 13, LABEL_SIZE + 4, xp);
+    text("NÍVEL", (int)hex.x + 32, (int)hex.y - 16, SMALL_SIZE, DIM_COLOR);
 
-    int px = pips_x;
-    const int pip = 9, gap = 3;
+    // Evoluções: um losango por nível, na cor de cada uma.
+    int px = (int)hex.x + 34, py = (int)hex.y + 6, count = 0;
     for (int i = 0; i < EVO_COUNT; i++) {
         Color line = evolution_color((EvolutionId)i);
-        for (int r = 0; r < e->rank[i] && px + pip <= pips_x + SHIP_INFO_WIDTH - 10; r++) {
-            DrawRectangle(px, y, pip, pip, line);
-            px += pip + gap;
+        for (int r = 0; r < e->rank[i] && count < 16; r++, count++) {
+            Vector2 at = { (float)(px + (count % 8) * 11), (float)(py + (count / 8) * 11) };
+            DrawPoly(at, 4, 4.5f, 0.0f, line);
         }
+    }
+
+    // Núcleos dos bosses, em fila acima do mostrador.
+    float ax = c.x - GAUGE_R + 8.0f, ay = c.y - GAUGE_R - 44.0f;
+    const Ability *ab = &w->ability;
+    if (ab->owned) {
+        float ready = (ab->charge > 0.0f) ? ab->charge / fmaxf(t->ability_charge, 1e-3f)
+                                          : 1.0f - ab->cooldown / fmaxf(t->ability_cooldown, 1e-3f);
+        ability_dial((Vector2){ ax, ay }, hud_keys("Q", "LB"), "RAIO", ready, ABILITY_COLOR);
+        ax += 52.0f;
+    }
+    if (w->brood.owned) {
+        ability_dial((Vector2){ ax, ay }, hud_keys("G", "R3"), "NINHADA", 1.0f - w->brood.cooldown / fmaxf(t->brood_cooldown, 1e-3f),
+                     SAC_COLOR);
+        ax += 52.0f;
+    }
+    if (w->tunnel.owned) {
+        ability_dial((Vector2){ ax, ay }, hud_keys("X", "baixo"), "TÚNEL", 1.0f - w->tunnel.cooldown / fmaxf(t->tunnel_cooldown, 1e-3f),
+                     TUNNEL_COLOR);
     }
 }
 
@@ -481,72 +629,7 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         return;
     }
 
-    // Barras: casco, escudo, energia e nível, no canto de baixo à esquerda.
-    int x = SHIP_LEFT;
-    int y = screen_h - SHIP_BOTTOM - SHIP_ROW * 3;
-    DrawRectangle(x - 10, y - 12, 96 + SHIP_BAR_WIDTH + SHIP_INFO_WIDTH + 20, SHIP_ROW * 4 + 12, FRAME_COLOR);
-
-    Color hull = HULL_COLOR;
-    if (s->hull < t->ship_hull_max * HULL_LOW && sinf(seconds(w, t) * BLINK_SPEED * 2.0f) > 0.0f) hull = DYING;
-    ship_bar(x, y, "CASCO", s->hull, t->ship_hull_max, hull);
-    ship_bar(x, y + SHIP_ROW, "ESCUDO", s->shield, t->ship_shield_max, SHIELD_COLOR);
-    ship_bar(x, y + SHIP_ROW * 2, "ENERGIA", s->energy, t->ship_energy_max, s->boost_spent ? DIM_COLOR : ENERGY_COLOR);
-    draw_level(w, t, x, y + SHIP_ROW * 3, x + 96 + SHIP_BAR_WIDTH + 28);
-
-    // Núcleos dos bosses: prontos, carregando ou em recarga, logo acima do painel.
-    int ability_y = y - 44;
-    const Tunnel *tu = &w->tunnel;
-    if (tu->owned) {
-        int ay = ability_y;
-        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
-        ui_draw_text("TÚNEL", x, ay, LABEL_SIZE - 2, TUNNEL_COLOR);
-        float ready = 1.0f - tu->cooldown / fmaxf(t->tunnel_cooldown, 1e-3f);
-        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, ready, (tu->cooldown <= 0.0f) ? TUNNEL_COLOR : with_alpha(TUNNEL_COLOR, 0.45f));
-        if (tu->cooldown <= 0.0f) {
-            const char *key = hud_keys("X", "baixo");
-            ui_draw_text(key, x + 96 + SHIP_BAR_WIDTH - ui_measure_text(key, SMALL_SIZE + 2), ay - 12, SMALL_SIZE + 2, DIM_COLOR);
-        }
-        ability_y -= 34;
-    }
-    const Brood *br = &w->brood;
-    if (br->owned) {
-        int ay = ability_y;
-        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
-        ui_draw_text("NINHADA", x, ay, LABEL_SIZE - 2, SAC_COLOR);
-        float ready = 1.0f - br->cooldown / fmaxf(t->brood_cooldown, 1e-3f);
-        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, ready, (br->cooldown <= 0.0f) ? SAC_COLOR : with_alpha(SAC_COLOR, 0.45f));
-        if (br->cooldown <= 0.0f) {
-            const char *key = hud_keys("G", "R3");
-            ui_draw_text(key, x + 96 + SHIP_BAR_WIDTH - ui_measure_text(key, SMALL_SIZE + 2), ay - 12, SMALL_SIZE + 2, DIM_COLOR);
-        }
-        ability_y -= 34;
-    }
-    const Ability *ab = &w->ability;
-    if (ab->owned) {
-        int ay = ability_y;
-        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
-        ui_draw_text("RAIO", x, ay, LABEL_SIZE - 2, ABILITY_COLOR);
-        float ready = 1.0f - ab->cooldown / fmaxf(t->ability_cooldown, 1e-3f);
-        Color c = (ab->cooldown <= 0.0f) ? ABILITY_COLOR : with_alpha(ABILITY_COLOR, 0.45f);
-        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, (ab->charge > 0.0f) ? ab->charge / t->ability_charge : ready, c);
-        if (ab->cooldown <= 0.0f && ab->charge <= 0.0f) {
-            ui_draw_text(hud_keys("Q", "LB"), x + 96 + SHIP_BAR_WIDTH - ui_measure_text(hud_keys("Q", "LB"), SMALL_SIZE + 2), ay - 12,
-                     SMALL_SIZE + 2, DIM_COLOR);
-        }
-    }
-
-    // Velocidade e altitude, ao lado das barras.
-    int info_x = x + 96 + SHIP_BAR_WIDTH + 28;
-    float speed = Vector3Length(Vector3Add(s->vel, s->fall));
-    ui_draw_text(TextFormat("vel %3.0f", (double)speed), info_x, y - 5, LABEL_SIZE, TEXT_COLOR);
-    ui_draw_text(TextFormat("alt %3.0f", (double)s->altitude), info_x, y - 5 + SHIP_ROW, LABEL_SIZE, TEXT_COLOR);
-    // Uma palavra para o que a nave está fazendo de especial.
-    int status_y = y - 5 + SHIP_ROW * 2;
-    if (s->sling > 0.0f)       ui_draw_text("ESTILINGUE", info_x, status_y, LABEL_SIZE, SLING_COLOR);
-    else if (s->drifting)      ui_draw_text("DRIFT", info_x, status_y, LABEL_SIZE, ENERGY_COLOR);
-    else if (s->reversing)     ui_draw_text("RÉ", info_x, status_y, LABEL_SIZE, HULL_COLOR);
-    else if (s->hover > 0.6f)  ui_draw_text("PAIRANDO", info_x, status_y, LABEL_SIZE, DIM_COLOR);
-    else if (s->in_atmosphere) ui_draw_text("RASANTE", info_x, status_y, LABEL_SIZE, GRAZE_COLOR);
+    draw_gauge(w, t, (Vector2){ (float)GAUGE_X, (float)(screen_h - GAUGE_Y) });
 
     // Mira: onde os canhões se cruzam. Como a câmera vem atrás com atraso,
     // esse ponto nem sempre é o centro da tela.
@@ -1623,18 +1706,65 @@ static void draw_rocks(const World *w, const Tuning *t, Camera3D camera)
 // ---------------------------------------------------------------------------
 //  Minério e defesas
 // ---------------------------------------------------------------------------
-#define SHOP_WIDTH   300
-#define SHOP_ROW     24
-#define SHOP_BOTTOM  22
 #define SHOP_NOTE_TIME 1.6f
 #define ORE_FLASH_TIME 0.35f
 
 // Canto de baixo à direita: o minério e as três defesas (tecla, preço e
 // quantas já há), apagadas quando não dá para comprar.
+// Ícone de cada defesa (o mesmo desenho na barra de construção).
+static void defense_icon(DefenseType type, Vector2 c, float r, Color color)
+{
+    switch (type) {
+    case DEF_TURRET:   // torre: base e cano
+        DrawRectangleRec((Rectangle){ c.x - r * 0.55f, c.y + r * 0.1f, r * 1.1f, r * 0.5f }, color);
+        DrawCircleV((Vector2){ c.x, c.y + r * 0.1f }, r * 0.38f, color);
+        DrawLineEx((Vector2){ c.x, c.y }, (Vector2){ c.x + r * 0.7f, c.y - r * 0.6f }, 4.0f, color);
+        break;
+    case DEF_SHIELD:   // cúpula sobre o chão
+        DrawRing(c, r * 0.6f, r * 0.78f, 180.0f, 360.0f, 24, color);
+        DrawCircleSector(c, r * 0.6f, 180.0f, 360.0f, 24, with_alpha(color, 0.3f));
+        DrawRectangleRec((Rectangle){ c.x - r * 0.9f, c.y, r * 1.8f, r * 0.12f }, color);
+        break;
+    default:   // satélite: corpo e painéis, com uma órbita
+        DrawEllipseLines((int)c.x, (int)c.y, r * 0.9f, r * 0.35f, with_alpha(color, 0.5f));
+        DrawRectangleRec((Rectangle){ c.x - r * 0.18f, c.y - r * 0.18f, r * 0.36f, r * 0.36f }, color);
+        DrawRectangleRec((Rectangle){ c.x - r * 0.75f, c.y - r * 0.1f, r * 0.45f, r * 0.2f }, color);
+        DrawRectangleRec((Rectangle){ c.x + r * 0.3f, c.y - r * 0.1f, r * 0.45f, r * 0.2f }, color);
+        break;
+    }
+}
+
+// A barra de construção (E): as três defesas, com ícone, preço e quantas há.
+// A sombra no chão, onde ela vai ficar, é desenhada no mundo (render).
+static void draw_build_bar(const World *w, const Tuning *t)
+{
+    int sw = GetScreenWidth(), sh = GetScreenHeight();
+    int tile = 112, gap = 14;
+    int total = DEF_TYPE_COUNT * tile + (DEF_TYPE_COUNT - 1) * gap;
+    int x0 = sw / 2 - total / 2, y0 = sh - (int)(2.0f * radar_radius() + RADAR_BOTTOM) - tile - 26;
+    text_centered("CONSTRUIR  -  mire onde quer a defesa", sw / 2, y0 - 26, LABEL_SIZE - 2, ORE_COLOR);
+    for (int k = 0; k < DEF_TYPE_COUNT; k++) {
+        DefenseType type = (DefenseType)k;
+        int cost = defense_cost(t, type), max = defense_max(t, type), have = defenses_count(&w->defenses, type);
+        bool full = have >= max, cheap = w->ore >= cost;
+        bool ok = !full && cheap;
+        Rectangle r = { (float)(x0 + k * (tile + gap)), (float)y0, (float)tile, (float)tile };
+        DrawRectangleRounded(r, 0.18f, 8, (Color){ 8, 10, 18, 225 });
+        DrawRectangleRoundedLinesEx(r, 0.18f, 8, ok ? 2.5f : 1.0f, ok ? ORE_COLOR : with_alpha(DIM_COLOR, 0.6f));
+        int cx = (int)(r.x + r.width * 0.5f);
+        defense_icon(type, (Vector2){ (float)cx, r.y + 42.0f }, 26.0f, ok ? TEXT_COLOR : DIM_COLOR);
+        // Tecla no canto.
+        if (hud_gamepad()) hud_dpad_arrow((int)r.x + 6, (int)r.y + 6, 16, k, ok ? WHITE : DIM_COLOR);
+        else               text(TextFormat("%d", k + 1), (int)r.x + 9, (int)r.y + 5, LABEL_SIZE - 2, ok ? WHITE : DIM_COLOR);
+        text_centered(defense_name(type), cx, (int)r.y + 70, SMALL_SIZE + 2, ok ? TEXT_COLOR : DIM_COLOR);
+        const char *price = full ? TextFormat("cheio  %d/%d", have, max) : TextFormat("%d   (%d/%d)", cost, have, max);
+        text_centered(price, cx, (int)r.y + 88, SMALL_SIZE + 2, full ? DIM_COLOR : (cheap ? ORE_COLOR : DYING));
+    }
+}
+
 static void draw_shop(const World *w, const Tuning *t)
 {
     int sw = GetScreenWidth(), sh = GetScreenHeight();
-    int x = sw - SHOP_WIDTH - 14, y = sh - SHOP_BOTTOM - SHOP_ROW * 4 - 8;
     float now = seconds(w, t);
 
     // Coletou minério há pouco? O número clareia.
@@ -1661,32 +1791,23 @@ static void draw_shop(const World *w, const Tuning *t)
         }
     }
 
-    DrawRectangle(x - 10, y - 8, SHOP_WIDTH + 20, SHOP_ROW * 4 + 14, FRAME_COLOR);
-    // A confirmação (ou a recusa) da compra aparece no lugar do título, por um instante.
-    if (note != NULL && note_alpha > 0.0f) {
-        ui_draw_text(note, x, y + 2, LABEL_SIZE - 4, with_alpha(note_color, fminf(note_alpha * 2.0f, 1.0f)));
-    } else {
-        ui_draw_text("MINÉRIO", x, y, LABEL_SIZE, with_alpha(ORE_COLOR, 0.85f));
-    }
+    // Marco 12: o painel de compra virou um contador de minério compacto (com
+    // a dica da construção); a escolha das defesas é a barra do E, no centro.
+    int box_w = 206, box_h = 52;
+    int bx = sw - box_w - 18, by = sh - box_h - 22;
+    DrawRectangleRounded((Rectangle){ (float)bx, (float)by, (float)box_w, (float)box_h }, 0.3f, 8, FRAME_COLOR);
+    Vector2 gem = { (float)(bx + 26), (float)(by + box_h / 2) };
+    DrawPoly(gem, 4, 13.0f + glow * 3.0f, 45.0f, mix_color(ORE_COLOR, WHITE, glow));
+    DrawPolyLinesEx(gem, 4, 13.0f + glow * 3.0f, 45.0f, 1.5f, WHITE);
     const char *amount = TextFormat("%d", w->ore);
-    int size = LABEL_SIZE + 4 + (int)(glow * 6.0f);
-    ui_draw_text(amount, x + SHOP_WIDTH - ui_measure_text(amount, size), y - 2 - (int)(glow * 3.0f), size,
-             mix_color(ORE_COLOR, WHITE, glow));
-    for (int k = 0; k < DEF_TYPE_COUNT; k++) {
-        DefenseType type = (DefenseType)k;
-        int ry = y + SHOP_ROW * (k + 1) + 2;
-        int cost = defense_cost(t, type), max = defense_max(t, type), have = defenses_count(&w->defenses, type);
-        bool full = have >= max, cheap = w->ore >= cost;
-        Color c = (full || !cheap) ? DIM_COLOR : TEXT_COLOR;
-        Color key = (full || !cheap) ? DIM_COLOR : PRIZE_COLOR;
-        if (hud_gamepad()) hud_dpad_arrow(x - 2, ry, 16, k, key);
-        else               ui_draw_text(TextFormat("%d", 4 + k), x, ry, LABEL_SIZE - 2, key);
-        ui_draw_text(defense_name(type), x + 24, ry, LABEL_SIZE - 2, c);
-        const char *right = full ? TextFormat("%d/%d", have, max) : TextFormat("%d    %d/%d", cost, have, max);
-        ui_draw_text(right, x + SHOP_WIDTH - ui_measure_text(right, LABEL_SIZE - 2), ry, LABEL_SIZE - 2,
-                 full ? DIM_COLOR : (cheap ? ORE_COLOR : DIM_COLOR));
+    ui_draw_text(amount, bx + 48, by + 6 - (int)(glow * 2.0f), LABEL_SIZE + 6 + (int)(glow * 4.0f), mix_color(ORE_COLOR, WHITE, glow));
+    if (note != NULL && note_alpha > 0.0f) {
+        ui_draw_text(note, bx + 48, by + 34, SMALL_SIZE, with_alpha(note_color, fminf(note_alpha * 2.0f, 1.0f)));
+    } else {
+        ui_draw_text(hud_keys("E  construir defesas", "RB  construir"), bx + 48, by + 34, SMALL_SIZE, DIM_COLOR);
     }
     (void)now;
+    if (w->building) draw_build_bar(w, t);
 }
 
 void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)

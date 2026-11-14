@@ -71,6 +71,14 @@ Defense *defenses_build(Defenses *d, const Tuning *t, DefenseType type, Vector3 
             up = Vector3Normalize(Vector3RotateByAxisAngle(up, Vector3Normalize(Vector3CrossProduct(up, ahead)), angle));
         }
     }
+    return defenses_build_at(d, t, type, up, planet_radius, rng);
+}
+
+Defense *defenses_build_at(Defenses *d, const Tuning *t, DefenseType type, Vector3 dir, float planet_radius, Rng *rng)
+{
+    if (defenses_count(d, type) >= defense_max(t, type)) return NULL;
+    float length = Vector3Length(dir);
+    Vector3 up = (length > 1e-3f) ? Vector3Scale(dir, 1.0f / length) : (Vector3){ 0.0f, 1.0f, 0.0f };
     for (int i = 0; i < DEFENSES_MAX; i++) {
         Defense *f = &d->items[i];
         if (f->alive) continue;

@@ -7,7 +7,8 @@
 //   DIVE      passada: desce em direção ao alvo atirando no solo e passa por
 //             cima dele;
 //   CLIMB     sobe, já rumo ao próximo ponto de espera, que fica adiante (o
-//             alvo do bando anda alguns graus a cada passada). Como o ponto
+//             alvo do bando anda alguns graus a cada passada, em círculo pela
+//             região onde o bando chegou: o cerco). Como o ponto
 //             novo fica à frente, o drone nunca precisa dar meia-volta;
 //   ENGAGE    com a nave por perto, parte do bando sai para encará-la: fica a
 //             uma distância fixa dela, circulando devagar e atirando, e
@@ -243,6 +244,11 @@ Steer swarm_think(Enemies *e, int index, const EnemyContext *ctx)
             if (en->pass == f->pass) {
                 f->target = Vector3Normalize(Vector3RotateByAxisAngle(f->target, f->drift_axis,
                                                                       t->swarm_drift * DEG2RAD));
+                // Cerco: o rumo vira um pouco a cada passada, e o alvo anda em
+                // círculo pela região onde o bando chegou, em vez de marchar
+                // pelo planeta. As crateras se acumulam e cavam fundo.
+                f->drift_axis = Vector3Normalize(Vector3RotateByAxisAngle(f->drift_axis, f->target,
+                                                                          t->swarm_drift / fmaxf(t->swarm_siege, 1.0f)));
                 f->pass++;
             }
             en->pass = f->pass;

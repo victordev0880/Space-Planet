@@ -141,6 +141,7 @@ typedef struct {
     Brood        brood;
     Tunnel       tunnel;
     float        suicide_wait;  // Drones suicidas (sinergia): segundos até o próximo
+    bool         building;      // a barra de construção (E) está aberta
     Missiles     missiles;
     float        focus;         // esquiva perfeita: segundos de tiros mais fortes
     bool         dodge_used;    // ... e se este dash já valeu uma (uma por dash)
@@ -261,6 +262,10 @@ bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float 
 // cavam mais fundo (a mordida do Devorador). Com `fragments` false, não
 // solta fragmentos (o pedaço arrancado some).
 bool world_impact_at(World *w, const Tuning *t, Vector3 ground, float rim_radius, float depth, bool fragments);
+
+// Onde uma defesa comprada agora seria construída: o ponto do chão onde a
+// mira toca o planeta, ou o chão embaixo da nave. false sem nave.
+bool world_build_point(const World *w, Vector3 *ground);
 
 // Retira uma esfera do planeta sem o estardalhaço de um impacto (a broca do
 // Escavador, o feixe do Sifão): poucos destroços, sem tremor nem som.

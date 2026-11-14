@@ -849,6 +849,7 @@ void world_restart(World *w, const Tuning *t)
     w->missiles.charges = t->missile_count;
     w->focus = 0.0f;
     w->dodge_used = false;
+    w->building = false;
     w->meteor_queue = 0;
     w->calm_seen = -1;
     w->cards_at = 0;
@@ -956,6 +957,7 @@ static void hold_still(World *w)
 #define ROCK_HIT_JOLT      0.25f    // tremor por unidade de velocidade da batida numa rocha
 #define ROCK_BOUNCE        0.4f
 #define RESTORE_DOTS       34       // Feixe restaurador: pontos de luz da rocha até a cratera
+#define BUILD_REACH        170.0f   // a construção vale onde a mira toca o planeta até esta distância
 #define RESTORE_DOT_SIZE   3.2f
 #define RESTORE_DRIFT      0.6f     // ... que correm em direção à cratera (frações da distância por segundo)
 
@@ -1171,12 +1173,37 @@ void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vecto
 }
 
 // Teclas 4, 5 e 6: compra uma defesa e a instala onde a nave está.
+bool world_build_point(const World *w, Vector3 *ground)
+{
+    // Onde a mira toca o planeta (até BUILD_REACH à frente); sem isso, o chão
+    // embaixo da nave.
+    const Ship *s = &w->ship;
+    if (!s->alive) return false;
+    Vector3 hit;
+    Vector3 dir = Vector3Normalize(s->pos);
+    if (planet_raycast(&w->planet, s->pos, ship_forward(s), BUILD_REACH, &hit)) dir = Vector3Normalize(hit);
+    Terrain terrain = planet_terrain(&w->planet.params, dir);
+    *ground = Vector3Scale(dir, w->planet.params.radius + (terrain.land ? terrain.elevation : 0.0f));
+    return true;
+}
+
+// Construção (E): abre a barra das três defesas, e a sombra da escolhida
+// aparece onde a mira aponta; 1, 2 e 3 constroem ali (4, 5 e 6 também, com a
+// barra aberta ou não). Comprar fecha a barra.
 static void tick_shop(World *w, const InputState *in, const Tuning *t)
 {
-    if (!w->ship.alive) return;
+    if (!w->ship.alive) {
+        w->building = false;
+        return;
+    }
+    if (in->pressed & ACT_BIT(ACT_BUILD)) {
+        w->building = !w->building;
+        events_push(&w->events, (uint32_t)w->tick, EV_BUILD_MODE, w->building ? 1 : 0, w->ship.pos, 0.0f);
+    }
     uint32_t tick = (uint32_t)w->tick;
     for (int k = 0; k < DEF_TYPE_COUNT; k++) {
-        if (!(in->pressed & ACT_BIT(ACT_BUY1 + k))) continue;
+        bool picked = (in->pressed & ACT_BIT(ACT_BUY1 + k)) || (w->building && (in->pressed & ACT_BIT(ACT_CARD1 + k)));
+        if (!picked) continue;
         DefenseType type = (DefenseType)k;
         int cost = defense_cost(t, type);
         if (defenses_count(&w->defenses, type) >= defense_max(t, type)) {
@@ -1187,10 +1214,12 @@ static void tick_shop(World *w, const InputState *in, const Tuning *t)
             events_push(&w->events, tick, EV_BUY_FAIL, (uint8_t)k, w->ship.pos, 0.0f);
             continue;
         }
-        Defense *f = defenses_build(&w->defenses, t, type, w->ship.pos, ship_forward(&w->ship), w->planet.params.radius,
-                                    &w->rng);
+        Vector3 ground;
+        if (!world_build_point(w, &ground)) continue;
+        Defense *f = defenses_build_at(&w->defenses, t, type, ground, w->planet.params.radius, &w->rng);
         if (f == NULL) continue;
         w->ore -= cost;
+        w->building = false;
         spawn_glow(w, PARTICLE_RING, f->pos, (Vector3){ 0.0f, 0.0f, 0.0f }, 3.0f, 0.6f, ORE_GLOW);
         events_push(&w->events, tick, EV_BUY, (uint8_t)k, f->pos, (float)cost);
     }

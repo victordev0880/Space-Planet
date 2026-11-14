@@ -33,7 +33,8 @@ CFLAGS   := $(CSTD) $(WARN) $(OPT) $(INCLUDES) -MMD -MP
 ifeq ($(OS),Windows_NT)
   SHELL   := cmd.exe
   X       := .exe
-  LIBS    := -lopengl32 -lgdi32 -lwinmm
+  LIBS    := -lopengl32 -lgdi32 -lwinmm -lws2_32
+  NET_LIBS := -lws2_32
   LDFLAGS := -static
   # UBSan em modo "trap": aborta no comportamento indefinido sem precisar da
   # biblioteca de runtime, que não existe no MinGW.
@@ -45,6 +46,7 @@ ifeq ($(OS),Windows_NT)
 else
   X       :=
   LIBS    := -lGL -lm -lpthread -ldl -lrt -lX11
+  NET_LIBS :=
   LDFLAGS :=
   TEST_SAN := -fsanitize=address,undefined
   fix    = $1
@@ -60,7 +62,7 @@ endif
 #  Os testes são ligados SEM o raylib; se um módulo de lógica chamar o raylib,
 #  "mingw32-make test" falha na ligação.
 # ---------------------------------------------------------------------------
-LOGIC_DIRS  := src/core src/game src/voxel src/tools
+LOGIC_DIRS  := src/core src/game src/voxel src/tools src/net
 RENDER_DIRS := src/render src/ui src/audio src/platform
 
 LOGIC_SRC  := $(foreach d,$(LOGIC_DIRS),$(wildcard $(d)/*.c))
@@ -98,7 +100,7 @@ run: $(GAME)
 #  Testes da lógica (sem raylib na ligação)
 # ---------------------------------------------------------------------------
 $(TEST_BIN): $(TEST_OBJ)
-	$(CC) $(TEST_OBJ) -o $@ $(TEST_SAN) -lm
+	$(CC) $(TEST_OBJ) -o $@ $(TEST_SAN) -lm $(NET_LIBS)
 
 $(TEST_OBJ_DIR)/%.o: %.c | $(RAYLIB_SRC)/raylib.h
 	@$(call mkdir,$(patsubst %/,%,$(dir $@)))

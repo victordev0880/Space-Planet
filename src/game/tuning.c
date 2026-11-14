@@ -381,6 +381,7 @@ static const TuneField ENEMY_FIELDS[] = {
     F("swarm.spacing",          swarm_spacing,          0,      100),
     F("swarm.dive_stagger",     swarm_dive_stagger,     0,      30),
     F("swarm.drift",            swarm_drift,            0,      180),
+    F("swarm.siege",            swarm_siege,            1,      180),
 
     F("bomber.hp",              enemy[ENEMY_BOMBER].hp,         0.1,  10000),
     F("bomber.radius",          enemy[ENEMY_BOMBER].radius,     0.1,  50),

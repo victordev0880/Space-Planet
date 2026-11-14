@@ -59,6 +59,7 @@ int main(void)
     suite_hive();
     suite_worm();
     suite_devourer();
+    suite_net();
     finish_current();
 
     printf("\n%d testes, %d verificacoes, %d falhas\n", test_count, test_checks, test_failures);

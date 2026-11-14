@@ -315,7 +315,7 @@ combat.marker_distance  = 70     # inimigos mais longe que isto ganham um marcad
 # A composição está em data/waves.txt. Aqui, o escalonamento: a cada horda os
 # inimigos nascem com esta fração a mais de vida (a 20ª: 1 + 19 vezes isto).
 # Acompanha a nave, que fica mais forte com as evoluções.
-waves.hp_growth = 0.04
+waves.hp_growth = 0.025
 
 # --- pontuação --------------------------------------------------------------
 # Abates seguidos, cada um a menos de combo_window segundos do anterior,

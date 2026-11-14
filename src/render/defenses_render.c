@@ -28,6 +28,7 @@ static const Color LIGHT_COLOR   = { 120, 230, 255, 255 };
 static const Color TRIM_COLOR    = { 255, 196, 90, 255 };
 static const Color SHIELD_COLOR  = { 110, 200, 255, 255 };
 static const Color ZAP_COLOR     = { 150, 230, 255, 255 };
+static const Color GHOST_COLOR   = { 255, 206, 90, 255 };    // a sombra da construção (cor do minério)
 static const Color MUZZLE_COLOR  = { 140, 230, 255, 255 };
 static const Color ORE_COLOR     = { 255, 206, 90, 255 };
 
@@ -193,18 +194,62 @@ static void streak(Vector3 a, Vector3 b, float width, Color color, Vector3 eye)
     rlVertex3f(b.x - side.x, b.y - side.y, b.z - side.z);
 }
 
+#define GHOST_SIDES 40
+
+// Anel deitado no chão, em volta de `center` (a sombra da construção).
+static void ground_ring(Vector3 center, float radius, float width, Color color)
+{
+    Vector3 up = Vector3Normalize(center);
+    Vector3 a = Vector3Perpendicular(up);
+    Vector3 b = Vector3CrossProduct(up, a);
+    Vector3 lift = Vector3Add(center, Vector3Scale(up, 0.6f));
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    for (int i = 0; i < GHOST_SIDES; i++) {
+        float t0 = (float)i / (float)GHOST_SIDES * 2.0f * PI, t1 = (float)(i + 1) / (float)GHOST_SIDES * 2.0f * PI;
+        Vector3 d0 = Vector3Add(Vector3Scale(a, cosf(t0)), Vector3Scale(b, sinf(t0)));
+        Vector3 d1 = Vector3Add(Vector3Scale(a, cosf(t1)), Vector3Scale(b, sinf(t1)));
+        Vector3 p0 = Vector3Add(lift, Vector3Scale(d0, radius - width * 0.5f));
+        Vector3 p1 = Vector3Add(lift, Vector3Scale(d0, radius + width * 0.5f));
+        Vector3 p2 = Vector3Add(lift, Vector3Scale(d1, radius + width * 0.5f));
+        Vector3 p3 = Vector3Add(lift, Vector3Scale(d1, radius - width * 0.5f));
+        rlTexCoord2f(0.5f, 0.5f);
+        rlVertex3f(p0.x, p0.y, p0.z);
+        rlVertex3f(p1.x, p1.y, p1.z);
+        rlVertex3f(p2.x, p2.y, p2.z);
+        rlVertex3f(p3.x, p3.y, p3.z);
+    }
+}
+
 void defenses_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Camera3D camera)
 {
     float time = ((float)w->tick + alpha) / (float)t->sim_hz;
     bool any_ore = rocks_ore_alive(&w->rocks) > 0;
     bool any_defense = false;
     for (int i = 0; i < DEFENSES_MAX; i++) any_defense = any_defense || w->defenses.items[i].alive;
-    if (!any_ore && !any_defense) return;
+    if (!any_ore && !any_defense && !w->building) return;
 
     rlDrawRenderBatchActive();
     rlDisableDepthMask();
     rlDisableBackfaceCulling();
     BeginBlendMode(BLEND_ADDITIVE);
+
+    // Construção aberta: a sombra no chão, onde a defesa vai ficar (o tamanho
+    // da cúpula do escudo, com um feixe subindo do centro).
+    Vector3 ground;
+    if (w->building && world_build_point(w, &ground)) {
+        Vector3 up = Vector3Normalize(ground);
+        float pulse = 0.6f + 0.4f * sinf(time * 6.0f);
+        rlSetTexture(glow.id);
+        rlBegin(RL_QUADS);
+        ground_ring(ground, t->shield_radius, 1.2f, faded(GHOST_COLOR, 0.7f * pulse));
+        ground_ring(ground, t->shield_radius * 0.35f, 0.8f, faded(GHOST_COLOR, 0.5f));
+        streak(Vector3Add(ground, Vector3Scale(up, 0.5f)), Vector3Add(ground, Vector3Scale(up, 18.0f)), 1.6f,
+               faded(GHOST_COLOR, 0.45f * pulse), camera.position);
+        rlEnd();
+        rlSetTexture(0);
+        rlDrawRenderBatchActive();
+
+    }
 
     for (int i = 0; i < DEFENSES_MAX; i++) {
         const Defense *f = &w->defenses.items[i];

@@ -54,5 +54,6 @@ void suite_settings(void);
 void suite_hive(void);
 void suite_worm(void);
 void suite_devourer(void);
+void suite_net(void);
 
 #endif

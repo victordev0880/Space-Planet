@@ -68,6 +68,10 @@ const char *defense_name(DefenseType type);
 Defense *defenses_build(Defenses *d, const Tuning *t, DefenseType type, Vector3 ship_pos, Vector3 ship_forward,
                         float planet_radius, Rng *rng);
 
+// A mesma coisa, sobre o ponto do planeta na direção `dir` (o modo de
+// construção, que mostra a sombra da defesa onde a mira aponta).
+Defense *defenses_build_at(Defenses *d, const Tuning *t, DefenseType type, Vector3 dir, float planet_radius, Rng *rng);
+
 void defenses_tick(Defenses *d, const DefenseContext *ctx);
 
 // Um golpe vai cavar o planeta em `ground` (cratera de raio `radius`). Se um
