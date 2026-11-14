@@ -7,6 +7,7 @@
 
 #include <math.h>
 #include <stdbool.h>
+#include <stdint.h>
 #include <string.h>
 
 extern int test_checks;
@@ -56,5 +57,10 @@ void suite_worm(void);
 void suite_devourer(void);
 void suite_net(void);
 void suite_coop(void);
+void suite_detmath(void);
+
+// Modo "tests --hash" (test_coop.c) e a tabela da matemática determinística.
+int coop_print_hashes(void);
+uint64_t detmath_table_hash(void);
 
 #endif

@@ -1,0 +1,141 @@
+# Compila e testa o jogo no Windows e no Linux a cada push.
+#
+#  - "determinismo" compara a simulação dos dois sistemas: o online é lockstep,
+#    então Windows e Linux só jogam juntos se chegarem aos mesmos bits.
+#  - Uma tag "v*" (ex.: git tag v1.0.0 && git push origin v1.0.0) publica um
+#    Release com os pacotes dos dois sistemas.
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-make zip
+          path-type: inherit   # o Makefile clona o raylib com o git do Windows
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor/raylib
+          key: raylib-5.5-${{ runner.os }}-v1
+
+      - name: Compilar
+        run: mingw32-make
+
+      - name: Testes
+        run: mingw32-make test
+
+      - name: Hash da simulação
+        run: ./build/tests.exe --hash | tr -d '\r' | tee hash-windows.txt
+
+      - name: Pacote
+        run: |
+          mkdir -p pkg/TerraFraturada
+          cp terra.exe pkg/TerraFraturada/TerraFraturada.exe
+          cp -r data assets pkg/TerraFraturada/
+          cp release/LEIA-ME.txt pkg/TerraFraturada/
+          cd pkg && zip -qr ../TerraFraturada-windows.zip TerraFraturada
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-windows
+          path: hash-windows.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TerraFraturada-windows
+          path: TerraFraturada-windows.zip
+
+  linux:
+    # 22.04: a glibc mais antiga faz o binário rodar também em distros mais velhas.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Dependências do raylib (X11 e OpenGL)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev libgl1-mesa-dev
+
+      - uses: actions/cache@v4
+        with:
+          path: vendor/raylib
+          key: raylib-5.5-${{ runner.os }}-v1
+
+      - name: Compilar
+        run: make -j4
+
+      - name: Testes (AddressSanitizer + UBSan)
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: make test
+
+      - name: Hash da simulação
+        run: ./build/tests --hash | tee hash-linux.txt
+
+      - name: Pacote
+        run: |
+          mkdir -p pkg/TerraFraturada
+          cp terra pkg/TerraFraturada/TerraFraturada
+          cp -r data assets pkg/TerraFraturada/
+          cp release/LEIA-ME.txt pkg/TerraFraturada/
+          tar -czf TerraFraturada-linux.tar.gz -C pkg TerraFraturada
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: hash-linux
+          path: hash-linux.txt
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TerraFraturada-linux
+          path: TerraFraturada-linux.tar.gz
+
+  determinismo:
+    needs: [windows, linux]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: hash-*
+          merge-multiple: true
+      - name: Windows e Linux simulam igual
+        run: |
+          paste hash-windows.txt hash-linux.txt
+          diff hash-windows.txt hash-linux.txt
+
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [windows, linux, determinismo]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: TerraFraturada-*
+          merge-multiple: true
+      - name: Publicar o Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            TerraFraturada-windows.zip TerraFraturada-linux.tar.gz \
+            --title "Terra Fraturada $GITHUB_REF_NAME" --generate-notes

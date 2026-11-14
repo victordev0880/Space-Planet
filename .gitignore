@@ -9,3 +9,4 @@ vendor/raylib/
 # Evidências geradas pelo autoplay e dados locais do jogador
 captures/
 save/
+dist/

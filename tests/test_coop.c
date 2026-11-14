@@ -3,6 +3,7 @@
 #include "test.h"
 #include "test_util.h"
 
+#include <stdio.h>
 #include <string.h>
 
 #include "game/combat.h"
@@ -261,4 +262,35 @@ void suite_coop(void)
     RUN(coop_over_the_network);
     arena_free(&arena_a);
     arena_free(&arena_b);
+}
+
+// "tests --hash": joga uma partida de 3 jogadores por 2 minutos (com hordas e
+// dois bosses) e imprime o hash do mundo a cada 10 s. A CI roda isto no
+// Windows e no Linux e compara as saídas: se uma linha diferir, os dois
+// sistemas não conseguem jogar online juntos, e a linha mostra quando a
+// simulação se separou.
+int coop_print_hashes(void)
+{
+    static World w;
+    static WavePlan plan;
+    char err[160];
+    tun = test_tuning();
+    if (!arena_init(&arena_a, 8u * 1024u * 1024u)) return 1;
+    if (!waves_load(&plan, "data/waves.txt", err, sizeof err)) {
+        printf("waves: %s\n", err);
+        return 1;
+    }
+    if (!make_world(&w, &arena_a, &plan, 3, 0)) return 1;
+    printf("detmath %016llx\n", (unsigned long long)detmath_table_hash());
+    printf("inicio  %016llx\n", (unsigned long long)world_hash(&w));
+    InputState in[SHIPS_MAX];
+    for (int i = 1; i <= seconds(120.0f); i++) {
+        if (i == seconds(20.0f)) world_spawn_boss(&w, &tun, BOSS_BREAKER, (Vector3){ 0.3f, 0.8f, 0.5f });
+        if (i == seconds(70.0f)) world_spawn_boss(&w, &tun, BOSS_WORM, (Vector3){ -0.6f, 0.2f, 0.7f });
+        for (int p = 0; p < SHIPS_MAX; p++) in[p] = scripted(p, (uint32_t)i);
+        world_tick_all(&w, in, &tun);
+        if (i % seconds(10.0f) == 0) printf("t=%3ds  %016llx\n", i / seconds(1.0f), (unsigned long long)world_hash(&w));
+    }
+    printf("abates %d, planeta %.4f\n", w.score.kills, (double)planet_hp(&w.planet));
+    return 0;
 }

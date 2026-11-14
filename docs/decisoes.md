@@ -1513,6 +1513,67 @@ cliente mandar o primeiro comando.
 - Não há como entrar numa partida já começada.
 - O piloto automático não usa a esquiva perfeita.
 
+## Marco 13, parte 1: Windows e Linux juntos, e o GitHub (2026-11-14)
+
+Pedido: publicar o jogo num repositório público do GitHub, com a CI
+compilando para Windows e Linux e publicando Releases, porque um dos amigos
+usa Linux.
+
+### Por que o Linux quebraria o online
+O lockstep exige que todos os computadores cheguem aos mesmos bits. Soma,
+multiplicação, divisão e raiz quadrada são exatas pelo IEEE 754, mas
+`sinf`, `cosf`, `atan2f`, `acosf` e `asinf` vêm da biblioteca C, e a do
+Windows (ucrt) e a do Linux (glibc) arredondam diferente no último bit. A
+nave vira com `sinf`/`cosf` a cada passo; uma diferença mínima vira, em
+segundos, outra partida (e o aviso de dessincronia).
+
+### A solução: `src/core/detmath.c`
+- Seno, cosseno e tangente com redução de argumento de Cody-Waite (pi/2 em
+  duas partes) e os polinômios do fdlibm; arco-tangente com redução por
+  1/x e pi/6 e série de Taylor; arco-seno e arco-cosseno via `atan2` e `sqrt`.
+  Tudo em double, só com operações exatas; o resultado em float é o double
+  arredondado. Erro abaixo de 1e-6 contra a biblioteca C (teste).
+- O Makefile força a inclusão de `detmath.h` (`-include`) **só nos arquivos
+  de lógica e nos testes**; o header troca `sinf(...)` e companhia pelas
+  nossas com macros. Vale também para as funções inline do `raymath.h`
+  (rotações de quatérnios, slerp). Desenho e áudio continuam com a
+  biblioteca C, que é mais rápida e não afeta a simulação.
+- `-ffp-contract=off` em tudo: sem isso o compilador pode fundir `a*b+c`
+  numa instrução FMA, que arredonda uma vez a menos, numa máquina e não em
+  outra.
+- `floor`, `ceil`, `fabs`, `fmin`, `fmax` e `sqrt` são exatas e ficam.
+  A leitura dos números dos arquivos de dados (`strtod`, `sscanf`)
+  arredonda corretamente nos dois sistemas, então também fica.
+- Os hashes do jogo solo mudaram uma vez (agora o `voo.txt` dá
+  `d75a6d0bf9a84db9`). Nada visível muda.
+
+### Como se confere
+- `build/tests --hash` joga 2 minutos de uma partida de 3 jogadores (hordas,
+  Rompe-Mundos e Verme) e imprime o hash do mundo a cada 10 s, mais um hash
+  de uma tabela da matemática determinística. A CI roda isso no Windows e no
+  Linux e um terceiro job compara as saídas (`determinismo`); a primeira
+  linha diferente diz em que momento as simulações se separaram.
+- O teste `detmath_same_bits_everywhere` guarda o hash da tabela gravado no
+  Windows; no Linux ele tem de dar o mesmo.
+
+### CI e Releases (`.github/workflows/build.yml`)
+- Windows: MSYS2 UCRT64, o mesmo `mingw32-make` daqui. Linux: Ubuntu 22.04
+  (glibc mais antiga, o binário roda em mais distros), pacotes de X11 e
+  OpenGL para o raylib, testes com AddressSanitizer e UBSan.
+- Cada push gera os pacotes como artefatos. Uma tag `v*` publica um Release
+  com `TerraFraturada-windows.zip` e `TerraFraturada-linux.tar.gz`.
+- No Linux, `-std=c11` faz a glibc esconder o que não é C puro
+  (`getifaddrs`, `fcntl`); o Makefile define `_DEFAULT_SOURCE` lá. Precisa
+  ser na linha de comando: o `-include` do detmath já puxa `<math.h>` antes
+  do primeiro `#include` do arquivo.
+- O LEIA-ME do pacote (`release/LEIA-ME.txt`) indica o ZeroTier para
+  grupos com Linux; o Radmin VPN só existe para Windows.
+
+### Limitações
+- A garantia vale para x86-64 com gcc (SSE2). Outro compilador ou ARM
+  (Raspberry, Mac M1) não foram testados.
+- O binário de Linux precisa de X11 ou XWayland.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

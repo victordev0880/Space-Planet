@@ -1,0 +1,39 @@
+TERRA FRATURADA
+===============
+
+Defenda a Terra de hordas alienígenas. O planeta é destrutível de verdade:
+cada ataque arranca pedaços dele, e a vida dele é o volume que ainda resta.
+
+COMO JOGAR
+  Windows (10 ou 11): abra TerraFraturada.exe. Não precisa instalar nada.
+    Se o Windows avisar "o Windows protegeu o computador", clique em
+    "Mais informações" e depois em "Executar assim mesmo".
+  Linux (x86-64, com X11 ou XWayland): no terminal, dentro desta pasta,
+    ./TerraFraturada
+    (se reclamar de permissão: chmod +x TerraFraturada)
+  Mantenha as pastas "data" e "assets" ao lado do jogo.
+
+JOGAR ONLINE COM AMIGOS (até 4)
+  Windows e Linux jogam juntos. Todos precisam da MESMA versão do jogo.
+  Não há servidor: o computador de quem cria a sala é o anfitrião.
+
+  1. Coloquem todos na mesma rede virtual. O ZeroTier (zerotier.com, grátis)
+     funciona no Windows e no Linux: um cria a rede no site, passa o ID da
+     rede e os outros entram nela (o dono aprova cada um no site).
+     Se todos usam Windows, o Radmin VPN (radmin-vpn.com) também serve.
+     Na mesma casa (mesmo Wi-Fi) não precisa de nada disso.
+  2. Quem hospeda: JOGAR ONLINE > CRIAR SALA. Se o sistema perguntar sobre o
+     firewall, permita (no Linux, a porta UDP 27015 precisa estar liberada).
+  3. Os outros: JOGAR ONLINE > ENTRAR NUMA SALA e digitem o IP do anfitrião
+     na rede virtual (aparece no ZeroTier ou no Radmin).
+  4. Com todos na sala, o anfitrião aperta COMEÇAR.
+
+CONTROLES
+  Mouse mira, clique atira, botão direito (segurar e soltar) mísseis
+  W/S acelerar e frear, A/D lado, Shift boost, Espaço dash, Ctrl drift
+  F raio trator, E construir defesas, Q/G/X habilidades dos bosses
+  1/2/3 escolhem a carta de evolução, Esc pausa, F11 tela cheia
+  Controle (gamepad) também funciona.
+
+Código-fonte: o jogo é feito em C com o raylib (licença zlib).
+A fonte Rajdhani é distribuída sob a licença OFL (assets/fonts).

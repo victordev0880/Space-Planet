@@ -1,6 +1,7 @@
 #include "test.h"
 
 #include <stdio.h>
+#include <string.h>
 
 int test_checks = 0;
 int test_failures = 0;
@@ -29,11 +30,12 @@ void test_fail(const char *file, int line, const char *expr)
     printf("    %s:%d: falhou: %s\n", file, line, expr);
 }
 
-int main(void)
+int main(int argc, char **argv)
 {
     // Sem buffer: se um teste derrubar o programa (UBSan para na hora), a
     // última linha mostra o teste anterior a ele, e não se perde no buffer.
     setvbuf(stdout, NULL, _IONBF, 0);
+    if (argc > 1 && strcmp(argv[1], "--hash") == 0) return coop_print_hashes();
     suite_rng();
     suite_arena();
     suite_noise();
@@ -60,6 +62,7 @@ int main(void)
     suite_worm();
     suite_devourer();
     suite_net();
+    suite_detmath();
     suite_coop();
     finish_current();
 

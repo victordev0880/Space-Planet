@@ -25,7 +25,9 @@ OPT  ?= -O2 -g
 # -isystem: os headers do raylib entram como "de sistema", então os warnings
 # deles não poluem (nem quebram, por causa do -Werror) o nosso build.
 INCLUDES := -Isrc -isystem $(RAYLIB_SRC)
-CFLAGS   := $(CSTD) $(WARN) $(OPT) $(INCLUDES) -MMD -MP
+# -ffp-contract=off: o compilador não funde a*b+c em FMA (um arredondamento
+# a menos), o que daria resultados diferentes conforme a máquina.
+CFLAGS   = $(CSTD) $(WARN) $(OPT) -ffp-contract=off $(PLATFORM_DEFS) $(INCLUDES) -MMD -MP
 
 # ---------------------------------------------------------------------------
 #  Diferenças de plataforma. No Windows os comandos rodam no cmd.exe.
@@ -35,6 +37,7 @@ ifeq ($(OS),Windows_NT)
   X       := .exe
   LIBS    := -lopengl32 -lgdi32 -lwinmm -lws2_32
   NET_LIBS := -lws2_32
+  PLATFORM_DEFS :=
   LDFLAGS := -static
   # UBSan em modo "trap": aborta no comportamento indefinido sem precisar da
   # biblioteca de runtime, que não existe no MinGW.
@@ -47,6 +50,8 @@ else
   X       :=
   LIBS    := -lGL -lm -lpthread -ldl -lrt -lX11
   NET_LIBS :=
+  # Com -std=c11 a glibc esconde o que não é C puro (getifaddrs, fcntl...).
+  PLATFORM_DEFS := -D_DEFAULT_SOURCE
   LDFLAGS :=
   TEST_SAN := -fsanitize=address,undefined
   fix    = $1
@@ -76,9 +81,15 @@ TEST_OBJ_DIR := build/test-obj
 TEST_BIN     := build/tests$(X)
 
 GAME_OBJ := $(patsubst %.c,$(OBJ_DIR)/%.o,$(GAME_SRC))
+
+# Matemática determinística (src/core/detmath.h): na lógica e nos testes, as
+# funções trigonométricas da biblioteca C são trocadas pelas nossas, para
+# Windows e Linux simularem a partida bit a bit igual (o online é lockstep).
+DET_MATH   := -include src/core/detmath.h
+det_for     = $(if $(filter $(addsuffix /%,$(LOGIC_DIRS)),$1),$(DET_MATH))
 TEST_OBJ := $(patsubst %.c,$(TEST_OBJ_DIR)/%.o,$(LOGIC_SRC) $(TEST_SRC))
 
-TEST_CFLAGS := $(CSTD) $(WARN) -O1 -g $(TEST_SAN) $(INCLUDES) -Itests -MMD -MP
+TEST_CFLAGS = $(CSTD) $(WARN) -O1 -g -ffp-contract=off $(TEST_SAN) $(PLATFORM_DEFS) $(INCLUDES) -Itests -MMD -MP $(DET_MATH)
 
 .PHONY: all run test clean distclean
 all: $(GAME)
@@ -89,9 +100,9 @@ all: $(GAME)
 $(GAME): $(GAME_OBJ) $(RAYLIB_LIB)
 	$(CC) $(GAME_OBJ) -o $@ $(LDFLAGS) $(RAYLIB_LIB) $(LIBS)
 
-$(OBJ_DIR)/%.o: %.c | $(RAYLIB_SRC)/raylib.h
+$(OBJ_DIR)/%.o: %.c Makefile | $(RAYLIB_SRC)/raylib.h
 	@$(call mkdir,$(patsubst %/,%,$(dir $@)))
-	$(CC) $(CFLAGS) -c $< -o $@
+	$(CC) $(CFLAGS) $(call det_for,$<) -c $< -o $@
 
 run: $(GAME)
 	$(call fix,./$(GAME)) $(ARGS)
@@ -102,7 +113,7 @@ run: $(GAME)
 $(TEST_BIN): $(TEST_OBJ)
 	$(CC) $(TEST_OBJ) -o $@ $(TEST_SAN) -lm $(NET_LIBS)
 
-$(TEST_OBJ_DIR)/%.o: %.c | $(RAYLIB_SRC)/raylib.h
+$(TEST_OBJ_DIR)/%.o: %.c Makefile | $(RAYLIB_SRC)/raylib.h
 	@$(call mkdir,$(patsubst %/,%,$(dir $@)))
 	$(CC) $(TEST_CFLAGS) -c $< -o $@
 
@@ -127,6 +138,8 @@ clean:
 distclean: clean
 	$(call rmdir,$(RAYLIB_DIR))
 
-# Dependências de headers geradas pelo compilador (-MMD)
+# Dependências de headers geradas pelo compilador (-MMD). Os objetos dependem
+# também do Makefile: mudar uma flag (como a matemática determinística)
+# recompila tudo, em vez de misturar objetos velhos e novos.
 -include $(GAME_OBJ:.o=.d)
 -include $(TEST_OBJ:.o=.d)
