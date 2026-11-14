@@ -281,7 +281,14 @@ void devourer_effects_draw(const World *w, const Tuning *t, float alpha, Texture
         // A garganta aberta brilha; os olhos, na mira.
         if (fighting && boss_core_factor(b, t) >= 0.99f) {
             float pulse = 0.7f + 0.3f * sinf(time * 11.0f);
-            DrawBillboard(camera, glow, at(&p, DEV_THROAT), p.scale * 0.9f * pulse, faded(THROAT, 0.75f));
+            if (b->action == DEV_LATCH) {
+                // No banquete, o papo nas costas incha e brilha a cada bocado engolido.
+                float gulp = 0.6f + 0.4f * sinf(time * 5.0f);
+                DrawBillboard(camera, glow, at(&p, DEV_HUMP), p.scale * 1.3f * gulp, faded(THROAT, 0.7f));
+                DrawBillboard(camera, glow, at(&p, DEV_HUMP), p.scale * 0.5f, faded(WHITE, 0.5f * gulp));
+            } else {
+                DrawBillboard(camera, glow, at(&p, DEV_THROAT), p.scale * 0.9f * pulse, faded(THROAT, 0.75f));
+            }
         }
         if (fighting && (b->action == DEV_AIM || b->action == DEV_DIVE)) {
             for (int k = 0; k < 2; k++) DrawBillboard(camera, glow, at(&p, DEV_EYE[k]), p.scale * 0.6f, faded(EYE_HOT, 0.6f));

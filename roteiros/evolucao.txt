@@ -1,13 +1,14 @@
 # Roteiro do marco 7 (evolução): a nave sem evoluções, com as peças do Enxame,
 # Kamikaze e Bombardeiro, e com todas; depois a tela de cartas, a escolha, e
-# a nave lutando com os aliados (drones de escolta e caças).
+# a nave lutando com os aliados (drones de escolta e caças). No fim (marco
+# 11), as sinergias: as peças douradas, o drone suicida e o feixe restaurador.
 #
 #   mingw32-make run ARGS="--autoplay roteiros/evolucao.txt"
 #
 # A nave fica em (45 35 82), no lado do dia, de nariz para -z; a câmera
 # livre a fotografa de trás, de cima e do lado.
 
-frames 1300
+frames 1800
 seed 4
 
 at 0    waves off
@@ -63,3 +64,34 @@ at 750  shot evolucao_09_combate
 at 900  shot evolucao_10_combate
 at 1050 shot evolucao_11_combate
 at 1299 shot evolucao_12_fim
+
+# --- sinergias (marco 11) ----------------------------------------------------
+at 1300 autopilot off
+at 1300 clear
+at 1300 ship 45.06 35.05 82.11  45.06 35.05 -20
+at 1300 evolve suicide 1
+at 1300 evolve restore 1
+at 1300 evolve salvage 1
+at 1300 evolve poise 1
+at 1340 cam 50.05 35.12 88.11  45.06 35.05 82.11
+at 1341 shot evolucao_13_nave_sinergias
+at 1342 view ship
+# Drones suicidas: inimigos à frente; os drones saem sozinhos atrás deles.
+at 1350 spawn siphon 1  45.0 40.0 30.0
+at 1350 spawn swarm 5  60.0 45.0 20.0
+at 1420 shot evolucao_14_drone_suicida
+at 1470 shot evolucao_15_drone_suicida
+# Feixe restaurador: uma cratera embaixo e uma rocha à frente da nave, que atira nela.
+at 1600 clear
+at 1600 crater 0.3 0.6 0.75 8 6
+at 1600 ship 45.06 35.05 82.11  45.06 35.05 -20
+at 1600 rock fragment 45.06 35.05 62
+at 1610 hold fire
+at 1660 release fire
+at 1662 cam 110 60 40  40 50 50
+at 1663 shot evolucao_16_feixe
+at 1664 view ship
+at 1689 cam 110 60 40  40 50 50
+at 1690 shot evolucao_17_feixe
+at 1691 view ship
+at 1799 shot evolucao_18_consertado

@@ -24,7 +24,7 @@
 #include "game/boss_types.h"
 #include "game/enemy_types.h"
 
-#define WAVES_MAX       16
+#define WAVES_MAX       24
 #define WAVE_GROUPS_MAX 12
 #define WAVE_GROUP_MAX_COUNT 24   // inimigos em um grupo
 

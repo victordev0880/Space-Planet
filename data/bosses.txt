@@ -130,7 +130,7 @@ brood.cooldown = 18
 # um tempo (se a nave não estiver dentro): entre atrás dele e acerte o ferrão
 # da cauda, e ele sai antes, atordoado. Fase 2: passa pelo núcleo e o morde.
 # Fase 3: nada rente à superfície, com o dorso para fora, abrindo um sulco.
-worm.hp             = 450     # vida
+worm.hp             = 300     # vida
 worm.points         = 20000
 worm.xp             = 50
 worm.enter_time     = 4       # segundos até ele entrar no planeta (invulnerável)
@@ -148,7 +148,7 @@ worm.tunnel_life    = 10      # segundos até um trecho do túnel desmoronar...
 worm.tunnel_guard   = 16      # ... a não ser que a nave esteja a menos disto dele
 
 worm.rumble_time   = 1.8      # aviso: o chão racha este tanto antes de ele sair
-worm.breach_time   = 4.5      # segundos do salto (o arco pelo espaço)
+worm.breach_time   = 5.5      # segundos do salto (o arco pelo espaço)
 worm.breach_height = 45       # altura do arco
 worm.breach_reach  = 55       # graus de planeta entre a saída e o mergulho
 worm.breach_radius = 7        # cratera da saída e do mergulho
@@ -157,8 +157,8 @@ worm.breach_blast  = 12       # a nave a menos disto da saída leva...
 worm.breach_damage = 25       # ... este dano
 
 worm.mouth_armor   = 0.05     # fração do dano que entra fora do salto (boca fechada)
-worm.nodule_hp     = 14       # vida de cada nódulo do dorso (são quatro)
-worm.nodule_damage = 0.08     # fração da vida que ele perde a cada nódulo destruído
+worm.nodule_hp     = 10       # vida de cada nódulo do dorso (são quatro)
+worm.nodule_damage = 0.1      # fração da vida que ele perde a cada nódulo destruído
 worm.tail_hp       = 8        # ferrão: acertado este tanto debaixo da terra, ele sai atordoado...
 worm.panic_time    = 7        # ... num salto lento, com este tanto de segundos
 worm.phase_2       = 0.6
@@ -185,7 +185,7 @@ tunnel.time     = 0.8         # invulnerável este tanto ao sair
 # morder, mastiga de garganta exposta. O comportamento segue o HP do PLANETA:
 # faminto, frenético e, abaixo da metade, o banquete (agarrado ao planeta,
 # devorando sem parar, garganta sempre aberta). Morto, devolve o que comeu.
-dev.hp             = 900
+dev.hp             = 560
 dev.points         = 50000
 dev.enter_time     = 7
 dev.spawn_distance = 4.5      # de onde vem, em raios do planeta
@@ -199,8 +199,8 @@ dev.heal_fragment  = 0.025    # fração da vida que um fragmento engolido cura
 dev.heal_meteor    = 0.05     # ... e um meteoro
 dev.heal_ore       = 0.002    # ... e um cristal de minério
 
-dev.bite_interval_1 = 9       # segundos entre mordidas, faminto
-dev.bite_interval_2 = 6       # ... e frenético
+dev.bite_interval_1 = 7       # segundos entre mordidas, faminto
+dev.bite_interval_2 = 5       # ... e frenético
 dev.aim_time       = 3.6      # o aviso: o círculo no chão antes do mergulho
 dev.aim_altitude   = 42       # de que altura ele mergulha
 dev.dive_time      = 1.0

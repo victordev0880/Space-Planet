@@ -53,7 +53,6 @@ static const Rgb8 SHIELD_SPARK      = { 130, 210, 255 };
 #define MOON_RETURN     0.01f    // sem a Colmeia, a Lua recupera este tanto da distância por segundo
 #define WORM_CRATER_FROM 12.0f   // as crateras do Verme são "impactos" vindos deste tanto acima do chão
 #define WORM_DUST        6       // poeira de cada tremor em cima do Verme
-#define DEV_BITE_FROM    20.0f   // a mordida do Devorador é um "impacto" vindo deste tanto acima do chão
 #define DEV_BITE_JOLT    9.0f
 #define DEV_BROKEN_JOLT  5.0f
 #define DEV_GULP         0.55f   // engole o que chegar a este tanto (em escalas) da boca
@@ -331,13 +330,26 @@ static bool shielded(World *w, const Tuning *t, Vector3 ground, float radius)
     return true;
 }
 
+static bool impact_at(World *w, const Tuning *t, Vector3 ground, Vector3 normal, float rim_radius, float depth,
+                      bool fragments);
+
 bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float rim_radius, float depth)
 {
     Vector3 ground;
     if (!planet_raycast(&w->planet, origin, dir, IMPACT_RAY_LENGTH, &ground)) return false;
+    return impact_at(w, t, ground, planet_normal(&w->planet, ground), rim_radius, depth, true);
+}
+
+bool world_impact_at(World *w, const Tuning *t, Vector3 ground, float rim_radius, float depth, bool fragments)
+{
+    return impact_at(w, t, ground, Vector3Normalize(ground), rim_radius, depth, fragments);
+}
+
+static bool impact_at(World *w, const Tuning *t, Vector3 ground, Vector3 normal, float rim_radius, float depth,
+                      bool fragments)
+{
     if (shielded(w, t, ground, rim_radius)) return true;
 
-    Vector3 normal = planet_normal(&w->planet, ground);
     float sphere_radius = 0.0f;
     Vector3 center = crater_sphere(ground, normal, rim_radius, depth, &sphere_radius);
     CarveResult carve = planet_carve(&w->planet, center, sphere_radius);
@@ -345,7 +357,7 @@ bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float 
 
     particles_impact(&w->particles, &w->rng, t, ground, normal, rim_radius, &carve);
     repair_note_damage(&w->repair, ground, rim_radius);
-    eject_fragments(w, t, ground, rim_radius, &carve);
+    if (fragments) eject_fragments(w, t, ground, rim_radius, &carve);
 
     Impact *impact = &w->impacts[w->impact_count % WORLD_IMPACT_HISTORY];
     w->impact_count++;
@@ -587,6 +599,8 @@ EnemyContext world_enemy_context(World *w, const Tuning *t)
     c.t = t;
     c.tick = (uint32_t)w->tick;
     c.dt = 1.0f / (float)t->sim_hz;
+    // A cada horda, um pouco mais de vida (sem hordas, como na primeira).
+    c.hp_scale = 1.0f + t->waves_hp_growth * (float)(w->waves_enabled ? w->director.wave : 0);
     return c;
 }
 
@@ -673,8 +687,8 @@ static void tick_devourer_requests(World *w, const Tuning *t, float dt)
         Vector3 ground = Vector3Scale(dir, w->planet.params.radius + (terrain.land ? terrain.elevation : 0.0f));
         bool blocked = shielded(w, t, ground, t->dev_bite_radius);
         if (!blocked) {
-            world_impact(w, t, Vector3Add(ground, Vector3Scale(dir, DEV_BITE_FROM)), Vector3Negate(dir), t->dev_bite_radius,
-                         t->dev_bite_depth);
+            // Do chão original (não aprofunda), e sem fragmentos: o pedaço vai para a boca dele.
+            world_impact_at(w, t, ground, t->dev_bite_radius, t->dev_bite_depth, false);
         }
         world_jolt(w, blocked ? DEV_BROKEN_JOLT : DEV_BITE_JOLT);
         devourer_bite_result(b, t, blocked, &w->events, tick);
@@ -936,6 +950,9 @@ static void hold_still(World *w)
 #define ROCK_DUST          10
 #define ROCK_HIT_JOLT      0.25f    // tremor por unidade de velocidade da batida numa rocha
 #define ROCK_BOUNCE        0.4f
+#define RESTORE_DOTS       34       // Feixe restaurador: pontos de luz da rocha até a cratera
+#define RESTORE_DOT_SIZE   3.2f
+#define RESTORE_DRIFT      0.6f     // ... que correm em direção à cratera (frações da distância por segundo)
 
 static const Rgb8 REPAIR_GLOW  = { 120, 255, 170 };
 static const Rgb8 REPAIR_SPARK = { 190, 255, 210 };
@@ -1103,6 +1120,29 @@ static void rock_collisions(World *w, const Tuning *t)
     }
 }
 
+// Feixe restaurador (sinergia Sifão + Escavador): a rocha quebrada a tiros
+// também conserta a maior cratera aberta. Um rastro de luz verde vai da rocha
+// até lá.
+static void restore_beam(World *w, const Tuning *t, Vector3 from, float fill)
+{
+    int best = -1;
+    for (int s = 0; s < REPAIR_SCARS; s++) {
+        const Scar *scar = &w->repair.scars[s];
+        if (scar->used && (best < 0 || scar->radius > w->repair.scars[best].radius)) best = s;
+    }
+    if (best < 0 || fill <= 0.0f) return;
+    Vector3 to = repair_scar_point(&w->planet, &w->repair.scars[best]);
+    if (!repair_start(&w->repair, &w->planet, t, to, fill)) return;
+    Vector3 span = Vector3Subtract(to, from);
+    for (int i = 0; i < RESTORE_DOTS; i++) {
+        float u = (float)i / (float)(RESTORE_DOTS - 1);
+        Vector3 drift = Vector3Scale(span, (1.0f - u) * RESTORE_DRIFT);   // os de trás correm atrás dos da frente
+        spawn_glow(w, PARTICLE_TRAIL, Vector3Lerp(from, to, u), drift, RESTORE_DOT_SIZE, 0.35f + 0.5f * u, REPAIR_GLOW);
+    }
+    spawn_glow(w, PARTICLE_RING, to, (Vector3){ 0.0f, 0.0f, 0.0f }, fill * 0.5f, 0.7f, REPAIR_GLOW);
+    events_push(&w->events, (uint32_t)w->tick, EV_RESTORE_BEAM, 0, to, fill);
+}
+
 void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vector3 point, Vector3 back)
 {
     if (index < 0 || index >= ROCKS_MAX || !w->rocks.items[index].alive) return;
@@ -1113,7 +1153,7 @@ void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vecto
     }
     uint8_t kind = k->kind;
     Vector3 pos = k->pos, vel = k->vel;
-    float radius = k->radius;
+    float radius = k->radius, fill = k->fill;
     uint32_t tick = (uint32_t)w->tick;
     particles_sparks(&w->particles, &w->rng, point, back, 5, 10.0f, ROCK_SPARK);
     events_push(&w->events, tick, EV_ROCK_SHOT, kind, point, damage);
@@ -1122,6 +1162,7 @@ void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vecto
     particles_explosion(&w->particles, &w->rng, pos, vel, radius * 0.8f, ORE_HOT, ORE_GLOW, ROCK_DUST_COLOR);
     int count = (kind == ROCK_METEOR) ? t->ore_meteor : t->ore_fragment;
     events_push(&w->events, tick, EV_ROCK_MINED, kind, pos, (float)count);
+    if (w->evo.rank[EVO_SYN_RESTORE] > 0) restore_beam(w, t, pos, fill * t->restore_fraction);
 }
 
 // Teclas 4, 5 e 6: compra uma defesa e a instala onde a nave está.
@@ -1363,6 +1404,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         combat_fire(w, &input, t, dt);
         combat_ability(w, &input, t, dt);
         combat_brood(w, &input, t, dt);
+        combat_suicide(w, t, dt);
         combat_tunnel(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);

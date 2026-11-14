@@ -30,11 +30,15 @@
 #define LATCH_DEPTH   0.65f   // agarrado, o centro fica este tanto (em escalas) acima do chão
 #define DRAIN_RING    0.7f    // as mordidas contínuas giram num anel deste tanto do raio dele
 #define DRIFT_UP      4.0f    // atordoado, sobe devagar
+#define CHEW_LIFT     1.6f    // mastigando, ergue a cabeça este tanto (em escalas) acima do chão
+#define BEHIND_PLANET -0.2f   // a nave mais "para baixo" que isto (cosseno): ele olha para o alto
 
 const Vector3 DEV_EYE[2] = { { 0.38f, 0.62f, -0.6f }, { -0.38f, 0.62f, -0.6f } };
 const float   DEV_EYE_RADIUS = 0.14f;
 const Vector3 DEV_THROAT = { 0.0f, 0.0f, -0.78f };
 const float   DEV_THROAT_RADIUS = 0.26f;
+const Vector3 DEV_HUMP = { 0.0f, 0.55f, 0.55f };
+const float   DEV_HUMP_RADIUS = 0.42f;
 
 #define ID_THROAT 2
 #define ID_HULL   3
@@ -97,18 +101,38 @@ static void prowl_move(Boss *b, const BossContext *ctx)
     boss_face(b, forward, radial, FACE_RATE, dt);
 }
 
+// Vira para `forward`, com o topo para longe do planeta (se der).
+static void turn_to(Boss *b, Vector3 forward, float rate, float dt)
+{
+    Vector3 up = Vector3Perpendicular(forward);
+    Vector3 radial = Vector3Normalize(b->pos);
+    Vector3 flat = Vector3Subtract(radial, Vector3Scale(forward, Vector3DotProduct(radial, forward)));
+    if (Vector3LengthSqr(flat) > 1e-4f) up = Vector3Normalize(flat);
+    boss_face(b, forward, up, rate, dt);
+}
+
 // Vai até um ponto suavemente, olhando para `forward`.
 static void glide(Boss *b, Vector3 to, Vector3 forward, float rate, float dt)
 {
     Vector3 before = b->pos;
     b->pos = Vector3Lerp(b->pos, to, 1.0f - expf(-rate * dt));
     b->vel = Vector3Scale(Vector3Subtract(b->pos, before), 1.0f / dt);
-    Vector3 up = Vector3Perpendicular(forward);
-    // O topo para longe do planeta, se der.
+    turn_to(b, forward, FACE_RATE * 1.5f, dt);
+}
+
+// Com a garganta aberta (mastigando, atordoado), ele encara a nave e ruge:
+// a garganta fica à vista de quem vai atacá-la. Com a nave do outro lado do
+// planeta, olha para o alto.
+static Vector3 face_ship(const Boss *b, const BossContext *ctx)
+{
     Vector3 radial = Vector3Normalize(b->pos);
-    Vector3 flat = Vector3Subtract(radial, Vector3Scale(forward, Vector3DotProduct(radial, forward)));
-    if (Vector3LengthSqr(flat) > 1e-4f) up = Vector3Normalize(flat);
-    boss_face(b, forward, up, FACE_RATE * 1.5f, dt);
+    const Ship *s = ctx->ship;
+    if (s == NULL || !s->alive) return radial;
+    Vector3 to = Vector3Subtract(s->pos, b->pos);
+    float d = Vector3Length(to);
+    if (d < 1e-3f) return radial;
+    to = Vector3Scale(to, 1.0f / d);
+    return (Vector3DotProduct(to, radial) < BEHIND_PLANET) ? radial : to;
 }
 
 // --- as ações ---------------------------------------------------------------------
@@ -270,20 +294,24 @@ void devourer_fight(Boss *b, const BossContext *ctx)
         if (b->timer <= 0.0f) d->bite_now = true;   // o mundo confere o escudo e chama devourer_bite_result
         break;
     }
-    case DEV_CHEW:
+    case DEV_CHEW: {
+        // Ergue a cabeça da cratera e mastiga encarando a nave.
+        Vector3 ground = Vector3Scale(d->bite_dir, original_ground(ctx->planet, d->bite_dir));
+        glide(b, Vector3Add(ground, Vector3Scale(d->bite_dir, b->scale * CHEW_LIFT)), face_ship(b, ctx), MOVE_RATE, dt);
         d->jaw_target = 0.55f + 0.45f * sinf(now * 7.0f);
-        b->vel = (Vector3){ 0.0f, 0.0f, 0.0f };
         b->timer -= dt;
         if (b->timer <= 0.0f) {
             b->action = DEV_RISE;
             b->timer = t->dev_rise_time;
         }
         break;
+    }
     case DEV_STUN: {
-        // Sobe devagar, a boca pendurada aberta.
+        // Sobe devagar, a boca pendurada aberta, virando-se para a nave.
         Vector3 up = Vector3Normalize(b->pos);
         b->vel = Vector3Scale(up, DRIFT_UP);
         b->pos = Vector3Add(b->pos, Vector3Scale(b->vel, dt));
+        turn_to(b, face_ship(b, ctx), FACE_RATE, dt);
         d->jaw_target = 1.0f;
         b->timer -= dt;
         if (b->timer <= 0.0f) {
@@ -367,11 +395,19 @@ int devourer_parts(const Boss *b, const Tuning *t, BossPart *out)
     }
     float factor = boss_core_factor(b, t);
     bool open = factor >= 0.99f;
-    out[n++] = (BossPart){ boss_point(b, t, DEV_THROAT), DEV_THROAT_RADIUS * b->scale, PART_CORE, ID_THROAT, open, false,
-                           open ? 0.12f : 0.0f, forward };
-    // Casco: o corpo, a corcova e as duas mandíbulas (que se abrem e destapam a garganta).
+    // O ponto fraco: a garganta; no banquete (a boca enterrada no planeta),
+    // o papo nas costas, por onde se vê o que ele engole.
+    bool feasting = b->action == DEV_LATCH;
+    Vector3 top = Vector3RotateByQuaternion((Vector3){ 0.0f, 1.0f, 0.0f }, b->rot);
+    out[n++] = feasting ? (BossPart){ boss_point(b, t, DEV_HUMP), DEV_HUMP_RADIUS * b->scale, PART_CORE, ID_THROAT, open, false,
+                                      open ? 0.12f : 0.0f, top }
+                        : (BossPart){ boss_point(b, t, DEV_THROAT), DEV_THROAT_RADIUS * b->scale, PART_CORE, ID_THROAT, open,
+                                      false, open ? 0.12f : 0.0f, forward };
+    // Casco: o corpo, a corcova (menos no banquete, quando ela é o alvo) e as
+    // duas mandíbulas (que se abrem e destapam a garganta).
     const BossSphere hull[2] = { { { 0.0f, 0.05f, 0.15f }, 0.88f }, { { 0.0f, 0.42f, 0.62f }, 0.5f } };
     for (int k = 0; k < 2; k++) {
+        if (k == 1 && feasting) continue;
         out[n++] = (BossPart){ boss_point(b, t, hull[k].center), hull[k].radius * b->scale, PART_HULL, (uint8_t)(ID_HULL + k),
                                false, true, 0.0f, { 0.0f, 0.0f, 0.0f } };
     }

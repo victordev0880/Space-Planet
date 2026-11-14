@@ -85,6 +85,7 @@ typedef struct {
     Vector3    look;          // para onde o modelo olha quando está quase parado (zero = para onde voa)
     float      bank;          // inclinação atual nas curvas, em radianos (suavizada)
     float      hp;
+    float      hp_max;        // vida cheia (a do tipo, escalada pela horda)
     float      age;           // segundos em cena
     float      flash;         // segundos restantes do clarão de dano (só desenho)
     float      timer;         // uso de cada tipo (próxima bomba, próximo tiro, próxima mordida...)
@@ -142,6 +143,7 @@ typedef struct {
     const Tuning *t;
     uint32_t      tick;
     float         dt;
+    float         hp_scale;   // multiplica a vida de quem nasce agora (cresce a cada horda)
 } EnemyContext;
 
 bool enemies_init(Enemies *e, Arena *arena);

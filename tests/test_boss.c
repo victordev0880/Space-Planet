@@ -298,9 +298,9 @@ static void boss_is_wave_five(void)
     bool ok = waves_load(&plan, "data/waves.txt", err, sizeof err);
     if (!ok) test_fail(__FILE__, __LINE__, err);
     CHECK(ok);
-    CHECK(plan.count >= 10);
+    CHECK(plan.count == 20);
     for (int i = 0; i < plan.count; i++) {
-        int expected = (i == 4) ? BOSS_BREAKER : (i == 9) ? BOSS_HIVE : -1;
+        int expected = (i == 4) ? BOSS_BREAKER : (i == 9) ? BOSS_HIVE : (i == 14) ? BOSS_WORM : (i == 19) ? BOSS_DEVOURER : -1;
         CHECK(wave_boss(&plan.waves[i]) == expected);
     }
 }

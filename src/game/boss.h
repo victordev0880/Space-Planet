@@ -216,6 +216,8 @@ extern const Vector3 DEV_EYE[2];
 extern const float   DEV_EYE_RADIUS;
 extern const Vector3 DEV_THROAT;
 extern const float   DEV_THROAT_RADIUS;
+extern const Vector3 DEV_HUMP;           // o papo nas costas: o ponto fraco no banquete
+extern const float   DEV_HUMP_RADIUS;
 
 typedef struct {
     float   jaw;                // 0 = fechada, 1 = escancarada (desenho e peças)

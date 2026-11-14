@@ -229,6 +229,109 @@ static void evolution_kills_give_xp_and_heal(void)
     CHECK_NEAR(w.evo.essence[ENEMY_BOMBER], t.xp_kill[ENEMY_BOMBER], 1e-3);
 }
 
+// Sinergias: só entram no sorteio com as duas linhas, e não contam para a
+// linha dominante (a cor da nave).
+static void synergy_unlocks_with_both_lines(void)
+{
+    Evolution e;
+    evolution_reset(&e);
+    CHECK(evolution_is_synergy(EVO_SYN_SUICIDE) && !evolution_is_synergy(EVO_ESCORT));
+    CHECK(evolution_weight(&e, &tun, EVO_SYN_SUICIDE) == 0.0f);
+    e.rank[EVO_SPREAD] = 1;   // só o Enxame
+    CHECK(evolution_weight(&e, &tun, EVO_SYN_SUICIDE) == 0.0f);
+    e.rank[EVO_CHAIN] = 1;    // ... e o Kamikaze
+    CHECK_NEAR(evolution_weight(&e, &tun, EVO_SYN_SUICIDE), tun.cards_synergy_weight, 1e-6);
+    CHECK(evolution_weight(&e, &tun, EVO_SYN_POISE) == 0.0f);   // outras sinergias, não
+    e.rank[EVO_SYN_SUICIDE] = 1;
+    CHECK(evolution_weight(&e, &tun, EVO_SYN_SUICIDE) == 0.0f);   // nível único
+    e.rank[EVO_SYN_SALVAGE] = 1;
+    CHECK(evolution_dominant_line(&e) == ENEMY_SWARM || evolution_dominant_line(&e) == ENEMY_KAMIKAZE);
+}
+
+// Drones suicidas: com um inimigo por perto, um drone sai da nave, persegue e explode nele.
+static void synergy_suicide_drone_hunts(void)
+{
+    static World w;
+    make_world(&w);
+    Tuning t = tun;
+    t.enemies_spawn_spread = 0.0f;
+    world_spawn(&w, &t, ENEMY_SIPHON, 1, Vector3Add(w.ship.pos, (Vector3){ 30.0f, 0.0f, 20.0f }));
+    float hp = w.enemies.items[0].hp;
+    w.evo.rank[EVO_SYN_SUICIDE] = 1;
+    for (int i = 0; i < seconds(6.0f) && !saw_event(&w, EV_BLAST); i++) run(&w, keys(0u), 1);
+    CHECK(saw_event(&w, EV_SUICIDE));
+    CHECK(saw_event(&w, EV_BLAST));
+    CHECK(!pool_alive(&w.enemies.pool, 0) || w.enemies.items[0].hp < hp);
+}
+
+// Desmanche: um abate deixa minério (mais dos grandes).
+static void synergy_salvage_drops_ore(void)
+{
+    static World w;
+    make_world(&w);
+    Tuning t = tun;
+    t.enemies_spawn_spread = 0.0f;
+    world_spawn(&w, &t, ENEMY_BOMBER, 1, (Vector3){ 0.0f, 0.0f, w.planet.params.radius * 2.5f });
+    w.evo.rank[EVO_SYN_SALVAGE] = 1;
+    CHECK(rocks_ore_alive(&w.rocks) == 0);
+    enemies_damage(&w.enemies, 0, 1000.0f, DEATH_PLAYER);
+    combat_sweep(&w, &t);
+    CHECK(rocks_ore_alive(&w.rocks) == t.salvage_big);
+}
+
+// Mira blindada: com o escudo cheio, o tiro vale mais; com o escudo gasto, não.
+static float bolt_damage(World *w, const Tuning *t, Vector3 target)
+{
+    float before = w->enemies.items[0].hp;
+    Vector3 from = Vector3Add(target, (Vector3){ -30.0f, 0.0f, 0.0f });
+    Shot *s = projectiles_spawn(&w->shots, SHOT_BOLT, from, (Vector3){ t->weapon_speed, 0.0f, 0.0f }, 2.0f);
+    s->damage = 1.0f;
+    s->source = BOLT_PLAYER;
+    for (int i = 0; i < 20; i++) {
+        projectiles_move(&w->shots, 1.0f / (float)t->sim_hz);
+        combat_resolve(w, t);
+    }
+    return before - w->enemies.items[0].hp;
+}
+
+static void synergy_poise_hits_harder(void)
+{
+    static World w;
+    make_world(&w);
+    Tuning t = tun;
+    t.enemies_spawn_spread = 0.0f;
+    Vector3 a = { 0.0f, 0.0f, w.planet.params.radius * 2.5f };
+    world_spawn(&w, &t, ENEMY_SIPHON, 1, a);
+    w.enemies.items[0].pos = a;
+    w.evo.rank[EVO_SYN_POISE] = 1;
+    w.ship.shield = t.ship_shield_max;
+    CHECK_NEAR(bolt_damage(&w, &t, a), t.poise_mult, 1e-4);
+    w.ship.shield = t.ship_shield_max * 0.5f;
+    CHECK_NEAR(bolt_damage(&w, &t, a), 1.0f, 1e-4);
+}
+
+// Feixe restaurador: quebrar uma rocha a tiros conserta a maior cratera.
+static void synergy_restore_mends_a_scar(void)
+{
+    static World w;
+    make_world(&w);
+    Tuning t = tun;
+    float r = w.planet.params.radius;
+    world_impact(&w, &t, (Vector3){ r * 3.0f, 0.0f, 0.0f }, (Vector3){ -1.0f, 0.0f, 0.0f }, 4.0f, 3.0f);
+    int64_t hurt = w.planet.volume;
+    Rock *k = world_spawn_rock(&w, &t, ROCK_FRAGMENT, (Vector3){ 0.0f, r + 15.0f, 0.0f }, (Vector3){ 0.0f, 0.0f, 0.0f });
+    CHECK(k != NULL);
+    if (k == NULL) return;
+    int index = (int)(k - w.rocks.items);
+    w.evo.rank[EVO_SYN_RESTORE] = 1;
+    world_damage_rock(&w, &t, index, 1000.0f, k->pos, (Vector3){ 0.0f, 1.0f, 0.0f });
+    CHECK(saw_event(&w, EV_RESTORE_BEAM));
+    CHECK(repair_active_jobs(&w.repair) > 0);
+    CHECK(rocks_ore_alive(&w.rocks) > 0);   // o minério continua saindo
+    run(&w, keys(0u), seconds(t.repair_time + 0.5f));
+    CHECK(w.planet.volume > hurt);
+}
+
 // Reflexão: com chance certa, o tiro inimigo volta como tiro da nave.
 static void evolution_reflect_returns_shots(void)
 {
@@ -312,5 +415,10 @@ void suite_evolution(void)
     RUN(evolution_reflect_returns_shots);
     RUN(evolution_escorts_fight);
     RUN(evolution_autopilot_evolves);
+    RUN(synergy_unlocks_with_both_lines);
+    RUN(synergy_suicide_drone_hunts);
+    RUN(synergy_salvage_drops_ore);
+    RUN(synergy_poise_hits_harder);
+    RUN(synergy_restore_mends_a_scar);
     arena_free(&arena);
 }

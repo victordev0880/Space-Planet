@@ -1,43 +1,56 @@
-# Roteiro da partida inteira: as dez hordas de data/waves.txt, jogadas pelo
-# piloto automático do autoplay, até a tela de fim. Serve para conferir o
-# ritmo da partida, o HUD (avisos de horda, pontos, marcadores, alertas), o
-# desempenho com as maiores hordas em cena e quanto do planeta se perde.
+# Roteiro da partida inteira: as vinte hordas de data/waves.txt (com os quatro
+# bosses, nas hordas 5, 10, 15 e 20), jogadas pelo piloto automático do
+# autoplay, até a tela de fim. Serve para conferir o ritmo da partida, o HUD
+# (avisos de horda, pontos, marcadores, alertas), o desempenho com as maiores
+# hordas em cena e quanto do planeta se perde.
 #
 #   mingw32-make run ARGS="--autoplay roteiros/onda1.txt"
 #
 # O piloto automático é uma ferramenta de teste: persegue o inimigo mais
 # urgente e atira, sem a esperteza de um jogador (não entra em túneis, não
 # desvia de tiros, não usa dash). Uma partida dele é o "pior caso razoável"
-# para o planeta.
+# para o planeta. São 30 minutos de jogo: rodar leva uns 10 a 15 minutos.
 
-frames 36000
+frames 108000
 seed 1
 
 at 0     autopilot on
 at 200   shot onda1_01_calmaria
 at 380   shot onda1_02_horda1
 at 640   shot onda1_03_combate
-at 1500  shot onda1_04
-at 3000  shot onda1_05
-at 4500  shot onda1_06
-at 6000  shot onda1_07
-at 7500  shot onda1_08
-at 9000  shot onda1_09
-at 10500 shot onda1_10
-at 12000 shot onda1_11
-at 13500 shot onda1_12
-at 15000 shot onda1_13
-at 16500 shot onda1_14
-at 18000 shot onda1_15
-at 19500 shot onda1_16
-at 21000 shot onda1_17
-at 22500 shot onda1_18
-at 24000 shot onda1_19
-at 25500 shot onda1_20
-at 27000 shot onda1_21
-at 28500 shot onda1_22
-at 30000 shot onda1_23
-at 31500 shot onda1_24
-at 33000 shot onda1_25
-at 34500 shot onda1_26
-at 35999 shot onda1_27_fim
+at 3000   shot onda1_04
+at 6000   shot onda1_05
+at 9000   shot onda1_06
+at 12000  shot onda1_07
+at 15000  shot onda1_08
+at 18000  shot onda1_09
+at 21000  shot onda1_10
+at 24000  shot onda1_11
+at 27000  shot onda1_12
+at 30000  shot onda1_13
+at 33000  shot onda1_14
+at 36000  shot onda1_15
+at 39000  shot onda1_16
+at 42000  shot onda1_17
+at 45000  shot onda1_18
+at 48000  shot onda1_19
+at 51000  shot onda1_20
+at 54000  shot onda1_21
+at 57000  shot onda1_22
+at 60000  shot onda1_23
+at 63000  shot onda1_24
+at 66000  shot onda1_25
+at 69000  shot onda1_26
+at 72000  shot onda1_27
+at 75000  shot onda1_28
+at 78000  shot onda1_29
+at 81000  shot onda1_30
+at 84000  shot onda1_31
+at 87000  shot onda1_32
+at 90000  shot onda1_33
+at 93000  shot onda1_34
+at 96000  shot onda1_35
+at 99000  shot onda1_36
+at 102000 shot onda1_37
+at 105000 shot onda1_38
+at 107999 shot onda1_39_fim

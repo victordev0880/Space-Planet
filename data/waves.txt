@@ -7,7 +7,8 @@
 #                (Escavador), siphon (Sifão), sniper (Atirador), shielder
 #                (Escudeiro), carrier (Porta-drones); ou um boss: breaker
 #                (Rompe-Mundos), hive (Colmeia Lunar; a direção é de onde ela
-#                chega à Lua), todos em data/bosses.txt, sempre com quantidade 1
+#                chega à Lua), worm (Verme do Núcleo) e devourer (Devorador, o
+#                último), todos em data/bosses.txt, sempre com quantidade 1
 #     atraso:    segundos depois do começo da horda em que o grupo aparece
 #     azimute e elevação: de onde o grupo vem, em graus (mesma convenção do
 #     Sol em tuning.txt). A nave começa olhando para o planeta a partir do
@@ -15,7 +16,9 @@
 #     Um Escudeiro que chega junto (mesma direção e hora) de um bando o
 #     acompanha e o protege.
 #
-#  A próxima horda só vem depois que a atual é destruída por inteiro.
+#  A próxima horda só vem depois que a atual é destruída por inteiro. São 20,
+#  com um boss a cada 5; vencido o Devorador (a 20ª), a partida está ganha.
+#  A vida dos inimigos cresce a cada horda (waves.hp_growth, em tuning.txt).
 #  Cada tipo novo aparece primeiro sozinho ou com pouca companhia.
 #  F5 relê este arquivo; a mudança vale a partir da próxima partida.
 # ============================================================================
@@ -99,3 +102,109 @@ wave.10.group.1 = hive 1 0 40 30
 wave.10.group.2 = bomber 1 20 -60 20
 wave.10.group.3 = kamikaze 6 35 120 -10
 wave.10.group.4 = siphon 1 60 -150 25
+
+# Horda 11 (24): dois Bombardeiros blindados, um Escavador saindo por trás.
+wave.11.pause   = 18
+wave.11.group.1 = bomber 2 0 -30 25
+wave.11.group.2 = shielder 1 0 -30 29
+wave.11.group.3 = swarm 8 4 80 0
+wave.11.group.4 = digger 1 10 150 20
+wave.11.group.5 = kamikaze 6 14 -100 -15
+wave.11.group.6 = swarm 6 20 30 -40
+
+# Horda 12 (25): cerco. Sifões de um lado, Atiradores do outro.
+wave.12.pause   = 18
+wave.12.group.1 = siphon 2 0 60 10
+wave.12.group.2 = shielder 1 0 60 14
+wave.12.group.3 = sniper 3 4 -120 20
+wave.12.group.4 = swarm 8 8 170 30
+wave.12.group.5 = kamikaze 6 12 -150 -20
+wave.12.group.6 = digger 1 18 0 -50
+wave.12.group.7 = siphon 1 24 -20 45
+wave.12.group.8 = shielder 1 24 -20 49
+wave.12.group.9 = swarm 2 30 100 -10
+
+# Horda 13 (27 + os lançados): dois Porta-drones.
+wave.13.pause   = 18
+wave.13.group.1 = carrier 1 0 -80 15
+wave.13.group.2 = shielder 1 0 -80 19
+wave.13.group.3 = swarm 8 4 40 30
+wave.13.group.4 = carrier 1 10 130 -10
+wave.13.group.5 = kamikaze 8 14 0 0
+wave.13.group.6 = bomber 1 18 -150 -30
+wave.13.group.7 = sniper 2 22 -140 35
+wave.13.group.8 = swarm 5 28 90 50
+
+# Horda 14 (28): ataque ao núcleo, de dois lados.
+wave.14.pause   = 19
+wave.14.group.1 = digger 2 0 30 -20
+wave.14.group.2 = shielder 1 0 30 -16
+wave.14.group.3 = bomber 2 6 -100 20
+wave.14.group.4 = swarm 10 8 160 10
+wave.14.group.5 = digger 1 14 -160 30
+wave.14.group.6 = siphon 2 16 -40 40
+wave.14.group.7 = kamikaze 8 20 90 -30
+wave.14.group.8 = sniper 2 26 -170 0
+
+# Horda 15: o Verme do Núcleo (boss), nadando dentro do planeta. A escolta é
+# leve e chega aos poucos: a luta é ir atrás dele quando ele salta.
+#   tipo "worm", sempre 1; a direção é por onde ele mergulha.
+wave.15.pause   = 20
+wave.15.group.1 = worm 1 0 -20 35
+wave.15.group.2 = swarm 6 25 60 10
+wave.15.group.3 = kamikaze 4 50 -120 0
+wave.15.group.4 = bomber 1 80 150 20
+
+# Horda 16 (29 + os lançados): pressão de todos os lados.
+wave.16.pause   = 19
+wave.16.group.1 = carrier 1 0 100 20
+wave.16.group.2 = bomber 2 4 -40 10
+wave.16.group.3 = shielder 1 4 -40 14
+wave.16.group.4 = digger 2 10 170 -30
+wave.16.group.5 = swarm 10 14 0 40
+wave.16.group.6 = kamikaze 8 20 -120 -10
+wave.16.group.7 = sniper 3 26 60 -40
+wave.16.group.8 = swarm 2 32 -90 0
+
+# Horda 17 (31): a sangria. Muitos Sifões, bem protegidos.
+wave.17.pause   = 19
+wave.17.group.1 = siphon 3 0 20 20
+wave.17.group.2 = shielder 1 0 20 24
+wave.17.group.3 = swarm 10 6 -90 0
+wave.17.group.4 = bomber 2 10 140 30
+wave.17.group.5 = siphon 2 16 -150 -20
+wave.17.group.6 = shielder 1 16 -150 -16
+wave.17.group.7 = kamikaze 8 20 -30 -30
+wave.17.group.8 = digger 1 26 90 -10
+wave.17.group.9 = sniper 3 30 -60 45
+
+# Horda 18 (31 + os lançados): dois Porta-drones e Escavadores.
+wave.18.pause   = 20
+wave.18.group.1 = carrier 2 0 -20 30
+wave.18.group.2 = digger 2 4 160 0
+wave.18.group.3 = shielder 1 4 160 4
+wave.18.group.4 = bomber 2 10 70 -20
+wave.18.group.5 = swarm 10 14 -110 15
+wave.18.group.6 = siphon 2 20 30 -40
+wave.18.group.7 = kamikaze 10 26 -60 45
+wave.18.group.8 = sniper 2 32 120 10
+
+# Horda 19 (36): a maior de todas, antes do fim.
+wave.19.pause   = 20
+wave.19.group.1 = bomber 3 0 0 20
+wave.19.group.2 = shielder 1 0 0 24
+wave.19.group.3 = digger 2 6 -120 -10
+wave.19.group.4 = swarm 12 8 120 10
+wave.19.group.5 = carrier 1 14 60 -30
+wave.19.group.6 = siphon 2 18 -60 40
+wave.19.group.7 = shielder 1 18 -60 44
+wave.19.group.8 = kamikaze 10 22 180 0
+wave.19.group.9 = sniper 4 30 -30 -40
+
+# Horda 20: o Devorador (boss final). Sozinho por um bom tempo: a luta é com
+# ele (e com as rochas que ele quer engolir). Depois, uma escolta leve.
+#   tipo "devourer", sempre 1; a direção é de onde ele chega.
+wave.20.pause   = 25
+wave.20.group.1 = devourer 1 0 15 25
+wave.20.group.2 = swarm 6 45 -60 10
+wave.20.group.3 = kamikaze 6 90 120 -20

@@ -28,7 +28,12 @@ typedef struct {
     const char *name;     // nome da carta ("Drones de escolta")
     const char *key;      // nome nos dados e nos roteiros ("escort")
     EnemyType   line;     // linha (tipo de inimigo) a que pertence
+    bool        synergy;  // sinergia: junta `line` e `partner`
+    EnemyType   partner;
 } EvolutionInfo;
+
+// Uma sinergia? (Junta duas linhas e só aparece quando a nave tem as duas.)
+bool evolution_is_synergy(EvolutionId id);
 
 // A evolução de um nome de dados ("escort"), ou -1.
 int evolution_from_key(const char *key);
@@ -48,6 +53,9 @@ typedef struct {
 } Evolution;
 
 const EvolutionInfo *evolution_info(EvolutionId id);
+
+// A nave já tem alguma evolução comum da linha `line`?
+bool evolution_has_line(const Evolution *e, EnemyType line);
 
 void evolution_reset(Evolution *e);
 

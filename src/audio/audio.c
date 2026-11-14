@@ -1435,6 +1435,9 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_DEV_SWALLOW:     s = SND_DEV_GULP; floor = 0.4f; break;
         case EV_DEV_LATCH:       s = SND_DEV_ROAR; positional = false; break;
         case EV_DEV_TEETH:       s = SND_DEV_TEETH; floor = 0.3f; break;
+        // Sinergias.
+        case EV_SUICIDE:         s = SND_LAUNCH; positional = false; volume = 0.6f; break;
+        case EV_RESTORE_BEAM:    s = SND_REPAIR; floor = 0.4f; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

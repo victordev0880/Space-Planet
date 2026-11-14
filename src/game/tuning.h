@@ -268,6 +268,7 @@ typedef struct {
     float combat_marker_distance;
 
     // pontuação
+    float waves_hp_growth;   // vida extra dos inimigos a cada horda (fração da vida do tipo)
     float score_combo_window;
     float score_combo_step;
     float score_combo_max;
@@ -419,6 +420,12 @@ typedef struct {
     float reflect_chance;
     float fighters_damage, fighters_rate, fighters_speed, fighters_range;
     float hangar_rate;
+    // Sinergias.
+    float cards_synergy_weight;          // peso de uma sinergia já liberada no sorteio
+    float suicide_interval, suicide_range, suicide_damage, suicide_radius, suicide_speed;
+    float restore_fraction;
+    int   salvage_small, salvage_big;
+    float poise_mult;
 
     // --- data/bosses.txt ----------------------------------------------------
     // Rompe-Mundos. Os vetores [3] valem por fase (1, 2 e 3).

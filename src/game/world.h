@@ -127,6 +127,7 @@ typedef struct {
     Ability      ability;
     Brood        brood;
     Tunnel       tunnel;
+    float        suicide_wait;  // Drones suicidas (sinergia): segundos até o próximo
     int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
     // --- rochas e conserto ---
@@ -238,6 +239,12 @@ EnemyContext world_enemy_context(World *w, const Tuning *t);
 // e abre ali uma cratera com a boca de raio `rim_radius` e a profundidade
 // `depth`, soltando destroços. Retorna false se o raio não acerta o planeta.
 bool world_impact(World *w, const Tuning *t, Vector3 origin, Vector3 dir, float rim_radius, float depth);
+
+// A mesma cratera, mas num ponto dado (`ground`, em geral a superfície
+// original), sem procurar o chão de agora: golpes repetidos no mesmo lugar não
+// cavam mais fundo (a mordida do Devorador). Com `fragments` false, não
+// solta fragmentos (o pedaço arrancado some).
+bool world_impact_at(World *w, const Tuning *t, Vector3 ground, float rim_radius, float depth, bool fragments);
 
 // Retira uma esfera do planeta sem o estardalhaço de um impacto (a broca do
 // Escavador, o feixe do Sifão): poucos destroços, sem tremor nem som.

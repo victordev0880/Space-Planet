@@ -512,6 +512,32 @@ static void waves_grow_and_use_every_type(void)
     CHECK(last >= first * 2);    // ... e cresce
 }
 
+// Escalonamento: quem nasce numa horda mais adiante tem mais vida.
+static void later_waves_have_tougher_enemies(void)
+{
+    static World w;
+    make_world_far(&w, (Vector3){ 0.0f, 1.0f, 0.0f });
+    Vector3 spot = Vector3Scale((Vector3){ 1.0f, 0.0f, 0.0f }, w.planet.params.radius * 3.0f);
+    world_spawn(&w, &tun, ENEMY_SWARM, 1, spot);
+    int first = find_type(&w, ENEMY_SWARM);
+    CHECK(first >= 0);
+    if (first < 0) return;
+    float base = tun.enemy[ENEMY_SWARM].hp;
+    CHECK_NEAR(w.enemies.items[first].hp, base, 1e-4);
+    CHECK_NEAR(w.enemies.items[first].hp_max, base, 1e-4);
+
+    world_clear_enemies(&w);
+    w.waves_enabled = true;
+    w.director.wave = 10;   // a 11ª horda
+    world_spawn(&w, &tun, ENEMY_SWARM, 1, spot);
+    int later = find_type(&w, ENEMY_SWARM);
+    CHECK(later >= 0);
+    if (later < 0) return;
+    float scaled = base * (1.0f + 10.0f * tun.waves_hp_growth);
+    CHECK_NEAR(w.enemies.items[later].hp, scaled, 1e-3);
+    CHECK_NEAR(w.enemies.items[later].hp_max, scaled, 1e-3);
+}
+
 void suite_enemies(void)
 {
     tun = test_tuning();
@@ -532,5 +558,6 @@ void suite_enemies(void)
     RUN(mixed_horde_is_stable_and_deterministic);
     RUN(enter_calls_the_next_wave);
     RUN(waves_grow_and_use_every_type);
+    RUN(later_waves_have_tougher_enemies);
     arena_free(&arena);
 }

@@ -70,6 +70,15 @@ static const Color ENEMY_COLORS[ENEMY_TYPE_COUNT] = {
     [ENEMY_SHIELDER] = { 110, 230, 255, 255 },
     [ENEMY_CARRIER]  = { 214, 150, 255, 255 },
 };
+static const Color SYNERGY_COLOR = { 255, 196, 64, 255 };   // as sinergias, em ouro
+
+// A cor de uma evolução: a da linha dela; ouro nas sinergias.
+static Color evolution_color(EvolutionId id)
+{
+    const EvolutionInfo *info = evolution_info(id);
+    return info->synergy ? SYNERGY_COLOR : ENEMY_COLORS[info->line];
+}
+
 static const char *const ENEMY_NAMES[ENEMY_TYPE_COUNT] = {
     [ENEMY_SWARM]    = "Enxame",
     [ENEMY_BOMBER]   = "Bombardeiro",
@@ -352,7 +361,7 @@ static void draw_level(const World *w, const Tuning *t, int x, int y, int pips_x
     int px = pips_x;
     const int pip = 9, gap = 3;
     for (int i = 0; i < EVO_COUNT; i++) {
-        Color line = ENEMY_COLORS[evolution_info((EvolutionId)i)->line];
+        Color line = evolution_color((EvolutionId)i);
         for (int r = 0; r < e->rank[i] && px + pip <= pips_x + SHIP_INFO_WIDTH - 10; r++) {
             DrawRectangle(px, y, pip, pip, line);
             px += pip + gap;
@@ -763,7 +772,7 @@ static int devourer_alerts(const World *w, const Tuning *t, int center_x, int y,
     case DEV_LATCH: {
         float torn = Clamp(d->latch_damage / fmaxf(t->dev_latch_break * b->hp_max, 1e-3f), 0.0f, 1.0f);
         float blink = (sinf(now * 12.0f) > 0.0f) ? 0.45f : 0.0f;
-        text_centered(TextFormat("BANQUETE: ELE ESTÁ DEVORANDO O PLANETA! ARRANQUE-O (%.0f%%)", (double)torn * 100.0), center_x,
+        text_centered(TextFormat("BANQUETE: ACERTE O PAPO NAS COSTAS DELE PARA ARRANCÁ-LO DO PLANETA (%.0f%%)", (double)torn * 100.0), center_x,
                       y, ALERT_SIZE + 6, mix_color(BOSS_COLOR, WHITE, blink));
         y += ALERT_SIZE + 12;
         break;
@@ -1137,10 +1146,10 @@ static void draw_markers(const World *w, const Tuning *t, Camera3D camera)
         if (project(camera, en->pos, &p) && on_screen(p)) {
             float distance = Vector3Distance(camera.position, en->pos);
             float lift = 18.0f * big;
-            if (has_health_bar(t, type) && (is_big(type) || en->hp < t->enemy[type].hp)) {
+            if (has_health_bar(t, type) && (is_big(type) || en->hp < en->hp_max)) {
                 // Vida dos mais resistentes, embaixo deles.
                 int width = is_big(type) ? 60 : 40;
-                draw_bar((int)p.x - width / 2, (int)p.y + 26, width, 5, en->hp / t->enemy[type].hp, color);
+                draw_bar((int)p.x - width / 2, (int)p.y + 26, width, 5, en->hp / fmaxf(en->hp_max, 1e-3f), color);
             }
             // (não sobe para a faixa dos painéis e avisos do topo)
             if (label != NULL && p.y - lift - 30.0f > EDGE_TOP) {
@@ -1201,7 +1210,7 @@ static int evolution_list(const World *w, int cx, int y, int size, float alpha)
         }
         int x = cx - width / 2;
         for (int k = start; k < end; k++) {
-            Color c = ENEMY_COLORS[evolution_info((EvolutionId)ids[k])->line];
+            Color c = evolution_color((EvolutionId)ids[k]);
             text(items[k], x, y + height, size, with_alpha(c, alpha));
             x += ui_measure_text(items[k], size) + gap;
         }
@@ -1377,7 +1386,7 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         if (part->role == PART_CORE) {
             DrawCircleLines((int)p.x, (int)p.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
             const char *label = (b->type == BOSS_HIVE) ? "CORAÇÃO" : (b->type == BOSS_WORM) ? "BOCA"
-                              : (b->type == BOSS_DEVOURER) ? "GARGANTA" : "NÚCLEO";
+                              : (b->type == BOSS_DEVOURER) ? ((b->action == DEV_LATCH) ? "PAPO" : "GARGANTA") : "NÚCLEO";
             text_centered(label, (int)p.x, (int)p.y - 34, 18, CORE_OPEN_COLOR);
         } else if (b->type == BOSS_DEVOURER) {
             diamond(p, 10.0f + 3.0f * sinf(now * 14.0f), EYE_COLOR);

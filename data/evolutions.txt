@@ -95,3 +95,26 @@ fighters.range  = 150  # vão atrás de inimigos até esta distância da nave
 
 hangar.max  = 2        # Hangar rápido: um drone de escolta a mais, e os aliados
 hangar.rate = 0.4      # atiram este tanto mais rápido, por nível
+
+# --- Sinergias -------------------------------------------------------------------
+# Uma carta dourada, de nível único, para cada par de linhas. Só entra no
+# sorteio quando a nave já tem uma evolução de cada linha do par; daí em
+# diante, com este peso (alto: misturar linhas é recompensado).
+cards.synergy_weight = 4
+
+suicide.max      = 1   # Drones suicidas (Enxame + Kamikaze): de tempos em tempos
+suicide.interval = 3.5 # um drone teleguiado sai da nave atrás do inimigo mais perto
+suicide.range    = 100 # (até esta distância) e explode nele
+suicide.damage   = 14  # dano no alvo e, em volta,
+suicide.radius   = 9   # neste raio
+suicide.speed    = 75
+
+restore.max      = 1   # Feixe restaurador (Sifão + Escavador): quebrar uma rocha a
+restore.fraction = 0.7 # tiros também conserta a maior cratera (raio = isto x o da rocha)
+
+salvage.max      = 1   # Desmanche (Bombardeiro + Porta-drones): cada abate deixa
+salvage.small    = 1   # cristais de minério: este tanto dos pequenos...
+salvage.big      = 4   # ... e este dos grandes
+
+poise.max        = 1   # Mira blindada (Atirador + Escudeiro): com o escudo cheio,
+poise.mult       = 1.6 # cada tiro vale este tanto

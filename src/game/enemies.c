@@ -261,7 +261,7 @@ int ai_spawn(Enemies *e, const EnemyContext *ctx, EnemyType type, int count, Vec
         en->rot = quat_look(Vector3Negate(radial), a);
         en->pos_prev = en->pos;
         en->rot_prev = en->rot;
-        en->hp = stats->hp;
+        en->hp = en->hp_max = stats->hp * ((ctx->hp_scale > 0.0f) ? ctx->hp_scale : 1.0f);
         en->type = (uint8_t)type;
         en->variant = variant;
         en->size = 1.0f + rng_range(ctx->rng, -SIZE_SPREAD, SIZE_SPREAD);

@@ -309,6 +309,8 @@ static const Color BOLT_CORE       = { 235, 250, 255, 255 };
 static const Color BOLT_HALO_COLOR = {  80, 190, 255, 255 };
 static const Color PLASMA_CORE     = { 255, 210, 255, 255 };
 static const Color PLASMA_HALO     = { 190,  80, 255, 255 };
+static const Color SUICIDE_CORE    = { 255, 236, 190, 255 };   // drone suicida (sinergia): laranja
+static const Color SUICIDE_HALO    = { 255, 130, 50, 255 };
 static const Color BOMB_COLOR      = { 255,  70,  50, 255 };
 static const Color MARK_COLOR      = { 255,  44,  32, 255 };
 static const Color DIG_MARK_COLOR  = { 255, 150,  40, 255 };
@@ -426,6 +428,12 @@ void projectiles_draw(const World *w, const Tuning *t, float alpha, Texture2D gl
             Vector3 tail = Vector3Subtract(pos, Vector3Scale(dir, length));
             streak(tail, pos, 2.6f, faded((Color){ 140, 255, 90, 255 }, 0.45f), eye);
             streak(tail, pos, 0.8f, faded((Color){ 230, 255, 200, 255 }, 0.95f), eye);
+        } else if (s->kind == SHOT_BOLT && s->source == BOLT_SUICIDE) {
+            // Drone suicida: um rastro laranja grosso (a cabeça acesa vem abaixo).
+            float length = fminf(speed * 0.1f, s->age * speed + 0.4f);
+            Vector3 tail = Vector3Subtract(pos, Vector3Scale(dir, length));
+            streak(tail, pos, 3.0f, faded(SUICIDE_HALO, 0.45f), eye);
+            streak(tail, pos, 0.9f, faded(SUICIDE_CORE, 0.95f), eye);
         } else if (s->kind == SHOT_BOLT) {
             // O risco não passa de onde o tiro saiu. Perto da câmera ele fica
             // mais fino e mais fraco; longe, um pouco mais grosso, para
@@ -456,6 +464,10 @@ void projectiles_draw(const World *w, const Tuning *t, float alpha, Texture2D gl
         if (s->kind == SHOT_PLASMA && s->source != ENEMY_SNIPER) {
             DrawBillboard(camera, glow, pos, PLASMA_SIZE * 1.6f, faded(PLASMA_HALO, 0.8f));
             DrawBillboard(camera, glow, pos, PLASMA_SIZE * 0.6f, PLASMA_CORE);
+        } else if (s->kind == SHOT_BOLT && s->source == BOLT_SUICIDE) {
+            float blink = 0.7f + 0.3f * sinf(time * 30.0f + (float)i);
+            DrawBillboard(camera, glow, pos, 3.0f, faded(SUICIDE_HALO, 0.7f * blink));
+            DrawBillboard(camera, glow, pos, 1.1f, SUICIDE_CORE);
         } else if (s->kind == SHOT_BOMB) {
             // Pisca cada vez mais rápido conforme se aproxima do solo.
             float remaining = Vector3Distance(pos, s->target);

@@ -243,7 +243,8 @@ static Color faded(Color c, float alpha)
 
 static LowPoly kits[EVO_COUNT];
 
-// Cores das linhas (as mesmas do HUD).
+// Cores das linhas (as mesmas do HUD); as sinergias acendem em ouro.
+static const Color SYNERGY_GLOW = { 255, 196, 64, 255 };
 static const Color LINE_COLORS[ENEMY_TYPE_COUNT] = {
     [ENEMY_SWARM]    = { 196, 130, 255, 255 },
     [ENEMY_BOMBER]   = { 255, 150, 70, 255 },
@@ -349,6 +350,20 @@ static void build_kits(void)
     m = &kits[EVO_HANGAR];
     lp_tube(m, kv(0.0f, 0.25f, 0.95f), kv(0.0f, 0.75f, 1.15f), 0.03f, 0.02f, 4, PART_PANEL, -1, false);
     lp_ring(m, kv(0.0f, 0.78f, 1.17f), Y, 0.0f, 0.12f, 0.02f, 8, PART_RING, PART_RING, false);
+
+    // Sinergias (detalhe aceso em ouro): drones suicidas pendurados sob as
+    // asas; emissor do feixe sob o nariz; garras de desmanche atrás; um halo
+    // sobre a cabine.
+    m = &kits[EVO_SYN_SUICIDE];
+    lp_box(m, kv(0.80f, -0.14f, 0.15f), kv(0.07f, 0.05f, 0.16f), PART_ACCENT, true);
+    lp_spike(m, kv(0.80f, -0.14f, -0.01f), kv(0.80f, -0.14f, -0.22f), 0.05f, 4, PART_RING, true);
+    m = &kits[EVO_SYN_RESTORE];
+    lp_tube(m, kv(0.0f, -0.22f, -0.9f), kv(0.0f, -0.36f, -0.9f), 0.05f, 0.12f, 8, PART_POD, PART_RING, false);
+    m = &kits[EVO_SYN_SALVAGE];
+    lp_plate(m, kv(0.30f, -0.10f, 1.05f), kv(0.42f, -0.30f, 1.35f), kv(0.36f, -0.30f, 1.45f), kv(0.24f, -0.10f, 1.20f), X, 0.04f,
+             0.02f, PART_PANEL, PART_PANEL, PART_RING, true);
+    m = &kits[EVO_SYN_POISE];
+    lp_ring(m, kv(0.0f, 0.52f, -0.35f), Y, 0.22f, 0.28f, 0.02f, 10, PART_RING, PART_RING, false);
 }
 
 // --- aliados ------------------------------------------------------------------
@@ -471,7 +486,8 @@ void ship_draw(const Ship *s, const Evolution *evo, const Planet *planet, const 
         for (int i = 0; i < EVO_COUNT; i++) {
             if (evo->rank[i] == 0) continue;
             LowPolyPose kit = pose;
-            kit.glow = LINE_COLORS[evolution_info((EvolutionId)i)->line];
+            const EvolutionInfo *info = evolution_info((EvolutionId)i);
+            kit.glow = info->synergy ? SYNERGY_GLOW : LINE_COLORS[info->line];
             lowpoly_draw(&kits[i], &kit);
         }
     }

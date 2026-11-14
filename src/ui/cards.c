@@ -25,6 +25,7 @@ static const Color PANEL = { 16, 18, 30, 238 };
 static const Color TEXT  = { 228, 232, 242, 255 };
 static const Color DIM   = { 150, 158, 178, 255 };
 static const Color HIGHLIGHT  = { 255, 214, 110, 255 };
+static const Color SYNERGY    = { 255, 196, 64, 255 };   // ouro: as cartas de sinergia
 
 static Color alpha_of(Color c, float a)
 {
@@ -125,6 +126,19 @@ const char *cards_describe(const Tuning *t, EvolutionId id, int rank)
     case EVO_HANGAR:
         snprintf(out, sizeof out, "+1 drone de escolta, e\nos aliados atiram %.0f%%\nmais rápido.", (double)(t->hangar_rate * r * 100.0f));
         break;
+    case EVO_SYN_SUICIDE:
+        snprintf(out, sizeof out, "A cada %.1f s, um drone\nteleguiado sai atrás do\ninimigo mais perto e explode\n(%.0f de dano em volta).",
+                 (double)t->suicide_interval, (double)t->suicide_damage);
+        break;
+    case EVO_SYN_RESTORE:
+        snprintf(out, sizeof out, "Quebrar uma rocha a tiros\ntambém conserta a maior\ncratera do planeta (e o\nminério continua seu).");
+        break;
+    case EVO_SYN_SALVAGE:
+        snprintf(out, sizeof out, "Cada abate deixa minério:\n%d cristal dos pequenos,\n%d dos grandes.", t->salvage_small, t->salvage_big);
+        break;
+    case EVO_SYN_POISE:
+        snprintf(out, sizeof out, "Com o escudo cheio, cada\ntiro vale %.1f vezes.\nNão leve dano!", (double)t->poise_mult);
+        break;
     default:
         out[0] = '\0';
         break;
@@ -150,11 +164,83 @@ static void lines(const char *text, int x, int y, int size, int step, Color c)
     }
 }
 
+// Maiúsculas, inclusive as letras acentuadas (UTF-8: em "Ã" = C3 83 e "ã" =
+// C3 A3, a minúscula é a maiúscula + 0x20 no segundo byte, de à a þ, menos ÷).
+static void upper(char *s)
+{
+    for (unsigned char *c = (unsigned char *)s; *c != '\0'; c++) {
+        if (*c >= 'a' && *c <= 'z') {
+            *c = (unsigned char)(*c - 'a' + 'A');
+        } else if (*c == 0xC3 && c[1] >= 0xA0 && c[1] <= 0xBE && c[1] != 0xB7) {
+            c[1] = (unsigned char)(c[1] - 0x20);
+            c++;
+        }
+    }
+}
+
+static void card_key(int x, int y, int index, float a)
+{
+    if (hud_gamepad()) {
+        hud_dpad_arrow(x + CARD_W - 34, y + 10, 18, index, alpha_of(TEXT, a));   // a seta do direcional
+    } else {
+        const char *key = TextFormat("[%d]", index + 1);
+        shadowed(key, x + CARD_W - 16 - ui_measure_text(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
+    }
+}
+
+// Sinergia: carta dourada, com as duas linhas que ela junta (dois círculos,
+// um de cada cor) e um brilho que pulsa na borda.
+static void draw_synergy_card(const World *w, const Tuning *t, int index, float appear, bool hover)
+{
+    int id = w->evo.choices[index];
+    const EvolutionInfo *info = evolution_info((EvolutionId)id);
+    Color a_line = hud_enemy_color(info->line), b_line = hud_enemy_color(info->partner);
+
+    Rectangle r = card_rect(index, w->evo.choice_count);
+    float ease = 1.0f - (1.0f - appear) * (1.0f - appear);
+    r.y += (1.0f - ease) * 60.0f - (hover ? (float)CARD_LIFT : 0.0f);
+    float a = ease;
+    int x = (int)r.x, y = (int)r.y, cx = x + CARD_W / 2;
+    float pulse = 0.6f + 0.4f * sinf((float)GetTime() * 4.0f);
+
+    DrawRectangleRec(r, alpha_of(PANEL, a));
+    DrawRectangleGradientV(x, y, CARD_W, 120, alpha_of((Color){ SYNERGY.r, SYNERGY.g, SYNERGY.b, 70 }, a),
+                           alpha_of((Color){ SYNERGY.r, SYNERGY.g, SYNERGY.b, 0 }, a));
+    DrawRectangleLinesEx(r, hover ? 4.0f : 3.0f, alpha_of(SYNERGY, a * (hover ? 1.0f : pulse)));
+    Rectangle inner = { r.x + 6.0f, r.y + 6.0f, r.width - 12.0f, r.height - 12.0f };
+    DrawRectangleLinesEx(inner, 1.0f, alpha_of((Color){ SYNERGY.r, SYNERGY.g, SYNERGY.b, 110 }, a));
+
+    shadowed("SINERGIA", x + 16, y + 13, SMALL_SIZE + 2, alpha_of(SYNERGY, a));
+    card_key(x, y, index, a);
+
+    // Emblema: as duas linhas, lado a lado, se tocando.
+    int ey = y + 96;
+    for (int k = 0; k < 2; k++) {
+        Color c = (k == 0) ? a_line : b_line;
+        int ox = cx + (k == 0 ? -20 : 20);
+        DrawCircle(ox, ey, 28.0f, alpha_of((Color){ c.r, c.g, c.b, 70 }, a));
+        DrawCircleLines(ox, ey, 28.0f, alpha_of(c, a));
+    }
+    centered("+", cx, ey - 18, 36, alpha_of(SYNERGY, a));
+
+    centered(info->name, cx, y + 146, NAME_SIZE, alpha_of(TEXT, a));
+    char pair[64];
+    snprintf(pair, sizeof pair, "%s + %s", hud_enemy_name(info->line), hud_enemy_name(info->partner));
+    upper(pair);
+    centered(pair, cx, y + 178, SMALL_SIZE, alpha_of(HIGHLIGHT, a));
+
+    lines(cards_describe(t, (EvolutionId)id, 1), x + 22, y + 214, TEXT_SIZE, TEXT_SIZE + 5, alpha_of(TEXT, a * 0.92f));
+}
+
 static void draw_card(const World *w, const Tuning *t, int index, float appear, bool hover)
 {
     int id = w->evo.choices[index];
     if (id < 0) return;
     const EvolutionInfo *info = evolution_info((EvolutionId)id);
+    if (info->synergy) {
+        draw_synergy_card(w, t, index, appear, hover);
+        return;
+    }
     Color line = hud_enemy_color(info->line);
     int next = w->evo.rank[id] + 1;
     int max = t->evo_max[id];
@@ -172,16 +258,9 @@ static void draw_card(const World *w, const Tuning *t, int index, float appear, 
     // Linha de origem e a tecla.
     char header[48];
     snprintf(header, sizeof header, "%s", hud_enemy_name(info->line));
-    for (char *c = header; *c != '\0'; c++) {
-        if (*c >= 'a' && *c <= 'z') *c = (char)(*c - 'a' + 'A');
-    }
+    upper(header);
     shadowed(header, x + 16, y + 13, SMALL_SIZE + 2, alpha_of(line, a));
-    if (hud_gamepad()) {
-        hud_dpad_arrow(x + CARD_W - 34, y + 10, 18, index, alpha_of(TEXT, a));   // a seta do direcional
-    } else {
-        const char *key = TextFormat("[%d]", index + 1);
-        shadowed(key, x + CARD_W - 16 - ui_measure_text(key, SMALL_SIZE + 2), y + 13, SMALL_SIZE + 2, alpha_of(TEXT, a));
-    }
+    card_key(x, y, index, a);
 
     // Emblema: um círculo na cor da linha, com o nível novo dentro.
     int ey = y + 96;

@@ -245,6 +245,7 @@ static const TuneField FIELDS[] = {
     F("combat.hitstop_player",  combat_hitstop_player,  0,      0.5),
     F("combat.marker_distance", combat_marker_distance, 0,      5000),
 
+    F("waves.hp_growth",        waves_hp_growth,        0,      1),
     F("score.combo_window",     score_combo_window,     0.1,    30),
     F("score.combo_step",       score_combo_step,       0,      5),
     F("score.combo_max",        score_combo_max,        1,      50),
@@ -497,6 +498,20 @@ static const TuneField EVO_FIELDS[] = {
     F("fighters.speed",          fighters_speed,          1,    1000),
     F("fighters.range",          fighters_range,          1,    5000),
     F("hangar.rate",             hangar_rate,             0,    10),
+    F("cards.synergy_weight",    cards_synergy_weight,    0,    1000),
+    I("suicide.max",             evo_max[EVO_SYN_SUICIDE],    1, 9),
+    F("suicide.interval",        suicide_interval,        0.2,  120),
+    F("suicide.range",           suicide_range,           1,    5000),
+    F("suicide.damage",          suicide_damage,          0,    1000),
+    F("suicide.radius",          suicide_radius,          0,    200),
+    F("suicide.speed",           suicide_speed,           1,    1000),
+    I("restore.max",             evo_max[EVO_SYN_RESTORE],    1, 9),
+    F("restore.fraction",        restore_fraction,        0,    4),
+    I("salvage.max",             evo_max[EVO_SYN_SALVAGE],    1, 9),
+    I("salvage.small",           salvage_small,           0,    20),
+    I("salvage.big",             salvage_big,             0,    40),
+    I("poise.max",               evo_max[EVO_SYN_POISE],      1, 9),
+    F("poise.mult",              poise_mult,              1,    10),
 };
 
 // data/bosses.txt

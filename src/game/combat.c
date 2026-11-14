@@ -32,6 +32,9 @@
 #define SPORE_JOLT       3.0f
 #define TUNNEL_FLASH     0.5f     // segundos do clarão na tela depois do Túnel
 #define TUNNEL_JOLT      10.0f
+#define SUICIDE_RETRY    0.5f     // Drones suicidas: sem alvo, procura de novo depois deste tanto
+#define SUICIDE_LIFE     4.0f     // segundos de voo de um drone suicida
+#define POISE_FULL       0.5f     // Mira blindada: o escudo conta como cheio a menos disto do máximo
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -390,6 +393,13 @@ static bool reflect(World *w, const Tuning *t, Shot *s, Vector3 point)
 
 // Tiro da nave numa peça do boss: alvo (capacitor, bolsa...), núcleo (blindado
 // fora da janela de ataque) ou casco (só faísca).
+// Sinergia Atirador + Escudeiro: com o escudo cheio, os tiros da nave valem mais.
+static bool poised(const World *w, const Tuning *t, const Shot *s)
+{
+    return w->evo.rank[EVO_SYN_POISE] > 0 && s->source == BOLT_PLAYER && w->ship.alive
+        && w->ship.shield >= t->ship_shield_max - POISE_FULL;
+}
+
 static void hit_boss(World *w, const Tuning *t, const Shot *s, const BossPart *part, Vector3 point, Vector3 back)
 {
     Boss *b = &w->boss;
@@ -399,6 +409,7 @@ static void hit_boss(World *w, const Tuning *t, const Shot *s, const BossPart *p
         damage *= t->crit_mult;
         events_push(&w->events, tick, EV_CRIT, ENEMY_BOMBER, point, damage);
     }
+    if (poised(w, t, s)) damage *= t->poise_mult;
     float applied = 0.0f;
     bool open = part->open;
     if (part->role != PART_HULL) applied = boss_hit(b, t, part->id, damage, &w->events, tick);
@@ -535,8 +546,14 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
                 events_push(&w->events, (uint32_t)w->tick, EV_CRIT, en->type, point, damage);
             }
         }
+        if (poised(w, t, s)) {
+            damage *= t->poise_mult;
+            spark = CRIT_SPARK;
+        }
 
         enemies_damage(e, enemy, damage, DEATH_PLAYER);
+        // Drone suicida: explode no alvo e fere quem está em volta.
+        if (s->source == BOLT_SUICIDE) ship_blast(w, t, point, t->suicide_radius, t->suicide_damage, enemy, true);
         particles_sparks(&w->particles, &w->rng, point, back, weak ? 8 : 5, 14.0f, spark);
         events_push(&w->events, (uint32_t)w->tick, kind, en->type, point, damage);
         w->hit_marker = HIT_MARKER_TIME;
@@ -559,6 +576,7 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
         }
     } else if (boss_part >= 0) {
         hit_boss(w, t, s, &parts[boss_part], point, back);
+        if (s->source == BOLT_SUICIDE) ship_blast(w, t, point, t->suicide_radius, t->suicide_damage, -1, true);
     } else if (rock >= 0) {
         world_damage_rock(w, t, rock, s->damage, point, back);
     } else if (bomb >= 0) {
@@ -785,14 +803,16 @@ void combat_brood(World *w, const InputState *in, const Tuning *t, float dt)
     for (int i = 0; i < p->pool.capacity; i++) {
         if (!pool_alive(&p->pool, i)) continue;
         Shot *sh = &p->items[i];
-        if (sh->kind != SHOT_BOLT || sh->source != BOLT_BROOD) continue;
+        // (Os drones suicidas da sinergia perseguem do mesmo jeito.)
+        if (sh->kind != SHOT_BOLT || (sh->source != BOLT_BROOD && sh->source != BOLT_SUICIDE)) continue;
         Vector3 target = sh->pos;
         if (!brood_target(w, t, sh, &target)) continue;
         float speed = Vector3Length(sh->vel);
+        float cruise = (sh->source == BOLT_BROOD) ? t->brood_speed : t->suicide_speed;
         Vector3 desired = Vector3Normalize(Vector3Subtract(target, sh->pos));
         Vector3 dir = Vector3Normalize(Vector3Lerp(Vector3Scale(sh->vel, 1.0f / fmaxf(speed, 1e-3f)), desired,
                                                    Clamp(t->brood_turn * dt, 0.0f, 1.0f)));
-        sh->vel = Vector3Scale(dir, fmaxf(speed, t->brood_speed));
+        sh->vel = Vector3Scale(dir, fmaxf(speed, cruise));
     }
 
     if (!br->owned || !s->alive || !(in->pressed & ACT_BIT(ACT_ABILITY2)) || br->cooldown > 0.0f) return;
@@ -833,6 +853,34 @@ void combat_brood(World *w, const InputState *in, const Tuning *t, float dt)
     }
     br->cooldown = t->brood_cooldown;
     events_push(&w->events, (uint32_t)w->tick, EV_BROOD, 0, s->pos, (float)count);
+}
+
+// Sinergia Enxame + Kamikaze: de tempos em tempos, um drone teleguiado sai da
+// nave atrás do inimigo mais perto e explode nele.
+void combat_suicide(World *w, const Tuning *t, float dt)
+{
+    const Ship *s = &w->ship;
+    if (w->evo.rank[EVO_SYN_SUICIDE] == 0 || !s->alive || !w->ship_active) return;
+    w->suicide_wait -= dt;
+    if (w->suicide_wait > 0.0f) return;
+    int target = nearest_enemy(w, t, s->pos, t->suicide_range);
+    if (target < 0) {
+        w->suicide_wait = SUICIDE_RETRY;   // ninguém por perto: olha de novo daqui a pouco
+        return;
+    }
+    // Sai de baixo da nave, de um lado e do outro em rodízio, e vira para o alvo.
+    Vector3 up = ship_up(s), forward = ship_forward(s);
+    Vector3 right = Vector3CrossProduct(forward, up);
+    float side = ((w->tick / (uint64_t)t->sim_hz) % 2u == 0u) ? 1.0f : -1.0f;
+    Vector3 dir = Vector3Normalize(Vector3Add(forward, Vector3Add(Vector3Scale(right, side * 0.6f), Vector3Scale(up, -0.3f))));
+    Vector3 vel = Vector3Add(Vector3Scale(dir, t->suicide_speed * 0.6f), Vector3Add(s->vel, s->fall));
+    Shot *sh = projectiles_spawn(&w->shots, SHOT_BOLT, Vector3Add(s->pos, Vector3Scale(dir, 1.5f)), vel, SUICIDE_LIFE);
+    w->suicide_wait = t->suicide_interval;
+    if (sh == NULL) return;
+    sh->source = BOLT_SUICIDE;
+    sh->damage = t->suicide_damage;
+    sh->homing = (int16_t)target;
+    events_push(&w->events, (uint32_t)w->tick, EV_SUICIDE, 0, s->pos, 0.0f);
 }
 
 // ---------------------------------------------------------------------------
@@ -1056,6 +1104,11 @@ void combat_sweep(World *w, const Tuning *t)
             // Reação em cadeia: o inimigo abatido explode em quem está perto.
             if (rank[EVO_CHAIN] > 0) {
                 ship_blast(w, t, en->pos, t->chain_radius, t->chain_damage * (float)rank[EVO_CHAIN], i, true);
+            }
+            // Desmanche (sinergia): o que sobra do inimigo vira minério.
+            if (rank[EVO_SYN_SALVAGE] > 0) {
+                int count = (t->enemy[type].scale >= BIG_KILL_SCALE) ? t->salvage_big : t->salvage_small;
+                rocks_drop_ore(&w->rocks, &w->rng, en->pos, Vector3Scale(en->vel, 0.3f), count, t->enemy[type].radius);
             }
         } else {
             events_push(&w->events, (uint32_t)w->tick, EV_CRASH, (uint8_t)type, en->pos, 0.0f);

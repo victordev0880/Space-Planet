@@ -129,4 +129,7 @@ bool rocks_damage(Rocks *r, Rng *rng, const Tuning *t, int index, float damage);
 // Cristais soltos agora.
 int rocks_ore_alive(const Rocks *r);
 
+// Solta `count` cristais de minério em volta de `pos` (espalhados em `spread`).
+void rocks_drop_ore(Rocks *r, Rng *rng, Vector3 pos, Vector3 vel, int count, float spread);
+
 #endif

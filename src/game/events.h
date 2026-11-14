@@ -100,6 +100,8 @@ typedef enum {
     EV_DEV_LATCH,      // ... agarrou o planeta (banquete)
     EV_DEV_TORN,       // ... foi arrancado do planeta
     EV_DEV_TEETH,      // ... cuspiu uma rajada de dentes
+    EV_SUICIDE,        // um drone suicida saiu da nave (sinergia)
+    EV_RESTORE_BEAM,   // o Feixe restaurador levou uma rocha minerada a uma cratera (pos = cratera)
     EV_TYPE_COUNT
 } EventType;
 

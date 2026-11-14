@@ -241,7 +241,7 @@ int rocks_ore_alive(const Rocks *r)
     return n;
 }
 
-static void spawn_ore(Rocks *r, Rng *rng, Vector3 pos, Vector3 vel, int count, float spread)
+void rocks_drop_ore(Rocks *r, Rng *rng, Vector3 pos, Vector3 vel, int count, float spread)
 {
     for (int i = 0; i < ORE_MAX && count > 0; i++) {
         Ore *o = &r->ore[i];
@@ -264,7 +264,7 @@ bool rocks_damage(Rocks *r, Rng *rng, const Tuning *t, int index, float damage)
     k->flash = 0.1f;
     if (k->hp > 0.0f) return false;
     int count = (k->kind == ROCK_METEOR) ? t->ore_meteor : t->ore_fragment;
-    spawn_ore(r, rng, k->pos, Vector3Scale(k->vel, 0.5f), count, k->radius);
+    rocks_drop_ore(r, rng, k->pos, Vector3Scale(k->vel, 0.5f), count, k->radius);
     if (r->towed == index) r->towed = -1;
     k->alive = false;
     return true;

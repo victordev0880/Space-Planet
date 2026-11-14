@@ -20,12 +20,29 @@ static const EvolutionInfo INFO[EVO_COUNT] = {
     [EVO_REFLECT]       = { "Reflexão", "reflect", ENEMY_SHIELDER },
     [EVO_FIGHTERS]      = { "Esquadrilha", "fighters", ENEMY_CARRIER },
     [EVO_HANGAR]        = { "Hangar rápido", "hangar", ENEMY_CARRIER },
+    [EVO_SYN_SUICIDE]   = { "Drones suicidas", "suicide", ENEMY_SWARM, true, ENEMY_KAMIKAZE },
+    [EVO_SYN_RESTORE]   = { "Feixe restaurador", "restore", ENEMY_SIPHON, true, ENEMY_DIGGER },
+    [EVO_SYN_SALVAGE]   = { "Desmanche", "salvage", ENEMY_BOMBER, true, ENEMY_CARRIER },
+    [EVO_SYN_POISE]     = { "Mira blindada", "poise", ENEMY_SNIPER, true, ENEMY_SHIELDER },
 };
 
 const EvolutionInfo *evolution_info(EvolutionId id)
 {
     if ((int)id < 0 || id >= EVO_COUNT) id = EVO_ESCORT;
     return &INFO[id];
+}
+
+bool evolution_is_synergy(EvolutionId id)
+{
+    return (int)id >= 0 && id < EVO_COUNT && INFO[id].synergy;
+}
+
+bool evolution_has_line(const Evolution *e, EnemyType line)
+{
+    for (int i = 0; i < EVO_COUNT; i++) {
+        if (!INFO[i].synergy && INFO[i].line == line && e->rank[i] > 0) return true;
+    }
+    return false;
 }
 
 int evolution_from_key(const char *key)
@@ -68,6 +85,11 @@ int evolution_gain(Evolution *e, const Tuning *t, EnemyType type, float xp)
 float evolution_weight(const Evolution *e, const Tuning *t, EvolutionId id)
 {
     if (e->rank[id] >= t->evo_max[id]) return 0.0f;
+    if (INFO[id].synergy) {
+        // Só com as duas linhas; aí, com peso alto: é a recompensa de misturar.
+        bool both = evolution_has_line(e, INFO[id].line) && evolution_has_line(e, INFO[id].partner);
+        return both ? t->cards_synergy_weight : 0.0f;
+    }
     return t->cards_base_weight + t->cards_essence_weight * e->essence[INFO[id].line];
 }
 
@@ -141,7 +163,9 @@ void evolution_tune(const Evolution *e, const Tuning *base, Tuning *out)
 int evolution_dominant_line(const Evolution *e)
 {
     int ranks[ENEMY_TYPE_COUNT] = { 0 };
-    for (int i = 0; i < EVO_COUNT; i++) ranks[INFO[i].line] += e->rank[i];
+    for (int i = 0; i < EVO_COUNT; i++) {
+        if (!INFO[i].synergy) ranks[INFO[i].line] += e->rank[i];
+    }
     int best = -1, most = 0;
     for (int line = 0; line < ENEMY_TYPE_COUNT; line++) {
         if (ranks[line] > most) {

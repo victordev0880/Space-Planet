@@ -16,6 +16,8 @@
 #define HARM_PRIORITY   0.5f    // ferindo o planeta agora (broca, feixe)
 #define HUNTER_PRIORITY 0.6f    // vindo atrás da nave (Kamikaze travado, Atirador mirando)
 #define SHIELDED_PRIORITY 4.0f  // protegido por escudo: quase nunca vale a pena
+#define WORM_WATCH_PRIORITY 0.3f    // Verme: o ponto de onde ele vai sair (no aviso)
+#define WORM_SHADOW_PRIORITY 3.0f   // ... e a cabeça dele debaixo da terra (quando não há nada melhor)
 #define TUNNEL_HOVER    22.0f   // altura sobre a boca do túnel de onde atira para baixo
 #define TUNNEL_ARRIVE   8.0f    // chegou ao ponto sobre a boca...
 #define TUNNEL_ALIGNED  2.0f    // ... ou já está alinhado com o túnel
@@ -112,6 +114,17 @@ static Target pick_target(const World *w, const Tuning *t)
     for (int k = 0; k < count; k++) {
         if (parts[k].aim <= 0.0f) continue;
         offer_part(&best, s->pos, parts[k].center, b->vel, parts[k].aim, parts[k].facing);
+    }
+
+    // Verme debaixo da terra: segue o tremor como um jogador. No aviso da
+    // saída, corre para cima do ponto; no resto do tempo, sem nada melhor a
+    // fazer, acompanha a cabeça dele por cima. Assim está perto quando ele salta.
+    if (b->type == BOSS_WORM && boss_vulnerable(b) && b->action != WORM_BREACH) {
+        float radius = w->planet.params.radius;
+        bool warning = (b->action == WORM_RUMBLE);
+        Vector3 dir = warning ? b->worm.breach_dir : Vector3Normalize(b->pos);
+        offer_part(&best, s->pos, Vector3Scale(dir, radius), (Vector3){ 0.0f, 0.0f, 0.0f },
+                   warning ? WORM_WATCH_PRIORITY : WORM_SHADOW_PRIORITY, dir);
     }
     return best;
 }
