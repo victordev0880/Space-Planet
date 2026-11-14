@@ -244,6 +244,11 @@ static void run(World *w, const Tuning *t, InputState in, int ticks)
     for (int i = 0; i < ticks; i++) world_tick(w, &in, t);
 }
 
+static int seconds(float s)
+{
+    return (int)(s * (float)tun.sim_hz);
+}
+
 // Mundo sem hordas, com a nave parada longe de tudo, no lado oposto ao
 // ponto `away_from`.
 static void make_world(World *w, Vector3 away_from)
@@ -508,19 +513,72 @@ static void enemy_shots_hurt_the_ship_but_not_during_dash(void)
     CHECK(saw_event(&w, EV_PLAYER_HIT));
     CHECK(w.shots.pool.live == 0);
 
-    // Durante o dash, o tiro passa pela nave sem fazer nada.
+    // Durante o dash, o tiro passa pela nave sem fazer nada: é uma esquiva
+    // perfeita (foco, energia de volta, um instante congelado), uma por dash.
     s->dash_left = 1.0f;
+    s->energy = 10.0f;
     shield = s->shield;
     p = projectiles_spawn(&w.shots, SHOT_PLASMA, Vector3Add(s->pos, (Vector3){ 20.0f, 0.0f, 0.0f }),
                           (Vector3){ -55.0f, 0.0f, 0.0f }, 3.0f);
     p->damage = 6.0f;
     resolve(&w, &tun, 30);
     CHECK(s->shield == shield);
+    CHECK(saw_event(&w, EV_PERFECT_DODGE));
+    CHECK_NEAR(w.focus, tun.dodge_focus, 1e-4);
+    CHECK_NEAR(s->energy, 10.0f + tun.dodge_energy, 1e-3);
+    CHECK(w.hitstop > 0);
+    uint32_t dodges = 0;
+    for (uint32_t id = 1; id <= w.events.count; id++) {
+        const GameEvent *e = events_find(&w.events, id);
+        if (e != NULL && e->type == EV_PERFECT_DODGE) dodges++;
+    }
+    combat_damage_ship(&w, &tun, 10.0f, s->pos);   // outro golpe no mesmo dash: não conta de novo
+    uint32_t again = 0;
+    for (uint32_t id = 1; id <= w.events.count; id++) {
+        const GameEvent *e = events_find(&w.events, id);
+        if (e != NULL && e->type == EV_PERFECT_DODGE) again++;
+    }
+    CHECK(dodges == 1 && again == 1);
 
     // Golpe forte: congela o jogo por um instante.
     s->dash_left = 0.0f;
+    w.hitstop = 0;
     combat_damage_ship(&w, &tun, 40.0f, s->pos);
     CHECK(w.hitstop == (int)lroundf(tun.combat_hitstop_player * (float)tun.sim_hz));
+}
+
+// Mísseis: segurando o botão direito, a mira trava os inimigos à frente, um
+// de cada vez; soltando, sai um míssil por trava, que persegue e explode. As
+// cargas gastas recarregam sozinhas.
+static void missiles_lock_fire_and_recharge(void)
+{
+    static World w;
+    make_world(&w, (Vector3){ 0.0f, 1.0f, 0.0f });
+    Tuning t = tun;
+    t.enemies_spawn_spread = 0.0f;
+    Ship *s = &w.ship;
+    Vector3 ahead = Vector3Add(s->pos, Vector3Scale(ship_forward(s), 60.0f));
+    Vector3 side = Vector3Scale(ship_right(s), 8.0f);
+    world_spawn(&w, &t, ENEMY_SIPHON, 1, Vector3Add(ahead, side));
+    world_spawn(&w, &t, ENEMY_SIPHON, 1, Vector3Subtract(ahead, side));
+    CHECK(w.missiles.charges == t.missile_count);
+
+    run(&w, &t, input(ACT_BIT(ACT_ALT_FIRE), 0.0f, 0.0f), seconds(t.missile_lock_time * 3.0f));
+    CHECK(w.missiles.painting && w.missiles.lock_count == 2);   // os dois à frente, e só eles
+    CHECK(saw_event(&w, EV_MISSILE_LOCK));
+    float hp0 = w.enemies.items[w.missiles.lock[0]].hp, hp1 = w.enemies.items[w.missiles.lock[1]].hp;
+    int a = w.missiles.lock[0], b = w.missiles.lock[1];
+
+    run(&w, &t, input(0u, 0.0f, 0.0f), 1);   // soltou
+    CHECK(saw_event(&w, EV_MISSILE_FIRE));
+    CHECK(w.missiles.charges == t.missile_count - 2 && w.missiles.lock_count == 0);
+    run(&w, &t, input(0u, 0.0f, 0.0f), seconds(2.0f));
+    CHECK(!pool_alive(&w.enemies.pool, a) || w.enemies.items[a].hp < hp0);
+    CHECK(!pool_alive(&w.enemies.pool, b) || w.enemies.items[b].hp < hp1);
+    CHECK(saw_event(&w, EV_BLAST));
+
+    run(&w, &t, input(0u, 0.0f, 0.0f), seconds(t.missile_recharge * 2.0f + 0.5f));
+    CHECK(w.missiles.charges == t.missile_count);
 }
 
 static void ramming_a_drone_destroys_it(void)
@@ -747,6 +805,7 @@ void suite_combat(void)
     RUN(bombs_can_be_shot_down);
     RUN(swarm_attack_runs_dig_small_craters);
     RUN(enemy_shots_hurt_the_ship_but_not_during_dash);
+    RUN(missiles_lock_fire_and_recharge);
     RUN(ramming_a_drone_destroys_it);
     RUN(hitstop_freezes_and_keeps_the_input);
     RUN(aim_assist_picks_what_the_nose_points_at);

@@ -296,6 +296,51 @@ static void synth_lock(float *out, int n)
     }
 }
 
+static void synth_missile_lock(float *out, int n)
+{
+    // Trava do míssil: um "tic" eletrônico curto e limpo (cada trava um).
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += 1850.0f / SAMPLE_RATE;
+        out[i] = (0.7f * sine(phase) + 0.3f * square(phase * 2.0f)) * envelope(t, 0.001f, 40.0f) * 0.6f;
+    }
+}
+
+static void synth_missile(float *out, int n)
+{
+    // Mísseis saindo: estalo do ejetor e um chiado de motor que sobe e some.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float cutoff = 800.0f + 5000.0f * fminf(t / (length * 0.4f), 1.0f);
+        float hiss = lowpass(&lp, noise(), cutoff) * envelope(t, 0.01f, 5.0f);
+        phase += sweep(220.0f, 90.0f, t, 0.08f) / SAMPLE_RATE;
+        float thump = sine(phase) * envelope(t, 0.001f, 30.0f);
+        out[i] = 1.1f * hiss + 0.8f * thump;
+    }
+}
+
+static void synth_dodge(float *out, int n)
+{
+    // Esquiva perfeita: um zunido que passa raspando (o golpe) e um brilho
+    // de cristal subindo (o foco).
+    LowPass lp = { 0 };
+    float phase = 0.0f, shine = 0.0f;
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float cutoff = 4000.0f * sinf(PI * fminf(t / 0.25f, 1.0f)) + 200.0f;
+        float whoosh = lowpass(&lp, noise(), cutoff) * envelope(t, 0.02f, 9.0f);
+        phase += sweep(600.0f, 1600.0f, t, length) / SAMPLE_RATE;
+        shine += sweep(1200.0f, 3200.0f, t, length) / SAMPLE_RATE;
+        float chime = (0.6f * sine(phase) + 0.4f * sine(shine)) * envelope(fmaxf(t - 0.06f, 0.0f), 0.02f, 4.0f);
+        out[i] = 1.2f * whoosh + 0.5f * chime;
+    }
+}
+
 static void synth_detonate(float *out, int n)
 {
     // Explosão seca e brilhante, com muitos estalos.
@@ -1197,6 +1242,9 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_DEV_GULP]        = { synth_dev_gulp,        0.50f, 0.70f, 2 },
     [SND_DEV_ROAR]        = { synth_dev_roar,        2.40f, 0.90f, 1 },
     [SND_DEV_TEETH]       = { synth_dev_teeth,       0.45f, 0.55f, 2 },
+    [SND_MISSILE_LOCK]    = { synth_missile_lock,    0.08f, 0.45f, 4 },
+    [SND_MISSILE]         = { synth_missile,         0.70f, 0.60f, 3 },
+    [SND_DODGE]           = { synth_dodge,           0.80f, 0.70f, 2 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -1438,6 +1486,10 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         // Sinergias.
         case EV_SUICIDE:         s = SND_LAUNCH; positional = false; volume = 0.6f; break;
         case EV_RESTORE_BEAM:    s = SND_REPAIR; floor = 0.4f; break;
+        // Mísseis e esquiva perfeita (da própria nave: sem posição).
+        case EV_MISSILE_LOCK:    s = SND_MISSILE_LOCK; positional = false; break;
+        case EV_MISSILE_FIRE:    s = SND_MISSILE; positional = false; break;
+        case EV_PERFECT_DODGE:   s = SND_DODGE; positional = false; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

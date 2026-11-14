@@ -198,8 +198,9 @@ typedef struct {
     float ship_mouse_sens;
     float ship_turn_rate;
     float ship_turn_smooth;
-    float ship_roll_rate;
-    float ship_auto_level;
+    float ship_pitch_limit;    // o nariz sobe ou desce até este tanto (graus) do horizonte
+    float ship_bank;           // inclinação de desenho máxima nas curvas (graus)
+    float ship_bank_strafe;    // ... e a do deslocamento lateral
     float ship_gravity;
     float ship_gravity_range;
     float ship_fall_drag;
@@ -260,6 +261,12 @@ typedef struct {
     float weapon_assist_angle;
     float weapon_assist_range;
     float weapon_hit_margin;
+    float weapon_knockback;    // empurrão de cada tiro num inimigo (velocidade, dividida pelo tamanho dele)
+    // Mísseis (botão direito) e esquiva perfeita.
+    int   missile_count;
+    float missile_recharge, missile_lock_time, missile_cone, missile_range, missile_damage, missile_radius;
+    float missile_speed, missile_turn, missile_life;
+    float dodge_focus, dodge_mult, dodge_hitstop, dodge_energy;
     float ship_graze_shield;
 
     // combate

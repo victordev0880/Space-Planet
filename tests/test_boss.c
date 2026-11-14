@@ -274,7 +274,7 @@ static void ability_beam_hits_a_line(void)
     float hp0 = w.enemies.items[0].hp, hp1 = w.enemies.items[1].hp;
 
     // Sem o núcleo, nada.
-    run(&w, &t, keys(ACT_BIT(ACT_ALT_FIRE)), seconds(t.ability_charge + 0.2f));
+    run(&w, &t, keys(ACT_BIT(ACT_ABILITY1)), seconds(t.ability_charge + 0.2f));
     CHECK(!saw_event(&w, EV_ABILITY));
 
     w.ability.owned = true;
@@ -283,7 +283,7 @@ static void ability_beam_hits_a_line(void)
     for (int i = 0; i < seconds(t.ability_charge + 0.2f) && !saw_event(&w, EV_ABILITY); i++) {
         w.enemies.items[0].pos = Vector3Add(w.ship.pos, Vector3Scale(ship_forward(&w.ship), 30.0f));
         w.enemies.items[1].pos = Vector3Add(w.ship.pos, Vector3Scale(ship_forward(&w.ship), 60.0f));
-        run(&w, &t, keys(ACT_BIT(ACT_ALT_FIRE)), 1);
+        run(&w, &t, keys(ACT_BIT(ACT_ABILITY1)), 1);
     }
     CHECK(saw_event(&w, EV_ABILITY));
     CHECK(w.enemies.items[0].hp < hp0 && w.enemies.items[1].hp < hp1);

@@ -13,6 +13,7 @@
 #define BANK_SMOOTH      3.0f     // rapidez com que a inclinação acompanha a curva
 #define TURN_SMOOTH      5.0f     // rapidez com que o modelo acompanha a direção do voo
 #define STILL_SPEED      1.5f     // abaixo disto, sem `look`, o modelo não gira
+#define SHOVE_DECAY      6.0f     // rapidez com que o empurrão dos tiros some
 #define LOOK_SPEED_MIN   3.0f     // abaixo disto, olha só para `look`...
 #define LOOK_SPEED_MAX   10.0f    // ... e acima disto, só para onde voa
 #define GROUND_LOOKAHEAD 0.25f    // segundos à frente em que o terreno é conferido
@@ -494,7 +495,8 @@ void enemies_tick(Enemies *e, const EnemyContext *ctx)
         float speed = Vector3Length(en->vel);
         if (speed > steer.max_speed) en->vel = Vector3Scale(en->vel, steer.max_speed / speed);
 
-        en->pos = Vector3Add(en->pos, Vector3Scale(en->vel, dt));
+        en->pos = Vector3Add(en->pos, Vector3Scale(Vector3Add(en->vel, en->shove), dt));
+        en->shove = Vector3Scale(en->shove, expf(-SHOVE_DECAY * dt));
         orient_enemy(en, t, Vector3Scale(change, 1.0f / dt), dt);
 
         // Bateu no planeta ou na Lua.

@@ -102,6 +102,9 @@ typedef enum {
     EV_DEV_TEETH,      // ... cuspiu uma rajada de dentes
     EV_SUICIDE,        // um drone suicida saiu da nave (sinergia)
     EV_RESTORE_BEAM,   // o Feixe restaurador levou uma rocha minerada a uma cratera (pos = cratera)
+    EV_MISSILE_LOCK,   // a mira travou um alvo             (value = travas)
+    EV_MISSILE_FIRE,   // os mísseis saíram                 (value = quantos)
+    EV_PERFECT_DODGE,  // esquiva perfeita: um golpe atravessou o dash
     EV_TYPE_COUNT
 } EventType;
 

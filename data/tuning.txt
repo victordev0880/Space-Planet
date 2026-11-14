@@ -180,7 +180,7 @@ particles.flash_life  = 0.22
 shake.strength  = 0.07         # tremor por unidade de raio da cratera
 shake.jolt      = 0.022        # tremor por unidade de velocidade quando a nave bate
 shake.falloff   = 150          # distância em que o tremor cai pela metade
-shake.max_angle = 1.8          # balanço máximo da câmera, em graus
+shake.max_angle = 0.7          # balanço máximo da câmera, em graus (pouco: girar a imagem enjoa)
 shake.decay     = 1.8          # quanto do tremor some por segundo
 shake.frequency = 22           # rapidez do balanço
 
@@ -202,8 +202,9 @@ ship.dash_cooldown = 0.55    # intervalo mínimo entre dois dashes
 ship.mouse_sens    = 0.11    # graus de giro por pixel de mouse
 ship.turn_rate     = 190     # giro máximo, em graus por segundo
 ship.turn_smooth   = 16      # maior = o giro responde mais rápido ao mouse
-ship.roll_rate     = 150     # rolagem (Q/E), em graus por segundo
-ship.auto_level    = 1.3     # quão rápido a nave se endireita em relação ao planeta (0 = nunca)
+ship.pitch_limit   = 89.5    # horizonte travado no planeta: o nariz sobe ou desce até este tanto (graus)
+ship.bank          = 32      # nas curvas a nave inclina este tanto (graus), só no desenho: a câmera não gira
+ship.bank_strafe   = 14      # ... e este tanto para o lado do deslocamento (A/D)
 ship.gravity       = 5       # puxão do planeta, junto à superfície
 ship.gravity_range = 2.2     # até onde a gravidade alcança, em raios do planeta
 ship.fall_drag     = 1.2     # freio da queda: sem motor, a nave afunda a no máximo gravity / fall_drag
@@ -245,9 +246,9 @@ chase.height     = 2.9       # altura acima da nave
 chase.look_ahead = 16        # a câmera mira este tanto à frente da nave
 chase.pos_smooth = 14        # maior = a câmera gruda mais na nave
 chase.rot_smooth = 9
-chase.fov_boost  = 14        # graus a mais de campo de visão no boost
+chase.fov_boost  = 5         # graus a mais de campo de visão no boost (pouco: abrir muito enjoa)
 chase.clearance  = 0.8       # folga mínima entre a câmera e o terreno
-chase.ground_tilt = 14       # no voo rasante a câmera inclina este tanto (graus) para o chão
+chase.ground_tilt = 5        # no voo rasante a câmera inclina este tanto (graus) para o chão
 
 # --- Lua --------------------------------------------------------------------
 moon.radius       = 0.27     # raio da Lua, em raios do planeta
@@ -277,6 +278,30 @@ weapon.graze_rate    = 1.35    # no voo rasante a cadência é multiplicada por 
 weapon.assist_angle  = 6.5     # ajuda de mira: inimigos até este ângulo (graus) do nariz puxam o tiro
 weapon.assist_range  = 200     # ... e até esta distância
 weapon.hit_margin    = 0.8     # o tiro acerta quem passar a até este tanto do inimigo (folga para acertar)
+weapon.knockback     = 3       # cada tiro empurra o inimigo (velocidade, dividida pelo tamanho dele): o golpe tem peso
+
+# --- mísseis (botão direito) --------------------------------------------------
+# Segurando o botão, a mira trava um alvo à frente a cada lock_time segundos
+# (até ter uma trava por carga); soltando, sai um míssil teleguiado por trava.
+# Sem trava, sai um só, em frente, que procura o inimigo mais perto.
+missile.count     = 4       # cargas (e travas) no máximo
+missile.recharge  = 2.2     # segundos para recarregar uma
+missile.lock_time = 0.18    # segundos por trava
+missile.cone      = 16      # trava inimigos até este ângulo (graus) do nariz...
+missile.range     = 180     # ... e até esta distância
+missile.damage    = 7       # dano no alvo, e em volta dele
+missile.radius    = 5       # ... neste raio
+missile.speed     = 90
+missile.turn      = 7       # quão rápido o míssil vira para o alvo
+missile.life      = 4       # segundos de voo
+
+# --- esquiva perfeita -----------------------------------------------------------
+# Um golpe que acerta a nave durante o dash (invulnerável) vira uma esquiva
+# perfeita: um instante congelado, energia de volta e alguns segundos de foco.
+dodge.focus   = 2.5         # segundos de foco...
+dodge.mult    = 1.5         # ... em que os tiros e mísseis valem este tanto
+dodge.hitstop = 0.1         # segundos congelados na esquiva
+dodge.energy  = 30          # energia devolvida
 ship.graze_shield    = 2.0     # no voo rasante o escudo recarrega este tanto mais rápido
 
 # --- combate ----------------------------------------------------------------

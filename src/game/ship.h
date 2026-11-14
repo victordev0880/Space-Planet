@@ -45,7 +45,9 @@ typedef struct {
     Quaternion rot;            // orientação (ver core/vmath.h)
     Vector3    pos_prev;       // pose um passo antes, para interpolar o desenho
     Quaternion rot_prev;
-    Vector3    turn;           // giro atual em rad/s: x = arfagem, y = guinada, z = rolagem
+    Vector3    turn;           // giro atual em rad/s: x = arfagem, y = guinada (em volta do "para cima" do planeta)
+    float      bank;           // inclinação só de desenho nas curvas, em radianos (a nave nunca rola de fato)
+    float      bank_prev;
 
     float hull;                // casco: não se recupera sozinho
     float shield;              // escudo: recarrega depois de um tempo sem dano

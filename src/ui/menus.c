@@ -470,10 +470,11 @@ static void draw_options(const Menu *m, const Settings *s, const Item *items, in
 static const char *const CONTROLS[][3] = {
     { "Mirar",                          "mouse",                      "analógico direito" },
     { "Atirar",                         "botão esquerdo",             "RT" },
-    { "Raio do núcleo (segurar)",       "botão direito",              "LT" },
+    { "Mísseis (segure: trava; solte: dispara)", "botão direito",   "LT" },
+    { "Raio do núcleo (segurar)",       "Q",                          "LB" },
     { "Acelerar  /  frear e ré",        "W  /  S",                    "analógico esquerdo" },
     { "Deslocar de lado",               "A  /  D",                    "analógico esquerdo" },
-    { "Rolar",                          "Q  /  E",                    "LB  /  RB" },
+    { "Ninhada  /  Túnel",              "G  /  X",                    "R3  /  direcional baixo" },
     { "Boost",                          "Shift",                      "L3 (apertar o analógico)" },
     { "Dash",                           "Espaço",                     "A" },
     { "Drift",                          "Ctrl",                       "B" },

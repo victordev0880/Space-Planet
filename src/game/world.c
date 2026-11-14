@@ -568,6 +568,7 @@ bool world_init(World *w, const Tuning *t, uint64_t seed, Arena *arena)
     repair_reset(&w->repair);
     defenses_reset(&w->defenses);
     w->meteor_wait = t->meteor_interval;
+    w->missiles.charges = t->missile_count;
     w->calm_seen = -1;
     w->eff = *t;
     director_stop(&w->director);
@@ -844,6 +845,10 @@ void world_restart(World *w, const Tuning *t)
     w->ore_total = 0;
     w->debris = 0.0f;
     w->meteor_wait = t->meteor_interval;
+    memset(&w->missiles, 0, sizeof w->missiles);
+    w->missiles.charges = t->missile_count;
+    w->focus = 0.0f;
+    w->dodge_used = false;
     w->meteor_queue = 0;
     w->calm_seen = -1;
     w->cards_at = 0;
@@ -1405,6 +1410,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         combat_ability(w, &input, t, dt);
         combat_brood(w, &input, t, dt);
         combat_suicide(w, t, dt);
+        combat_missiles(w, &input, t, dt);
         combat_tunnel(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);

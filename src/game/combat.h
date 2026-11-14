@@ -47,6 +47,10 @@ void combat_brood(World *w, const InputState *in, const Tuning *t, float dt);
 // Sinergia Enxame + Kamikaze: solta um drone suicida de tempos em tempos.
 void combat_suicide(World *w, const Tuning *t, float dt);
 
+// Mísseis (botão direito): segurar trava alvos, soltar dispara. Também conta
+// o foco da esquiva perfeita.
+void combat_missiles(World *w, const InputState *in, const Tuning *t, float dt);
+
 // O Túnel do núcleo do Verme (tecla X): a nave atravessa o planeta.
 void combat_tunnel(World *w, const InputState *in, const Tuning *t, float dt);
 

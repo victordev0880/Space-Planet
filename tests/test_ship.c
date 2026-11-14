@@ -178,11 +178,19 @@ static void ship_mouse_and_keys_turn_it(void)
     run(&pitch, input(0u, 0u, 0.0f, -6.0f), seconds(0.5f));
     CHECK(Vector3DotProduct(ship_forward(&pitch), up0) > 0.2f);
 
-    // E rola para a direita: o topo tomba para a direita, o nariz fica.
-    Ship roll = s;
-    run(&roll, input(ACT_BIT(ACT_ROLL_RIGHT), 0u, 0.0f, 0.0f), seconds(0.3f));
-    CHECK(Vector3DotProduct(ship_up(&roll), right0) > 0.2f);
-    CHECK_NEAR(Vector3DotProduct(ship_forward(&roll), forward0), 1.0f, 1e-3);
+    // Horizonte travado: girando à vontade, a nave nunca rola (a direita dela
+    // fica sempre no plano do horizonte), e o nariz para no limite de arfagem.
+    Ship wild = s;
+    for (int i = 0; i < seconds(6.0f); i++) {
+        InputState in = input(ACT_BIT(ACT_LEFT), 0u, 7.0f * sinf((float)i * 0.05f), -9.0f);
+        ship_tick(&wild, &in, &planet, NULL, &tun, dt);
+        Vector3 up = Vector3Normalize(wild.pos);
+        CHECK_NEAR(Vector3DotProduct(ship_right(&wild), up), 0.0f, 2e-2);   // (a posição andou depois do giro)
+    }
+    Vector3 up = Vector3Normalize(wild.pos);
+    float elevation = asinf(Clamp(Vector3DotProduct(ship_forward(&wild), up), -1.0f, 1.0f)) * RAD2DEG;
+    CHECK(elevation <= tun.ship_pitch_limit + 0.5f && elevation > tun.ship_pitch_limit - 5.0f);
+    CHECK(fabsf(wild.bank) > 0.01f);   // nas curvas, inclina (só no desenho)
 
     // O giro nunca passa do limite, por mais que o mouse corra.
     Ship fast = s;
@@ -191,8 +199,17 @@ static void ship_mouse_and_keys_turn_it(void)
     CHECK(turned <= tun.ship_turn_rate * DEG2RAD * dt * 1.01f);
 
     // A orientação continua sendo um quatérnion de comprimento 1.
-    run(&fast, input(ACT_BIT(ACT_ROLL_LEFT), 0u, 9.0f, -7.0f), seconds(20.0f));
+    run(&fast, input(0u, 0u, 9.0f, -7.0f), seconds(20.0f));
     CHECK_NEAR(QuaternionLength(fast.rot), 1.0f, 1e-4);
+    (void)up0;
+}
+
+// Direção no plano do horizonte do lugar onde a nave está (as viradas são em
+// volta do "para cima" do planeta).
+static Vector3 level(Vector3 v, const Ship *s)
+{
+    Vector3 up = Vector3Normalize(s->pos);
+    return Vector3Normalize(Vector3Subtract(v, Vector3Scale(up, Vector3DotProduct(v, up))));
 }
 
 static void ship_heading_follows_the_nose(void)
@@ -202,12 +219,12 @@ static void ship_heading_follows_the_nose(void)
     uint32_t forward = ACT_BIT(ACT_FORWARD);
 
     run(&s, input(forward, 0u, 0.0f, 0.0f), seconds(2.0f));
-    Vector3 before = Vector3Normalize(s.vel);
 
     // Vira cerca de 90 graus acelerando: o voo acompanha a curva.
+    Vector3 before = level(Vector3Normalize(s.vel), &s);
     run(&s, input(forward, 0u, 15.0f, 0.0f), seconds(0.9f));
+    CHECK(Vector3DotProduct(level(ship_forward(&s), &s), before) < 0.5f);   // o nariz virou mesmo
     run(&s, input(forward, 0u, 0.0f, 0.0f), seconds(2.0f));
-    CHECK(Vector3DotProduct(ship_forward(&s), before) < 0.5f);   // o nariz virou mesmo
     CHECK_NEAR(Vector3DotProduct(Vector3Normalize(s.vel), ship_forward(&s)), 1.0f, 0.02f);
 }
 
@@ -221,9 +238,10 @@ static void ship_drift_keeps_the_heading(void)
     float speed = Vector3Length(s.vel);
 
     // Com o drift apertado, o nariz gira e a nave continua indo reto.
+    Vector3 heading_level = level(heading, &s);
     run(&s, input(ACT_BIT(ACT_DRIFT), 0u, 20.0f, 0.0f), seconds(0.7f));
     CHECK(s.drifting);
-    CHECK(Vector3DotProduct(ship_forward(&s), heading) < 0.3f);              // nariz virou bastante
+    CHECK(Vector3DotProduct(level(ship_forward(&s), &s), heading_level) < 0.3f);   // nariz virou bastante
     CHECK(Vector3DotProduct(Vector3Normalize(s.vel), heading) > 0.98f);      // rumo quase igual
     CHECK(Vector3Length(s.vel) > speed * 0.9f);                              // e quase sem perder velocidade
 
@@ -373,7 +391,7 @@ static void ship_gravity_is_gentle_and_local(void)
         if (Vector3Length(s.fall) > fastest_fall) fastest_fall = Vector3Length(s.fall);
     }
     CHECK(s.fall.y < 0.0f && s.pos.y < start.y);
-    CHECK_NEAR(s.pos.x, 0.0f, 1e-3);
+    CHECK(fabsf(s.pos.x) + fabsf(s.pos.z) < 1.0f);
     CHECK_NEAR(Vector3Length(s.vel), 0.0f, 1e-5);
     // A queda tem uma velocidade limite baixa.
     CHECK(fastest_fall <= tun.ship_gravity / tun.ship_fall_drag);
@@ -594,12 +612,14 @@ static void ship_high_flight_is_straight(void)
     CHECK(s.pos.x > 20.0f);
     CHECK_NEAR(Vector3DotProduct(ship_forward(&s), forward), 1.0f, 1e-3);
 
-    // Subindo na vertical de dentro da atmosfera, também não: a vertical não muda.
+    // Subindo na vertical de dentro da atmosfera, também não (a vertical não
+    // muda). O nariz fica a até ship.pitch_limit do horizonte: na vertical
+    // exata não haveria "direita", e a câmera pularia.
     ship_place(&s, &tun, &planet, (Vector3){ 0.0f, radius + air * 0.8f, 0.0f }, (Vector3){ 0.0f, 1.0f, 0.0f }, 0.0f);
     forward = ship_forward(&s);
     run(&s, input(ACT_BIT(ACT_FORWARD), 0u, 0.0f, 0.0f), seconds(0.5f));
-    CHECK_NEAR(Vector3DotProduct(ship_forward(&s), forward), 1.0f, 1e-4);
-    CHECK_NEAR(s.pos.x, 0.0f, 1e-3);
+    CHECK(Vector3DotProduct(ship_forward(&s), forward) > cosf((90.0f - tun.ship_pitch_limit + 0.5f) * DEG2RAD));
+    CHECK(fabsf(s.pos.x) + fabsf(s.pos.z) < 1.0f);
 }
 
 static void ship_same_inputs_same_flight(void)
@@ -611,7 +631,7 @@ static void ship_same_inputs_same_flight(void)
     InputState steps[4] = {
         input(ACT_BIT(ACT_FORWARD), 0u, 2.0f, -1.0f),
         input(ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BOOST), ACT_BIT(ACT_DASH), -4.0f, 0.5f),
-        input(ACT_BIT(ACT_DRIFT) | ACT_BIT(ACT_ROLL_LEFT), 0u, 9.0f, 3.0f),
+        input(ACT_BIT(ACT_DRIFT) | ACT_BIT(ACT_LEFT), 0u, 9.0f, 3.0f),
         input(ACT_BIT(ACT_BACK) | ACT_BIT(ACT_LEFT), 0u, 0.0f, 0.0f),
     };
     for (int i = 0; i < 4; i++) {

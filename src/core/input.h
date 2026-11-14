@@ -19,13 +19,13 @@ typedef enum {
     ACT_BACK,
     ACT_LEFT,
     ACT_RIGHT,
-    ACT_ROLL_LEFT,
-    ACT_ROLL_RIGHT,
+    ACT_ABILITY1,      // Q: raio do núcleo Rompe-Mundos (segurar)
+    ACT_BUILD,         // E: construção de defesas
     ACT_BOOST,
     ACT_DASH,
     ACT_DRIFT,
     ACT_FIRE,
-    ACT_ALT_FIRE,
+    ACT_ALT_FIRE,      // botão direito: mísseis (segurar trava os alvos, soltar dispara)
     ACT_OVERLAY,     // F1
     ACT_FREECAM,     // F2
     ACT_WIREFRAME,   // F3

@@ -35,6 +35,7 @@
 #define SUICIDE_RETRY    0.5f     // Drones suicidas: sem alvo, procura de novo depois deste tanto
 #define SUICIDE_LIFE     4.0f     // segundos de voo de um drone suicida
 #define POISE_FULL       0.5f     // Mira blindada: o escudo conta como cheio a menos disto do máximo
+#define MISSILE_KNOCK    4.0f     // um míssil empurra este tanto de tiros
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -63,6 +64,7 @@ static const Blast BLASTS[ENEMY_TYPE_COUNT] = {
 };
 static const Rgb8 SHIELD_BLOCK = { 120, 240, 255 };
 static const Rgb8 CRIT_SPARK   = { 255, 250, 170 };
+static const Rgb8 DODGE_SPARK  = { 200, 240, 255 };
 static const Rgb8 SPORE_HOT    = { 230, 255, 190 };
 static const Rgb8 SPORE_GLOW   = { 140, 255, 90 };
 static const Rgb8 SPORE_GOO    = { 70, 120, 50 };
@@ -293,10 +295,30 @@ void combat_ship_wreck(World *w)
     events_push(&w->events, (uint32_t)w->tick, EV_PLAYER_DOWN, 0, s->pos, 0.0f);
 }
 
+// Esquiva perfeita: um golpe que acerta a nave no meio do dash. Um instante
+// congelado, energia de volta e alguns segundos de foco (tiros mais fortes).
+// Vale uma vez por dash.
+static void perfect_dodge(World *w, const Tuning *t, Vector3 point)
+{
+    Ship *s = &w->ship;
+    w->dodge_used = true;
+    w->focus = t->dodge_focus;
+    s->energy = fminf(s->energy + t->dodge_energy, t->ship_energy_max);
+    int ticks = seconds_to_ticks(t, t->dodge_hitstop);
+    if (ticks > w->hitstop) w->hitstop = ticks;
+    Vector3 normal = Vector3Normalize(Vector3Subtract(point, s->pos));
+    particles_sparks(&w->particles, &w->rng, point, normal, 18, 16.0f, DODGE_SPARK);
+    events_push(&w->events, (uint32_t)w->tick, EV_PERFECT_DODGE, 0, s->pos, t->dodge_focus);
+}
+
 void combat_damage_ship(World *w, const Tuning *t, float amount, Vector3 point)
 {
     Ship *s = &w->ship;
-    if (!s->alive || ship_invulnerable(s) || amount <= 0.0f) return;
+    if (!s->alive || amount <= 0.0f) return;
+    if (ship_invulnerable(s)) {
+        if (s->dash_left > 0.0f && !w->dodge_used) perfect_dodge(w, t, point);
+        return;
+    }
 
     bool held = amount <= s->shield;
     bool died = ship_damage(s, t, amount);
@@ -391,8 +413,6 @@ static bool reflect(World *w, const Tuning *t, Shot *s, Vector3 point)
     return true;
 }
 
-// Tiro da nave numa peça do boss: alvo (capacitor, bolsa...), núcleo (blindado
-// fora da janela de ataque) ou casco (só faísca).
 // Sinergia Atirador + Escudeiro: com o escudo cheio, os tiros da nave valem mais.
 static bool poised(const World *w, const Tuning *t, const Shot *s)
 {
@@ -400,6 +420,21 @@ static bool poised(const World *w, const Tuning *t, const Shot *s)
         && w->ship.shield >= t->ship_shield_max - POISE_FULL;
 }
 
+// Foco (esquiva perfeita): tiros e mísseis da nave valem mais por um tempo.
+static bool focused(const World *w, const Shot *s)
+{
+    return w->focus > 0.0f && (s->source == BOLT_PLAYER || s->source == BOLT_MISSILE);
+}
+
+// Explosão de quem explode ao acertar: drone suicida e míssil.
+static void bolt_blast(World *w, const Tuning *t, const Shot *s, Vector3 point, int skip)
+{
+    if (s->source == BOLT_SUICIDE) ship_blast(w, t, point, t->suicide_radius, t->suicide_damage, skip, true);
+    if (s->source == BOLT_MISSILE) ship_blast(w, t, point, t->missile_radius, s->damage, skip, true);
+}
+
+// Tiro da nave numa peça do boss: alvo (capacitor, bolsa...), núcleo (blindado
+// fora da janela de ataque) ou casco (só faísca).
 static void hit_boss(World *w, const Tuning *t, const Shot *s, const BossPart *part, Vector3 point, Vector3 back)
 {
     Boss *b = &w->boss;
@@ -410,6 +445,7 @@ static void hit_boss(World *w, const Tuning *t, const Shot *s, const BossPart *p
         events_push(&w->events, tick, EV_CRIT, ENEMY_BOMBER, point, damage);
     }
     if (poised(w, t, s)) damage *= t->poise_mult;
+    if (focused(w, s)) damage *= t->dodge_mult;
     float applied = 0.0f;
     bool open = part->open;
     if (part->role != PART_HULL) applied = boss_hit(b, t, part->id, damage, &w->events, tick);
@@ -550,10 +586,17 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
             damage *= t->poise_mult;
             spark = CRIT_SPARK;
         }
+        if (focused(w, s)) {
+            damage *= t->dodge_mult;
+            spark = CRIT_SPARK;
+        }
 
         enemies_damage(e, enemy, damage, DEATH_PLAYER);
-        // Drone suicida: explode no alvo e fere quem está em volta.
-        if (s->source == BOLT_SUICIDE) ship_blast(w, t, point, t->suicide_radius, t->suicide_damage, enemy, true);
+        // Empurrão: o golpe tem peso (menos nos grandes; mais no míssil).
+        float knock = t->weapon_knockback * ((s->source == BOLT_MISSILE) ? MISSILE_KNOCK : 1.0f) / fmaxf(t->enemy[en->type].scale, 0.5f);
+        en->shove = Vector3Add(en->shove, Vector3Scale(Vector3Negate(back), knock));
+        // Drone suicida e míssil: explodem no alvo e ferem quem está em volta.
+        bolt_blast(w, t, s, point, enemy);
         particles_sparks(&w->particles, &w->rng, point, back, weak ? 8 : 5, 14.0f, spark);
         events_push(&w->events, (uint32_t)w->tick, kind, en->type, point, damage);
         w->hit_marker = HIT_MARKER_TIME;
@@ -576,7 +619,7 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
         }
     } else if (boss_part >= 0) {
         hit_boss(w, t, s, &parts[boss_part], point, back);
-        if (s->source == BOLT_SUICIDE) ship_blast(w, t, point, t->suicide_radius, t->suicide_damage, -1, true);
+        bolt_blast(w, t, s, point, -1);
     } else if (rock >= 0) {
         world_damage_rock(w, t, rock, s->damage, point, back);
     } else if (bomb >= 0) {
@@ -589,6 +632,7 @@ static void resolve_bolt(World *w, const Tuning *t, int index)
     } else if (ground) {
         particles_sparks(&w->particles, &w->rng, point, back, 4, 8.0f, BOLT_SPARK);
         events_push(&w->events, (uint32_t)w->tick, EV_SPARK, 0, point, 0.0f);
+        bolt_blast(w, t, s, point, -1);   // o míssil explode no chão também (sem cavar)
     }
     projectiles_remove(p, index);
 }
@@ -604,6 +648,10 @@ static void resolve_enemy_shot(World *w, const Tuning *t, int index)
     if (ship->alive && w->ship_active) {
         float reach = bomb ? t->ship_radius + t->bomber_bomb_radius : t->ship_radius * SHIP_HIT_SCALE;
         float hit = segment_sphere(a, b, ship->pos, reach);
+        // No dash o tiro atravessa a nave: é a esquiva perfeita.
+        if (hit >= 0.0f && ship_invulnerable(ship) && ship->dash_left > 0.0f && !w->dodge_used) {
+            perfect_dodge(w, t, Vector3Lerp(a, b, hit));
+        }
         if (hit >= 0.0f && !ship_invulnerable(ship)) {
             if (!bomb && reflect(w, t, s, Vector3Lerp(a, b, hit))) return;
             combat_damage_ship(w, t, s->damage, Vector3Lerp(a, b, hit));
@@ -692,7 +740,7 @@ void combat_ability(World *w, const InputState *in, const Tuning *t, float dt)
     Ship *s = &w->ship;
     a->cooldown = fmaxf(a->cooldown - dt, 0.0f);
     a->beam_left = fmaxf(a->beam_left - dt, 0.0f);
-    bool held = (in->held & ACT_BIT(ACT_ALT_FIRE)) != 0u;
+    bool held = (in->held & ACT_BIT(ACT_ABILITY1)) != 0u;
     if (!a->owned || !s->alive || !held || a->cooldown > 0.0f) {
         a->charge = 0.0f;
         return;
@@ -803,15 +851,17 @@ void combat_brood(World *w, const InputState *in, const Tuning *t, float dt)
     for (int i = 0; i < p->pool.capacity; i++) {
         if (!pool_alive(&p->pool, i)) continue;
         Shot *sh = &p->items[i];
-        // (Os drones suicidas da sinergia perseguem do mesmo jeito.)
-        if (sh->kind != SHOT_BOLT || (sh->source != BOLT_BROOD && sh->source != BOLT_SUICIDE)) continue;
+        // (Os drones suicidas e os mísseis perseguem do mesmo jeito.)
+        bool homing = sh->source == BOLT_BROOD || sh->source == BOLT_SUICIDE || sh->source == BOLT_MISSILE;
+        if (sh->kind != SHOT_BOLT || !homing) continue;
         Vector3 target = sh->pos;
         if (!brood_target(w, t, sh, &target)) continue;
         float speed = Vector3Length(sh->vel);
-        float cruise = (sh->source == BOLT_BROOD) ? t->brood_speed : t->suicide_speed;
+        float cruise = (sh->source == BOLT_BROOD) ? t->brood_speed : (sh->source == BOLT_SUICIDE) ? t->suicide_speed : t->missile_speed;
+        float steer = (sh->source == BOLT_MISSILE) ? t->missile_turn : t->brood_turn;
         Vector3 desired = Vector3Normalize(Vector3Subtract(target, sh->pos));
         Vector3 dir = Vector3Normalize(Vector3Lerp(Vector3Scale(sh->vel, 1.0f / fmaxf(speed, 1e-3f)), desired,
-                                                   Clamp(t->brood_turn * dt, 0.0f, 1.0f)));
+                                                   Clamp(steer * dt, 0.0f, 1.0f)));
         sh->vel = Vector3Scale(dir, fmaxf(speed, cruise));
     }
 
@@ -881,6 +931,120 @@ void combat_suicide(World *w, const Tuning *t, float dt)
     sh->damage = t->suicide_damage;
     sh->homing = (int16_t)target;
     events_push(&w->events, (uint32_t)w->tick, EV_SUICIDE, 0, s->pos, 0.0f);
+}
+
+// ---------------------------------------------------------------------------
+//  Mísseis (botão direito)
+// ---------------------------------------------------------------------------
+
+static bool missile_locked(const Missiles *m, int index)
+{
+    for (int k = 0; k < m->lock_count; k++) {
+        if (m->lock[k] == index) return true;
+    }
+    return false;
+}
+
+// O próximo alvo a travar: o inimigo sem trava mais perto do centro da mira,
+// dentro do cone e do alcance.
+static int missile_candidate(const World *w, const Tuning *t)
+{
+    const Ship *s = &w->ship;
+    const Enemies *e = &w->enemies;
+    Vector3 forward = ship_forward(s);
+    float best_dot = cosf(t->missile_cone * DEG2RAD);
+    int best = -1;
+    for (int i = 0; i < e->pool.capacity; i++) {
+        if (!pool_alive(&e->pool, i) || e->items[i].hp <= 0.0f || missile_locked(&w->missiles, i)) continue;
+        if (enemies_shielded_by(e, t, i) >= 0) continue;
+        Vector3 to = Vector3Subtract(e->items[i].pos, s->pos);
+        float d = Vector3Length(to);
+        if (d < 1.0f || d > t->missile_range) continue;
+        float dot = Vector3DotProduct(to, forward) / d;
+        if (dot > best_dot) {
+            best_dot = dot;
+            best = i;
+        }
+    }
+    return best;
+}
+
+void combat_missiles(World *w, const InputState *in, const Tuning *t, float dt)
+{
+    Missiles *m = &w->missiles;
+    const Ship *s = &w->ship;
+    uint32_t tick = (uint32_t)w->tick;
+
+    // Foco da esquiva perfeita e a trava de "uma esquiva por dash".
+    w->focus = fmaxf(w->focus - dt, 0.0f);
+    if (s->dash_left <= 0.0f) w->dodge_used = false;
+
+    // Recarga: uma carga de cada vez.
+    if (m->charges < t->missile_count) {
+        m->recharge -= dt;
+        if (m->recharge <= 0.0f) {
+            m->charges++;
+            m->recharge = t->missile_recharge;
+        }
+    } else {
+        m->recharge = t->missile_recharge;
+    }
+
+    // Travas em quem já morreu caem.
+    int kept = 0;
+    for (int k = 0; k < m->lock_count; k++) {
+        int i = m->lock[k];
+        if (pool_alive(&w->enemies.pool, i) && w->enemies.items[i].hp > 0.0f) m->lock[kept++] = (int16_t)i;
+    }
+    m->lock_count = kept;
+
+    if (!s->alive || !w->ship_active) {
+        m->painting = false;
+        m->lock_count = 0;
+        return;
+    }
+
+    // Segurando: trava um alvo de cada vez, até ter uma trava por carga.
+    if (in->held & ACT_BIT(ACT_ALT_FIRE)) {
+        if (!m->painting) {
+            m->painting = true;
+            m->lock_wait = 0.0f;
+        }
+        m->lock_wait -= dt;
+        if (m->lock_wait <= 0.0f && m->lock_count < m->charges && m->lock_count < MISSILE_LOCKS) {
+            int target = missile_candidate(w, t);
+            if (target >= 0) {
+                m->lock[m->lock_count++] = (int16_t)target;
+                m->lock_wait = t->missile_lock_time;
+                events_push(&w->events, tick, EV_MISSILE_LOCK, w->enemies.items[target].type, w->enemies.items[target].pos,
+                            (float)m->lock_count);
+            }
+        }
+        return;
+    }
+    if (!m->painting) return;
+
+    // Soltou: um míssil por trava; sem trava, um só, que procura o mais perto.
+    m->painting = false;
+    int count = (m->lock_count > 0) ? m->lock_count : (m->charges > 0 ? 1 : 0);
+    Vector3 forward = ship_forward(s), up = ship_up(s);
+    Vector3 right = Vector3CrossProduct(forward, up);
+    for (int k = 0; k < count; k++) {
+        // Saem dos dois lados, em leque, e viram para o alvo no caminho.
+        float side = (k % 2 == 0) ? 1.0f : -1.0f;
+        float spread = 0.35f + 0.15f * (float)(k / 2);
+        Vector3 dir = Vector3Normalize(Vector3Add(forward, Vector3Add(Vector3Scale(right, side * spread), Vector3Scale(up, -0.15f))));
+        Vector3 from = Vector3Add(s->pos, Vector3Scale(right, side * 1.0f));
+        Vector3 vel = Vector3Add(Vector3Scale(dir, t->missile_speed * 0.55f), Vector3Add(s->vel, s->fall));
+        Shot *sh = projectiles_spawn(&w->shots, SHOT_BOLT, from, vel, t->missile_life);
+        if (sh == NULL) break;
+        sh->source = BOLT_MISSILE;
+        sh->damage = t->missile_damage;
+        sh->homing = (m->lock_count > 0) ? m->lock[k] : (int16_t)-1;
+    }
+    m->charges -= count;
+    m->lock_count = 0;
+    if (count > 0) events_push(&w->events, tick, EV_MISSILE_FIRE, 0, s->pos, (float)count);
 }
 
 // ---------------------------------------------------------------------------

@@ -142,11 +142,11 @@ static void draw_hint(const DebugOverlay *o, const World *w, const DebugInfo *in
     } else if (w->cam_mode == CAM_FREE) {
         hint = "WASD mover   mouse olhar   Shift rápido   F2 volta ao jogo   F1 debug";
     } else if (w->cam_mode == CAM_SHIP && first_moments && info->gamepad) {
-        hint = "RT atira   analógico esquerdo voa   analógico direito mira   LB/RB rola   solto, a nave paira\n"
-               "L3 boost   A dash   B drift   X raio trator   Y chama a próxima horda   Start pausa";
+        hint = "RT atira   LT segura e solta: mísseis   analógico esquerdo voa   analógico direito mira\n"
+               "L3 boost   A dash (no último instante: esquiva perfeita)   B drift   X raio trator   Y próxima horda";
     } else if (w->cam_mode == CAM_SHIP && first_moments) {
-        hint = "clique atira   W acelera   S freia e dá ré   sem teclas a nave paira   A/D lado   Q/E rola\n"
-               "Shift boost   Espaço dash   Ctrl drift   F raio trator   Enter chama a próxima horda";
+        hint = "clique atira   botão direito segura e solta: mísseis   W acelera   S freia e dá ré   A/D lado\n"
+               "Shift boost   Espaço dash (no último instante: esquiva perfeita)   Ctrl drift   F raio trator   Enter próxima horda";
     } else if (w->cam_mode == CAM_ORBIT) {
         hint = "F1 debug   F2 câmera livre   F3 wireframe";
     }

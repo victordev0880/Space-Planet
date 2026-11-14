@@ -15,7 +15,7 @@ static const Vector3 SPAWN_DIRECTION = { 0.2f, 0.35f, 1.0f };
 #define COLLISION_PASSES   4       // tentativas de desencostar do terreno por passo
 #define COLLISION_SKIN     0.02f   // folga deixada ao desencostar
 #define CONTACT_FRICTION   0.06f   // fração da velocidade perdida ao raspar no terreno
-#define LEVEL_MIN_SIDE     0.2f    // voando quase na vertical, não há "para cima" a seguir
+#define BANK_SMOOTH        6.0f    // rapidez com que a inclinação de desenho acompanha a curva
 #define LEASH_RADII        9.0f    // além desta distância (em raios do planeta) a nave é trazida de volta
 #define LEASH_PULL         0.6f    // força de volta por unidade de distância além do limite
 #define LEASH_MAX_THRUSTS  1.5f    // teto dessa força, em "empuxos do motor"
@@ -108,49 +108,48 @@ static float approach(float value, float target, float speed, float dt)
 }
 
 // --- giro -------------------------------------------------------------------
-static void turn(Ship *s, const InputState *in, const Planet *planet, const Tuning *t, float dt)
+// Horizonte travado no planeta (marco 12, contra o enjoo): o "para cima" é
+// sempre o do planeta. O mouse vira a nave em torno dele (guinada) e levanta
+// ou baixa o nariz (arfagem), até `ship.pitch_limit` graus do horizonte. A
+// nave nunca rola de verdade, então a câmera, que usa o topo da nave, nunca
+// gira o horizonte na tela. Nas curvas ela inclina só no desenho (`bank`).
+static void turn(Ship *s, const InputState *in, const Tuning *t, float dt)
 {
     float max_rate = t->ship_turn_rate * DEG2RAD;
     float sens = t->ship_mouse_sens * DEG2RAD;
 
     // O mouse dá um ângulo por passo; dividido pelo passo vira velocidade de
-    // giro. Sinais: girar em torno de +Y positivo vira para a esquerda, então
-    // mouse para a direita é negativo; em torno de +X positivo levanta o
-    // nariz, então mouse para baixo é negativo.
+    // giro. Mouse para a direita vira para a direita (guinada negativa, em
+    // torno do "para cima"); mouse para cima (dy negativo) levanta o nariz.
     float yaw = Clamp(-in->look_dx * sens / dt, -max_rate, max_rate);
     float pitch = Clamp(-in->look_dy * sens / dt, -max_rate, max_rate);
-
-    float roll = 0.0f;
-    if (in->held & ACT_BIT(ACT_ROLL_LEFT))  roll += t->ship_roll_rate * DEG2RAD;
-    if (in->held & ACT_BIT(ACT_ROLL_RIGHT)) roll -= t->ship_roll_rate * DEG2RAD;
-
-    // Sem rolagem manual, a nave se endireita sozinha: gira até o topo dela
-    // apontar para longe do planeta. Quanto mais longe do planeta, mais fraco.
-    if (roll == 0.0f && t->ship_auto_level > 0.0f) {
-        Vector3 forward = ship_forward(s);
-        float distance = Vector3Length(s->pos);
-        float radius = planet->params.radius;
-        float nearness = Clamp(1.0f - (distance - radius) / (radius * (t->ship_gravity_range - 1.0f)), 0.0f, 1.0f);
-
-        if (distance > 1e-3f && nearness > 0.0f) {
-            Vector3 away = Vector3Scale(s->pos, 1.0f / distance);
-            // Parte de "para longe do planeta" que fica de lado em relação ao nariz.
-            Vector3 side = Vector3Subtract(away, Vector3Scale(forward, Vector3DotProduct(away, forward)));
-            if (Vector3Length(side) > LEVEL_MIN_SIDE) {
-                side = Vector3Normalize(side);
-                float error = atan2f(Vector3DotProduct(side, ship_right(s)), Vector3DotProduct(side, ship_up(s)));
-                roll = Clamp(-error * t->ship_auto_level * nearness, -max_rate, max_rate);
-            }
-        }
-    }
-
-    Vector3 target = { pitch, yaw, roll };
+    Vector3 target = { pitch, yaw, 0.0f };
     float blend = 1.0f - expf(-t->ship_turn_smooth * dt);
     s->turn = Vector3Lerp(s->turn, target, blend);
 
-    // Multiplicar pela direita aplica o giro nos eixos da própria nave.
-    Quaternion step = QuaternionFromEuler(s->turn.x * dt, s->turn.y * dt, s->turn.z * dt);
-    s->rot = QuaternionNormalize(QuaternionMultiply(s->rot, step));
+    float distance = Vector3Length(s->pos);
+    Vector3 up = (distance > 1e-3f) ? Vector3Scale(s->pos, 1.0f / distance) : ship_up(s);
+    Vector3 forward = Vector3RotateByAxisAngle(ship_forward(s), up, s->turn.y * dt);
+
+    // Arfagem medida do horizonte, com limite (sem ele, voando na vertical não
+    // haveria "direita" para virar).
+    float limit = t->ship_pitch_limit * DEG2RAD;
+    float elevation = asinf(Clamp(Vector3DotProduct(forward, up), -1.0f, 1.0f));
+    float wanted = Clamp(elevation + s->turn.x * dt, -limit, limit);
+    Vector3 flat = Vector3Subtract(forward, Vector3Scale(up, Vector3DotProduct(forward, up)));
+    if (Vector3LengthSqr(flat) < 1e-8f) flat = Vector3Perpendicular(up);   // vertical exata: qualquer rumo serve
+    flat = Vector3Normalize(flat);
+    forward = Vector3Add(Vector3Scale(flat, cosf(wanted)), Vector3Scale(up, sinf(wanted)));
+    s->rot = quat_look(forward, up);
+
+    // Inclinação de desenho: para dentro da curva, e um pouco para o lado do
+    // deslocamento lateral (A/D).
+    float side = 0.0f;
+    if (in->held & ACT_BIT(ACT_RIGHT)) side -= 1.0f;
+    if (in->held & ACT_BIT(ACT_LEFT))  side += 1.0f;
+    float bank_max = t->ship_bank * DEG2RAD;
+    float bank = Clamp(s->turn.y / fmaxf(max_rate, 1e-3f) * 2.5f, -1.0f, 1.0f) * bank_max + side * t->ship_bank_strafe * DEG2RAD;
+    s->bank = Lerp(s->bank, Clamp(bank, -bank_max, bank_max), 1.0f - expf(-BANK_SMOOTH * dt));
 }
 
 // --- colisão ----------------------------------------------------------------
@@ -243,6 +242,7 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
 
     s->pos_prev = s->pos;
     s->rot_prev = s->rot;
+    s->bank_prev = s->bank;
 
     if (!s->alive) {
         s->respawn_left -= dt;
@@ -256,7 +256,7 @@ ShipEvents ship_tick(Ship *s, const InputState *in, const Planet *planet, const 
     if (s->dash_left > 0.0f) s->dash_left -= dt;
     if (s->dash_wait > 0.0f) s->dash_wait -= dt;
 
-    turn(s, in, planet, t, dt);
+    turn(s, in, t, dt);
     Vector3 forward = ship_forward(s);
     Vector3 right = ship_right(s);
 

@@ -25,8 +25,9 @@ typedef enum {
 // De quem é um SHOT_BOLT. Só os do jogador quebram rochas: um aliado (ou uma
 // torre) não pode destruir o meteoro que o jogador queria rebocar. BOLT_BROOD
 // é um ferrão da Ninhada (núcleo Colmeia): persegue um inimigo. BOLT_SUICIDE é
-// um drone suicida (sinergia Enxame + Kamikaze): persegue e explode.
-enum { BOLT_PLAYER = 0, BOLT_ALLY = 1, BOLT_BROOD = 2, BOLT_SUICIDE = 3 };
+// um drone suicida (sinergia Enxame + Kamikaze): persegue e explode. BOLT_MISSILE
+// é um míssil da nave (botão direito): persegue a trava e explode.
+enum { BOLT_PLAYER = 0, BOLT_ALLY = 1, BOLT_BROOD = 2, BOLT_SUICIDE = 3, BOLT_MISSILE = 4 };
 
 typedef struct {
     Vector3 pos;

@@ -42,6 +42,8 @@ static const Color MARKER_COLOR = { 255, 255, 255, 230 };
 static const Color PRIZE_COLOR         = { 255, 214, 110, 255 };
 static const Color BOSS_COLOR          = { 255, 84, 60, 255 };
 static const Color ABILITY_COLOR       = { 120, 220, 255, 255 };
+static const Color MISSILE_COLOR       = { 255, 200, 120, 255 };   // mísseis: cargas e travas
+static const Color FOCUS_COLOR         = { 170, 235, 255, 255 };   // foco da esquiva perfeita
 static const Color CAPACITOR_COLOR     = { 255, 210, 80, 255 };
 static const Color CORE_OPEN_COLOR     = { 255, 110, 230, 255 };
 static const Color TRACTOR_COLOR       = { 110, 255, 210, 255 };
@@ -369,6 +371,64 @@ static void draw_level(const World *w, const Tuning *t, int x, int y, int pips_x
     }
 }
 
+// Mísseis: as cargas em pontinhos sob a mira (a que recarrega vai enchendo),
+// o círculo da trava enquanto o botão está apertado e um colchete girando em
+// cada alvo travado. E o foco da esquiva perfeita, acima da mira.
+static void draw_missile_hud(const World *w, const Tuning *t, Camera3D camera, int cx, int cy)
+{
+    const Missiles *m = &w->missiles;
+    float now = (float)GetTime();
+    int count = t->missile_count;
+    for (int k = 0; k < count; k++) {
+        float x = (float)cx + ((float)k - 0.5f * (float)(count - 1)) * 11.0f;
+        float y = (float)cy + 26.0f;
+        Vector2 a = { x, y - 4.0f }, b = { x - 3.5f, y + 3.0f }, c = { x + 3.5f, y + 3.0f };
+        if (k < m->charges) {
+            DrawTriangle(a, b, c, MISSILE_COLOR);
+        } else {
+            DrawTriangleLines(a, b, c, with_alpha(MISSILE_COLOR, 0.4f));
+            if (k == m->charges) {   // a próxima, enchendo
+                float fill = 1.0f - m->recharge / fmaxf(t->missile_recharge, 1e-3f);
+                DrawRectangle((int)(x - 3.5f), (int)(y + 5.0f), (int)(7.0f * fill), 2, with_alpha(MISSILE_COLOR, 0.8f));
+            }
+        }
+    }
+    if (m->painting) {
+        float focal = (float)GetScreenHeight() * 0.5f / tanf(camera.fovy * 0.5f * DEG2RAD);
+        float radius = focal * tanf(t->missile_cone * DEG2RAD);
+        DrawCircleLines(cx, cy, radius, with_alpha(MISSILE_COLOR, 0.35f + 0.15f * sinf(now * 10.0f)));
+    }
+    for (int k = 0; k < m->lock_count; k++) {
+        const Enemy *en = &w->enemies.items[m->lock[k]];
+        Vector2 p;
+        if (!project(camera, en->pos, &p)) continue;
+        float size = 14.0f + 2.0f * sinf(now * 9.0f + (float)k);
+        float spin = now * 2.0f;
+        for (int c = 0; c < 4; c++) {   // quatro cantos girando
+            float a0 = spin + (float)c * PI * 0.5f;
+            Vector2 corner = { p.x + cosf(a0) * size, p.y + sinf(a0) * size };
+            Vector2 e1 = { corner.x + cosf(a0 + 2.4f) * 7.0f, corner.y + sinf(a0 + 2.4f) * 7.0f };
+            Vector2 e2 = { corner.x + cosf(a0 - 2.4f) * 7.0f, corner.y + sinf(a0 - 2.4f) * 7.0f };
+            DrawLineEx(corner, e1, 2.0f, MISSILE_COLOR);
+            DrawLineEx(corner, e2, 2.0f, MISSILE_COLOR);
+        }
+    }
+    if (w->focus > 0.0f) {
+        float a = Clamp(w->focus / 0.4f, 0.0f, 1.0f);
+        float since = t->dodge_focus - w->focus;
+        bool fresh = since < 0.8f;   // no primeiro instante, o nome do feito
+        text_centered(fresh ? "ESQUIVA PERFEITA!" : "FOCO", cx, cy - (fresh ? 58 : 46), fresh ? LABEL_SIZE + 4 : SMALL_SIZE + 2,
+                      with_alpha(fresh ? WHITE : FOCUS_COLOR, a));
+        DrawRectangle(cx - 24, cy - 26, (int)(48.0f * w->focus / fmaxf(t->dodge_focus, 1e-3f)), 2, with_alpha(FOCUS_COLOR, a));
+        if (fresh) {   // um sopro de luz nas bordas da tela
+            int sw = GetScreenWidth(), sh = GetScreenHeight();
+            Color edge = with_alpha(FOCUS_COLOR, 0.35f * (1.0f - since / 0.8f));
+            DrawRectangleGradientH(0, 0, sw / 6, sh, edge, BLANK);
+            DrawRectangleGradientH(sw - sw / 6, 0, sw / 6, sh, BLANK, edge);
+        }
+    }
+}
+
 static void draw_reticle(int cx, int cy, Color color)
 {
     DrawCircleLines(cx, cy, 9.0f, color);
@@ -470,7 +530,7 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         Color c = (ab->cooldown <= 0.0f) ? ABILITY_COLOR : with_alpha(ABILITY_COLOR, 0.45f);
         draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, (ab->charge > 0.0f) ? ab->charge / t->ability_charge : ready, c);
         if (ab->cooldown <= 0.0f && ab->charge <= 0.0f) {
-            ui_draw_text(hud_keys("botão direito", "LT"), x + 96 + SHIP_BAR_WIDTH - ui_measure_text(hud_keys("botão direito", "LT"), SMALL_SIZE + 2), ay - 12,
+            ui_draw_text(hud_keys("Q", "LB"), x + 96 + SHIP_BAR_WIDTH - ui_measure_text(hud_keys("Q", "LB"), SMALL_SIZE + 2), ay - 12,
                      SMALL_SIZE + 2, DIM_COLOR);
         }
     }
@@ -497,6 +557,7 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
         draw_reticle(cx, cy, MARKER_COLOR);
         if (w->kill_marker > 0.0f) draw_hit_marker(cx, cy, w->kill_marker / 0.3f, true);
         else                      draw_hit_marker(cx, cy, w->hit_marker / 0.12f, false);
+        draw_missile_hud(w, t, camera, cx, cy);
     }
 
     // Antecipação: onde mirar no inimigo mais perto do nariz. Ele se move e o
@@ -957,7 +1018,7 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
             break;
         }
         text_centered("NÚCLEO ROMPE-MUNDOS ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(ABILITY_COLOR, fade));
-        text_centered(TextFormat(hud_keys("segure o botão direito: um raio que atravessa tudo (recarga de %.0f s)", "segure LT: um raio que atravessa tudo (recarga de %.0f s)"),
+        text_centered(TextFormat(hud_keys("segure Q: um raio que atravessa tudo (recarga de %.0f s)", "segure LB: um raio que atravessa tudo (recarga de %.0f s)"),
                                  (double)t->ability_cooldown),
                       sw / 2, y + BANNER_SIZE - 6, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
         break;

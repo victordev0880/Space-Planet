@@ -17,6 +17,7 @@
 #define HUNTER_PRIORITY 0.6f    // vindo atrás da nave (Kamikaze travado, Atirador mirando)
 #define SHIELDED_PRIORITY 4.0f  // protegido por escudo: quase nunca vale a pena
 #define WORM_WATCH_PRIORITY 0.3f    // Verme: o ponto de onde ele vai sair (no aviso)
+#define MISSILE_AUTOPILOT_LOCKS 2   // dispara os mísseis com este tanto de travas
 #define WORM_SHADOW_PRIORITY 3.0f   // ... e a cabeça dele debaixo da terra (quando não há nada melhor)
 #define TUNNEL_HOVER    22.0f   // altura sobre a boca do túnel de onde atira para baixo
 #define TUNNEL_ARRIVE   8.0f    // chegou ao ponto sobre a boca...
@@ -246,7 +247,7 @@ static bool plan_delivery(const World *w, const Tuning *t, const Rock *rock, Vec
 void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
 {
     const uint32_t flight = ACT_BIT(ACT_FORWARD) | ACT_BIT(ACT_BACK) | ACT_BIT(ACT_BOOST) | ACT_BIT(ACT_FIRE)
-                          | ACT_BIT(ACT_ALT_FIRE) | ACT_BIT(ACT_TRACTOR) | ACT_BIT(ACT_BUY1) | ACT_BIT(ACT_BUY2)
+                          | ACT_BIT(ACT_ALT_FIRE) | ACT_BIT(ACT_ABILITY1) | ACT_BIT(ACT_TRACTOR) | ACT_BIT(ACT_BUY1) | ACT_BIT(ACT_BUY2)
                           | ACT_BIT(ACT_BUY3);
     sample->held &= ~flight;
     sample->look_dx = 0.0f;
@@ -403,10 +404,20 @@ void autopilot_drive(const World *w, const Tuning *t, InputSample *sample)
     if (distance < CHASE_NEAR) sample->held |= ACT_BIT(ACT_BACK);
     if (ahead > cosf(FIRE_ANGLE_DEG * DEG2RAD) && distance < t->weapon_range * 0.9f) {
         sample->held |= ACT_BIT(ACT_FIRE);
-        // Com o núcleo Rompe-Mundos pronto, segura o botão direito também (numa
-        // rocha não: o raio não a quebra).
+        // Com o núcleo Rompe-Mundos pronto, segura o Q também (numa rocha não:
+        // o raio não a quebra).
         if (!mining && w->ability.owned && w->ability.cooldown <= 0.0f && distance < t->ability_range * 0.8f) {
-            sample->held |= ACT_BIT(ACT_ALT_FIRE);
+            sample->held |= ACT_BIT(ACT_ABILITY1);
         }
+    }
+
+    // Mísseis: com duas cargas e um inimigo à frente, segura o botão direito;
+    // solta com duas travas, ou depois de um segundo sem travar mais nenhuma.
+    const Missiles *m = &w->missiles;
+    if (m->painting) {
+        if (m->lock_count < MISSILE_AUTOPILOT_LOCKS && m->lock_wait > -1.0f) sample->held |= ACT_BIT(ACT_ALT_FIRE);
+    } else if (target.found && target.enemy >= 0 && m->charges >= MISSILE_AUTOPILOT_LOCKS && distance < t->missile_range
+               && ahead > cosf(t->missile_cone * DEG2RAD)) {
+        sample->held |= ACT_BIT(ACT_ALT_FIRE);
     }
 }

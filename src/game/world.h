@@ -60,8 +60,21 @@ typedef struct {
 
 #define WORLD_IMPACT_HISTORY 32
 
-// Núcleo Rompe-Mundos, a recompensa do primeiro boss: segurando o botão
-// direito, a nave carrega e solta um raio que atravessa tudo numa linha.
+// Mísseis (botão direito): segurando, a mira trava até MISSILE_LOCKS alvos à
+// frente, um de cada vez; soltando, sai um míssil teleguiado por trava (sem
+// trava, um só, em frente). As cargas recarregam sozinhas.
+#define MISSILE_LOCKS 4
+typedef struct {
+    int     charges;               // mísseis prontos
+    float   recharge;              // segundos até a próxima carga
+    float   lock_wait;             // segundos até a próxima trava
+    int16_t lock[MISSILE_LOCKS];   // inimigos travados (índices no pool)
+    int     lock_count;
+    bool    painting;              // o botão está apertado
+} Missiles;
+
+// Núcleo Rompe-Mundos, a recompensa do primeiro boss: segurando Q, a nave
+// carrega e solta um raio que atravessa tudo numa linha.
 typedef struct {
     bool    owned;       // a nave tem o núcleo
     float   cooldown;    // segundos até poder usar de novo
@@ -128,6 +141,9 @@ typedef struct {
     Brood        brood;
     Tunnel       tunnel;
     float        suicide_wait;  // Drones suicidas (sinergia): segundos até o próximo
+    Missiles     missiles;
+    float        focus;         // esquiva perfeita: segundos de tiros mais fortes
+    bool         dodge_used;    // ... e se este dash já valeu uma (uma por dash)
     int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
     // --- rochas e conserto ---

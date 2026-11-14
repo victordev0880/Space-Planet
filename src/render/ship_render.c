@@ -461,6 +461,9 @@ void ship_draw(const Ship *s, const Evolution *evo, const Planet *planet, const 
     // Pose interpolada entre o passo anterior e o atual.
     Vector3 pos = Vector3Lerp(s->pos_prev, s->pos, alpha);
     Quaternion rot = QuaternionSlerp(s->rot_prev, s->rot, alpha);
+    // Inclinação nas curvas: só no desenho (a câmera fica no horizonte).
+    float bank = Lerp(s->bank_prev, s->bank, alpha);
+    rot = QuaternionMultiply(rot, QuaternionFromAxisAngle((Vector3){ 0.0f, 0.0f, 1.0f }, bank));
     Vector3 sun = tuning_sun_direction(t);
 
     // Clarão: branco-azulado no dash (invulnerável); avermelhado logo depois

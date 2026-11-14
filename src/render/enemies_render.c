@@ -311,6 +311,9 @@ static const Color PLASMA_CORE     = { 255, 210, 255, 255 };
 static const Color PLASMA_HALO     = { 190,  80, 255, 255 };
 static const Color SUICIDE_CORE    = { 255, 236, 190, 255 };   // drone suicida (sinergia): laranja
 static const Color SUICIDE_HALO    = { 255, 130, 50, 255 };
+static const Color MISSILE_TRAIL   = { 170, 200, 255, 255 };   // míssil da nave: fumaça azulada
+#define MISSILE_TRAIL_MAX 9.0f
+static const Color MISSILE_FLAME   = { 255, 190, 110, 255 };
 static const Color BOMB_COLOR      = { 255,  70,  50, 255 };
 static const Color MARK_COLOR      = { 255,  44,  32, 255 };
 static const Color DIG_MARK_COLOR  = { 255, 150,  40, 255 };
@@ -428,6 +431,18 @@ void projectiles_draw(const World *w, const Tuning *t, float alpha, Texture2D gl
             Vector3 tail = Vector3Subtract(pos, Vector3Scale(dir, length));
             streak(tail, pos, 2.6f, faded((Color){ 140, 255, 90, 255 }, 0.45f), eye);
             streak(tail, pos, 0.8f, faded((Color){ 230, 255, 200, 255 }, 0.95f), eye);
+        } else if (s->kind == SHOT_BOLT && s->source == BOLT_MISSILE) {
+            // Míssil: corpo branco curto e um rastro de fumaça azulada. Como o
+            // tiro, fica fino e fraco perto da câmera (saindo da nave, viraria
+            // um facho largo na frente da tela).
+            float length = fminf(MISSILE_TRAIL_MAX, s->age * speed * 0.5f + 0.4f);   // curto: não passa por trás da câmera
+            Vector3 tail = Vector3Subtract(pos, Vector3Scale(dir, length));
+            Vector3 body = Vector3Subtract(pos, Vector3Scale(dir, 0.9f));
+            float distance = Vector3Distance(pos, eye);
+            float near = Clamp((distance - BOLT_NEAR) / (BOLT_CLEAR - BOLT_NEAR), 0.1f, 1.0f);
+            float width = Clamp(distance / BOLT_WIDTH_AT, 0.25f, 1.5f);
+            streak(tail, body, 2.4f * width, faded(MISSILE_TRAIL, 0.4f * near), eye);
+            streak(body, pos, 0.8f * width, faded(WHITE, 0.95f * near), eye);
         } else if (s->kind == SHOT_BOLT && s->source == BOLT_SUICIDE) {
             // Drone suicida: um rastro laranja grosso (a cabeça acesa vem abaixo).
             float length = fminf(speed * 0.1f, s->age * speed + 0.4f);
@@ -464,6 +479,12 @@ void projectiles_draw(const World *w, const Tuning *t, float alpha, Texture2D gl
         if (s->kind == SHOT_PLASMA && s->source != ENEMY_SNIPER) {
             DrawBillboard(camera, glow, pos, PLASMA_SIZE * 1.6f, faded(PLASMA_HALO, 0.8f));
             DrawBillboard(camera, glow, pos, PLASMA_SIZE * 0.6f, PLASMA_CORE);
+        } else if (s->kind == SHOT_BOLT && s->source == BOLT_MISSILE) {
+            // A chama do motor, atrás.
+            float speed = Vector3Length(s->vel);
+            Vector3 back = (speed > 1e-3f) ? Vector3Scale(s->vel, -1.0f / speed) : (Vector3){ 0.0f, 0.0f, 0.0f };
+            float flicker = 0.75f + 0.25f * sinf(time * 40.0f + (float)i);
+            DrawBillboard(camera, glow, Vector3Add(pos, Vector3Scale(back, 1.0f)), 2.2f * flicker, faded(MISSILE_FLAME, 0.8f));
         } else if (s->kind == SHOT_BOLT && s->source == BOLT_SUICIDE) {
             float blink = 0.7f + 0.3f * sinf(time * 30.0f + (float)i);
             DrawBillboard(camera, glow, pos, 3.0f, faded(SUICIDE_HALO, 0.7f * blink));
