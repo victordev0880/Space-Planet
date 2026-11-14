@@ -101,6 +101,32 @@ static void aim_warns_then_bites(void)
     float hp = w.boss.hp;
     CHECK_NEAR(boss_hit(&w.boss, &t, ID_THROAT, 10.0f, &w.events, (uint32_t)w.tick), 10.0f, 1e-4);
     CHECK_NEAR(w.boss.hp, hp - 10.0f, 1e-3);
+
+    // Mastigando, ele ergue a cabeça: a boca (e a garganta) não fica enfiada
+    // no chão. (A nave está do outro lado do planeta: ele olha para o alto.)
+    run(&w, &t, seconds(1.0f));
+    CHECK(w.boss.action == DEV_CHEW);
+    Vector3 mouth_dir = Vector3RotateByQuaternion((Vector3){ 0.0f, 0.0f, -1.0f }, w.boss.rot);
+    CHECK(Vector3DotProduct(mouth_dir, Vector3Normalize(w.boss.pos)) > 0.5f);
+    CHECK(planet_sample(&w.planet, boss_point(&w.boss, &t, DEV_THROAT)) < VOXEL_ISO);
+}
+
+// Mordidas repetidas no mesmo ponto não cavam mais fundo (medem do relevo
+// original) e não soltam fragmentos (o pedaço vai para a boca).
+static void bites_do_not_dig_deeper(void)
+{
+    static World w;
+    Tuning t = small();
+    make_world(&w, &t);
+    Vector3 dir = { 0.0f, 1.0f, 0.0f };
+    Terrain terrain = planet_terrain(&w.planet.params, dir);
+    Vector3 ground = Vector3Scale(dir, w.planet.params.radius + (terrain.land ? terrain.elevation : 0.0f));
+    int fragments = rocks_count(&w.rocks, ROCK_FRAGMENT);
+    CHECK(world_impact_at(&w, &t, ground, t.dev_bite_radius, t.dev_bite_depth, false));
+    int64_t after_one = w.planet.volume;
+    world_impact_at(&w, &t, ground, t.dev_bite_radius, t.dev_bite_depth, false);
+    CHECK(w.planet.volume == after_one);
+    CHECK(rocks_count(&w.rocks, ROCK_FRAGMENT) == fragments);
 }
 
 // Dano bastante nos olhos durante o aviso: ele erra (atordoado) e o planeta fica inteiro.
@@ -211,6 +237,7 @@ void suite_devourer(void)
     tun = test_tuning();
     CHECK(arena_init(&arena, 8u * 1024u * 1024u));
     RUN(aim_warns_then_bites);
+    RUN(bites_do_not_dig_deeper);
     RUN(eyes_make_it_miss);
     RUN(shield_breaks_the_teeth);
     RUN(vortex_swallows_rocks_and_heals);

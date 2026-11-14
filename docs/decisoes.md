@@ -1169,6 +1169,159 @@ Comandos `menu title|pause|options|controls|game` e `pad on|off`; roteiros
 - A música é uma peça só, e as variações são de arranjo. Se cansar, dá para
   escrever uma segunda progressão para a segunda metade das hordas.
 
+## Marco 11: conteúdo (2026-11-13 e 14)
+
+Pedido do Victor: "faça os bosses com mecânicas realmente divertidas de
+enfrentar". O marco trouxe os três bosses que faltavam, a campanha de 20
+hordas, as sinergias e o balanceamento. Foram quatro commits.
+
+### A estrutura comum dos bosses
+O Rompe-Mundos era um arquivo só. Agora `boss.c` tem a parte comum (entrada,
+fases pela vida, morte em explosões, os pedidos ao mundo), e cada boss vive no
+próprio arquivo (`boss_breaker.c`, `boss_hive.c`, `boss_worm.c`,
+`boss_devourer.c`).
+
+O corpo é uma lista de esferas (`BossPart`), cada uma com um papel:
+- casco, que só bloqueia;
+- alvo (capacitor, bolsa, nódulo, olho);
+- núcleo.
+
+A peça diz se está aberta, se a nave bate nela, para que lado está voltada e
+quão urgente ela é para o piloto automático. Tiros, o raio do núcleo, batidas,
+os marcadores do HUD e o piloto automático só enxergam essa lista. O dano
+volta ao boss por `boss_hit`. O Rompe-Mundos passou pela mudança com o mesmo
+hash de antes em `boss1.txt`.
+
+### Colmeia Lunar (horda 10)
+Ela se agarra à Lua; o coração fica de frente para a Terra.
+- **Bolsas**: uma de cada vez incha (o aviso) e solta drones. Estourada antes,
+  a ninhada morre junto. Com as seis estouradas, o coração abre (dano
+  inteiro); depois elas renascem.
+- **Fase 2** (65% da vida): nascem três propulsores atrás da Lua, que a
+  empurram contra a Terra. Com a Lua perto, um tentáculo arranca a crosta
+  embaixo dela, mais rápido quanto mais perto. Destruídos os propulsores, a
+  Lua volta devagar. É o "defender ou caçar" na luta de boss.
+- **Fase 3** (30%): o coração cospe ácido na nave e fica entreaberto.
+- **Esporos**: a cada duas bolsas estouradas fica um esporo boiando. O raio
+  trator o pega e, apertando F de novo, o arremessa: no coração, dá dano mesmo
+  fechado. É o raio trator (do marco 9) virando arma.
+- Recompensa: a **Ninhada** (tecla G; R3 no controle), uma revoada de 8
+  ferrões teleguiados, com recarga de 18 s.
+
+### Verme do Núcleo (horda 15)
+Ele nada dentro do planeta e salta para fora.
+- **Debaixo da terra** o chão treme em cima dele, e a cabeça cava um túnel de
+  verdade, onde a nave cabe e por onde pode segui-lo. Os túneis desmoronam
+  depois de 10 s, a não ser com a nave dentro.
+- **O aviso**: o chão racha em vermelho 1,8 s antes da saída.
+- **O salto** (5,5 s): um arco pelo espaço, de boca aberta (dano inteiro) e
+  com os quatro nódulos do dorso à mostra. Cada nódulo destruído tira 10% da
+  vida.
+- **O ferrão**: dentro do túnel, atrás dele, a cauda fica exposta. Acertada,
+  ele sai na hora, atordoado, num salto lento e baixo: é a recompensa de quem
+  tem coragem de entrar no túnel.
+- **Fase 2**: no caminho, passa pelo núcleo e o morde, e cospe larvas
+  (Kamikazes) ao sair. **Fase 3**: nada rente à superfície com o dorso para
+  fora, abrindo um sulco.
+- Recompensa: o **Túnel** (tecla X; direcional para baixo), que atravessa o
+  planeta e sai do outro lado (com a rocha a reboque junto), com recarga de 22 s.
+- Custo do túnel: as mordidas ficam a 4,5 de distância e o túnel desmorona
+  com um raio que cobre o espaço entre duas mordidas. Assim, metade dos chunks
+  é remalhada em relação à primeira versão.
+
+### Devorador (horda 20, o último)
+Uma bocarra colossal (um corpo de larva em anéis, mandíbulas com dentes,
+pinças de osso) que ronda o planeta.
+- **Redemoinho**: suga rochas e minério para a boca; cada rocha engolida cura
+  (fragmento 2,5%, meteoro 5%). Rebocar a rocha protege (a do raio trator
+  resiste). Roubar as rochas dele é parte da luta.
+- **A mordida**: ele marca um ponto no chão (anéis vermelhos que se fecham) e
+  paira em cima, com os olhos acesos. Três respostas:
+  - acertar os olhos o bastante: ele erra e fica atordoado;
+  - pôr um escudo local (tecla 5) no alvo: quebra os dentes, e ele fica
+    atordoado por mais tempo;
+  - não fazer nada: uma cratera enorme.
+- **Mastigando** ou **atordoado**, ele ergue a cabeça e encara a nave, com a
+  garganta exposta (dano inteiro).
+- **Humor pelo HP do planeta**: faminto; frenético abaixo de 85% (mordidas
+  mais rápidas e rajadas de dentes na nave); **banquete** abaixo de 60%. No
+  banquete ele se agarra ao planeta e devora sem parar, e o ponto fraco passa
+  a ser o papo nas costas: 10% da vida em dano o arranca de lá.
+- **Consertar o planeta acalma o Devorador**, porque o humor volta. A
+  economia do marco 9 vira estratégia de boss.
+- **Morto**, ele devolve o que engoliu: até 14 rochas chovem sobre as maiores
+  crateras e as consertam. É a recompensa do último boss (não há núcleo: a
+  partida acaba).
+
+Ajustes medidos com o piloto automático:
+- A mordida soltava fragmentos, e o redemoinho os engolia de volta: ele se
+  curava 45% em 3 minutos. Agora o pedaço mordido vai para a boca, sem
+  fragmentos.
+- Mordidas repetidas no mesmo lugar chegavam ao núcleo. A mordida agora mede
+  a profundidade a partir do relevo original (`world_impact_at`), como o
+  corte do Rompe-Mundos.
+- Mastigando, a boca ficava enfiada na cratera e a garganta "exposta" era
+  inalcançável. Daí ele erguer a cabeça e encarar a nave.
+- Vida 560. O piloto automático evoluído o vence em 5,2 minutos, com o planeta
+  em 91%.
+
+### A câmera e os bosses
+Os bosses são enormes, e a câmera de perseguição entrava no corpo deles (a
+tela virava uma parede de polígonos). A câmera já recuava diante do terreno
+e da Lua; agora recua também diante das peças sólidas do boss (menos a que
+envolve a própria nave).
+
+### Campanha de 20 hordas
+- Um boss a cada 5 hordas (5, 10, 15 e 20). Vencido o Devorador, a partida
+  está ganha.
+- As hordas 11 a 19 combinam os tipos: cerco de Sifões e Atiradores, dois
+  Porta-drones, ataque ao núcleo pelos dois lados, a "sangria". A maior tem 36
+  inimigos, chegando em grupos.
+- **Escalonamento**: os inimigos nascem com 4% a mais de vida a cada horda
+  (`waves.hp_growth`; 76% a mais na horda 20). A nave cresce com as
+  evoluções, e as hordas finais precisam acompanhar. A barra de vida dos
+  inimigos agora usa a vida máxima de cada um.
+
+### Sinergias
+Uma carta dourada de nível único para cada par de linhas, cobrindo as 8
+linhas. Só entra no sorteio quando a nave já tem uma evolução de cada linha do
+par, e aí com peso alto (`cards.synergy_weight`): misturar é recompensado.
+- **Drones suicidas** (Enxame + Kamikaze): a cada 3,5 s, um drone teleguiado
+  sai atrás do inimigo mais perto e explode nele.
+- **Feixe restaurador** (Sifão + Escavador): quebrar uma rocha a tiros também
+  conserta a maior cratera (um rastro verde vai da rocha até lá), e o minério
+  continua saindo. A escolha "consertar ou minerar" deixa de ser excludente
+  para quem montou esta sinergia.
+- **Desmanche** (Bombardeiro + Porta-drones): cada abate deixa minério (1
+  cristal dos pequenos, 4 dos grandes), e as defesas ficam ao alcance.
+- **Mira blindada** (Atirador + Escudeiro): com o escudo cheio, cada tiro vale
+  1,6. Premia quem não leva dano.
+
+As sinergias ganham peças douradas na nave e não contam para a linha
+dominante (a cor da nave).
+
+### Piloto automático
+Ele seguia o Verme mal: nunca estava perto quando o Verme saltava. Agora, no
+aviso, corre para cima do ponto de saída; no resto do tempo, acompanha a
+cabeça dele por cima, como faria um jogador que segue o tremor.
+
+### Medições (Vega 8)
+- `onda1.txt`, a campanha inteira pelo piloto automático: **vitória nas 20
+  hordas** em 27 minutos de jogo, com o planeta em 90% e o núcleo em 94%. Os
+  bosses caíram aos 3,7, 9,6, 19,9 e 26,8 minutos. Mediana de 4,75 ms, p99 de
+  11 ms, 172 quadros acima do orçamento em 108 mil (0,16%).
+- `devourer1.txt`: mediana de 5,8 ms, p99 de 11,5 ms.
+- As lutas, com a nave evoluída como na horda 15 e o piloto automático:
+  Devorador em 5,2 min; Verme a 24% da vida em 8 min. O piloto automático não
+  entra em túneis (não usa o ferrão). Para um jogador, o Verme é o boss de
+  habilidade: mira num alvo em movimento.
+
+### Limitações conhecidas do marco 11
+- O piloto automático não usa os núcleos de boss (Ninhada, Túnel) nem o
+  esporo arremessado. As lutas dele são o pior caso.
+- A vida dos bosses não escala com a partida: eles são medidos contra a nave
+  evoluída da horda em que aparecem.
+
 ## Respostas do Victor (2026-11-11)
 
 - **Shaders GLSL são permitidos** na competição. Continuam isolados em

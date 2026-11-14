@@ -6,6 +6,9 @@
 //                                   Terra e arranca a crosta com um tentáculo.
 //   Verme do Núcleo (boss_worm.c)   nada dentro do planeta cavando túneis e
 //                                   salta para fora; persiga-o pelos túneis.
+//   Devorador     (boss_devourer.c) a bocarra final: suga rochas para se curar
+//                                   e morde o planeta; acerte os olhos no aviso,
+//                                   ou ponha um escudo local no alvo.
 //
 // Comum a todos: uma entrada (invulnerável), a luta em fases pela vida, pontos
 // fracos que abrem e fecham, e a morte em explosões. O corpo é descrito como
