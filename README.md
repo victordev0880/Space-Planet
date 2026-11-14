@@ -19,7 +19,7 @@ Não precisa instalar nada. O `LEIA-ME.txt` dentro do pacote traz os controles.
 
 ### Online cooperativo (até 4 jogadores)
 
-Windows e Linux jogam juntos. Um jogador cria a sala (**JOGAR ONLINE > CRIAR SALA**) e os outros entram pelo IP dele. Fora da mesma rede local, use uma rede virtual gratuita como o [ZeroTier](https://www.zerotier.com/) (Windows e Linux) ou o Radmin VPN (só Windows). Todos precisam da mesma versão do jogo.
+Um jogador cria a sala (**JOGAR ONLINE > CRIAR SALA**) e os outros entram pelo IP dele. Fora da mesma rede local, use uma rede virtual gratuita como o [ZeroTier](https://www.zerotier.com/) (Windows e Linux) ou o Radmin VPN (só Windows). Todos precisam da mesma versão do jogo.
 
 O online é *lockstep*: cada computador roda a partida inteira e só os comandos trafegam. Por isso a simulação é determinística bit a bit, com trigonometria própria (`src/core/detmath.c`) em vez da biblioteca C de cada sistema. A CI compara a simulação do Windows com a do Linux a cada commit.
 
