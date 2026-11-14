@@ -5,6 +5,7 @@
 
 #include "game/combat.h"
 #include "voxel/damage.h"
+#include "voxel/terraform.h"
 
 #define PITCH_LIMIT (89.0f * DEG2RAD)
 
@@ -50,6 +51,9 @@ static const Rgb8 SHIELD_SPARK      = { 130, 210, 255 };
 #define BOSS_BLAST_JOLT 6.0f
 #define SPORE_DRIFT     3.0f     // velocidade com que o esporo sai da bolsa estourada
 #define MOON_RETURN     0.01f    // sem a Colmeia, a Lua recupera este tanto da distância por segundo
+#define WORM_CRATER_FROM 12.0f   // as crateras do Verme são "impactos" vindos deste tanto acima do chão
+#define WORM_DUST        6       // poeira de cada tremor em cima do Verme
+static const Rgb8 WORM_DUST_COLOR = { 140, 118, 96 };
 
 // ---------------------------------------------------------------------------
 //  Câmeras
@@ -605,6 +609,33 @@ void world_spawn_boss(World *w, const Tuning *t, BossType type, Vector3 dir)
     boss_spawn(&w->boss, type, &ctx, dir);
 }
 
+// O Verme: crateras de saída e de mergulho, trechos do túnel que desmoronam,
+// a erupção que pega a nave e a poeira no chão em cima dele.
+static void tick_worm_requests(World *w, const Tuning *t)
+{
+    const WormState *m = &w->boss.worm;
+    for (int i = 0; i < m->crater_count; i++) {
+        Vector3 up = Vector3Normalize(m->crater_at[i]);
+        world_impact(w, t, Vector3Add(m->crater_at[i], Vector3Scale(up, WORM_CRATER_FROM)), Vector3Negate(up),
+                     t->worm_breach_radius, t->worm_breach_depth);
+    }
+    // Um pouco maior que a mordida, para cobrir o túnel entre duas mordidas.
+    float refill = sqrtf(t->worm_tunnel_radius * t->worm_tunnel_radius + 0.25f * t->worm_tunnel_spacing * t->worm_tunnel_spacing);
+    for (int i = 0; i < m->restore_count; i++) planet_restore(&w->planet, m->restores[i], refill + 0.5f);
+    if (m->ship_damage > 0.0f && w->ship.alive && w->ship_active) combat_damage_ship(w, t, m->ship_damage, w->ship.pos);
+    if (m->dust_now && worm_underground(&w->boss, &w->planet)) {
+        // Tremor: poeira subindo do chão em cima da cabeça.
+        Vector3 up = Vector3Normalize(w->boss.pos);
+        Terrain ground = planet_terrain(&w->planet.params, up);
+        Vector3 at = Vector3Scale(up, w->planet.params.radius + (ground.land ? ground.elevation : 0.0f));
+        for (int k = 0; k < WORM_DUST; k++) {
+            Vector3 dir = Vector3Normalize(Vector3Add(up, Vector3Scale(rng_unit_vec3(&w->rng), 0.7f)));
+            spawn_glow(w, PARTICLE_DUST, at, Vector3Scale(dir, rng_range(&w->rng, 2.0f, 7.0f)),
+                       rng_range(&w->rng, 1.2f, 2.6f), rng_range(&w->rng, 0.8f, 1.6f), WORM_DUST_COLOR);
+        }
+    }
+}
+
 // O boss pensa; o mundo executa o que ele pede (cortes no planeta, drones,
 // explosões da morte) e, se ele acabou de cair, paga a recompensa.
 static void tick_boss(World *w, const Tuning *t)
@@ -619,6 +650,7 @@ static void tick_boss(World *w, const Tuning *t)
         rocks_spawn_spore(&w->rocks, &w->rng, t, b->hive.spore_at[i], Vector3Scale(out, SPORE_DRIFT));
     }
     b->hive.spore_count = 0;
+    if (b->type == BOSS_WORM) tick_worm_requests(w, t);
     // A Colmeia empurra a Lua; sem ela, a Lua volta devagar à órbita.
     float dt = 1.0f / (float)t->sim_hz;
     if (boss_active(b) && b->type == BOSS_HIVE) w->moon.scale = b->hive.moon_scale;
@@ -638,7 +670,7 @@ static void tick_boss(World *w, const Tuning *t)
     w->score.bosses++;
     world_give_xp(w, t, boss_xp((BossType)b->type, t));
     // A recompensa: o núcleo do boss (cada um dá uma habilidade).
-    bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : &w->ability.owned;
+    bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : (b->type == BOSS_WORM) ? &w->tunnel.owned : &w->ability.owned;
     if (!*owned) {
         *owned = true;
         events_push(&w->events, (uint32_t)w->tick, EV_REWARD, b->type, w->ship.pos, 0.0f);
@@ -672,6 +704,7 @@ void world_restart(World *w, const Tuning *t)
     boss_reset(&w->boss);
     memset(&w->ability, 0, sizeof w->ability);
     memset(&w->brood, 0, sizeof w->brood);
+    memset(&w->tunnel, 0, sizeof w->tunnel);
     w->moon.scale = 1.0f;
     rocks_reset(&w->rocks);
     defenses_reset(&w->defenses);
@@ -1212,6 +1245,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         combat_fire(w, &input, t, dt);
         combat_ability(w, &input, t, dt);
         combat_brood(w, &input, t, dt);
+        combat_tunnel(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);
         tick_meteors(w, t, dt);
@@ -1360,6 +1394,13 @@ uint64_t world_hash(const World *w)
             HASH(h, w->boss.hive.thr_hp);
             HASH(h, w->boss.hive.moon_scale);
             HASH(h, w->boss.hive.inflating);
+        }
+        if (w->boss.type == BOSS_WORM) {
+            HASH(h, w->boss.type);
+            HASH(h, w->boss.worm.nodule_hp);
+            HASH(h, w->boss.worm.tail_hp);
+            HASH(h, w->boss.worm.tunnel_count);
+            h = hash_vec3(h, w->boss.worm.seg[WORM_SEGMENTS - 1]);
         }
     }
     // Só entram no resumo quando existem (os roteiros antigos não mudam de hash).

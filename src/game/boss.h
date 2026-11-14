@@ -4,6 +4,8 @@
 //   Colmeia Lunar (boss_hive.c)     agarrada à Lua: bolsas que soltam drones;
 //                                   da fase 2 em diante, empurra a Lua contra a
 //                                   Terra e arranca a crosta com um tentáculo.
+//   Verme do Núcleo (boss_worm.c)   nada dentro do planeta cavando túneis e
+//                                   salta para fora; persiga-o pelos túneis.
 //
 // Comum a todos: uma entrada (invulnerável), a luta em fases pela vida, pontos
 // fracos que abrem e fecham, e a morte em explosões. O corpo é descrito como
@@ -134,6 +136,59 @@ typedef struct {
     Vector3 spore_at[2];             // ... aqui
 } HiveState;
 
+// --- Verme do Núcleo --------------------------------------------------------------
+// Um verme de segmentos que nada dentro do planeta. A cabeça cava um túnel
+// (que desmorona depois de um tempo, se a nave não estiver nele); o corpo
+// segue o rastro da cabeça. Ciclo: BURROW (debaixo da terra, rumo ao ponto
+// de saída; da fase 2 em diante passa antes pelo núcleo e o morde) ->
+// RUMBLE (o chão racha onde ele vai sair: o aviso) -> BREACH (salta num arco
+// pelo espaço, boca aberta e nódulos à mostra, e mergulha de novo). Na fase 3
+// nada rente à superfície (SWIM), com o dorso para fora, abrindo um sulco.
+// Acertar o ferrão da cauda dentro do túnel o faz sair antes, atordoado.
+#define WORM_SEGMENTS 14
+#define WORM_NODULES  4
+#define WORM_TRAIL    96     // pontos do rastro da cabeça (um a cada WORM_TRAIL_STEP)
+#define WORM_TUNNEL   128    // trechos do túnel esperando para desmoronar
+#define WORM_RESTORES 4      // trechos que desmoronam por passo
+
+typedef enum { WORM_BURROW, WORM_RUMBLE, WORM_BREACH, WORM_SWIM } WormAction;
+
+extern const int WORM_NODULE_SEGMENT[WORM_NODULES];   // em qual segmento fica cada nódulo
+
+typedef struct {
+    Vector3 trail[WORM_TRAIL];           // rastro da cabeça (o mais novo em trail_head)
+    int     trail_head, trail_count;
+    Vector3 seg[WORM_SEGMENTS];          // centros dos segmentos (0 = cabeça)
+    Vector3 seg_prev[WORM_SEGMENTS];
+    Vector3 heading;                     // para onde a cabeça vai (comprimento 1)
+    float   speed;
+    Vector3 goal;                        // ponto que a cabeça persegue agora
+    int     stage;                       // etapa do mergulho (0: fundo ou núcleo; 1: sob a saída)
+    Vector3 breach_dir;                  // direção (do centro) de onde ele vai sair
+    Vector3 land_dir;                    // ... e onde vai mergulhar de volta
+    float   arc_time, arc_total;         // salto: segundos decorridos e duração
+    bool    to_core;                     // este mergulho passa pelo núcleo
+    bool    bit_core;                    // ... e já o mordeu
+    bool    panic;                       // saiu atordoado (o ferrão foi acertado)
+    float   nodule_hp[WORM_NODULES];
+    float   nodule_flash[WORM_NODULES];
+    float   tail_hp, tail_flash;
+    bool    nodule_open[WORM_NODULES];   // o nódulo está fora da rocha (dá para acertar)
+    bool    tail_open;                   // o ferrão está no túnel, com a cabeça debaixo da terra
+    bool    panic_now;                   // o ferrão acabou de ser acertado: sair já
+    float   carve_left;                  // distância até a próxima mordida do túnel
+    float   dust_left;                   // distância até o próximo tremor no chão (o mundo levanta poeira)
+    bool    dust_now;
+    Vector3 tunnel[WORM_TUNNEL];         // trechos do túnel, do mais velho ao mais novo
+    float   tunnel_age[WORM_TUNNEL];
+    int     tunnel_first, tunnel_count;
+    Vector3 restores[WORM_RESTORES];     // pedidos: trechos que desmoronam neste passo
+    int     restore_count;
+    Vector3 crater_at[2];                // pedidos: crateras de saída e de mergulho
+    int     crater_count;
+    float   ship_damage;                 // pedido: dano na nave (a erupção pegou ela)
+} WormState;
+
 // --- o boss ---------------------------------------------------------------------
 typedef struct {
     uint8_t      type;          // BossType
@@ -165,6 +220,7 @@ typedef struct {
 
     BreakerState breaker;
     HiveState    hive;
+    WormState    worm;
 } Boss;
 
 typedef struct {
@@ -209,7 +265,7 @@ float boss_hit_core_raw(Boss *b, const Tuning *t, float amount, Events *events, 
 float boss_core_factor(const Boss *b, const Tuning *t);
 
 // Ferramentas (roteiros do autoplay): põe a vida numa fração da máxima, com a
-// troca de fase que isso causar. Só com o boss lutando.
+// troca de fase que isso causar (zero mata). Só com o boss lutando.
 void boss_set_health(Boss *b, const Tuning *t, float fraction, Events *events, uint32_t tick);
 
 // Números de cada tipo (data/bosses.txt).
@@ -234,5 +290,14 @@ int  hive_thrusters_left(const Boss *b);
 Vector3 hive_sac_point(const Boss *b, int k);
 float   hive_sac_size(const Boss *b, const Tuning *t, int k);
 Vector3 hive_thruster_point(const Boss *b, int k);
+
+// --- Verme do Núcleo ----------------------------------------------------------------
+float   worm_segment_radius(const Tuning *t, int k);
+// "Cima" e frente de um segmento (cima = para longe do planeta).
+Vector3 worm_segment_up(const Boss *b, int k);
+Vector3 worm_segment_forward(const Boss *b, int k);
+Vector3 worm_nodule_point(const Boss *b, const Tuning *t, int n);
+int     worm_nodules_left(const Boss *b);
+bool    worm_underground(const Boss *b, const Planet *planet);   // a cabeça está dentro do planeta
 
 #endif

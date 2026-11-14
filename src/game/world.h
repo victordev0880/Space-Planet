@@ -77,6 +77,15 @@ typedef struct {
     float cooldown;   // segundos até poder usar de novo
 } Brood;
 
+// Núcleo do Verme, a recompensa do terceiro boss: a tecla X faz a nave
+// atravessar o planeta e sair do outro lado.
+typedef struct {
+    bool    owned;
+    float   cooldown;
+    float   flash;      // segundos do efeito na tela depois da travessia (só desenho)
+    Vector3 from;       // de onde saiu (só desenho)
+} Tunnel;
+
 typedef enum {
     GAME_PLAYING,
     GAME_WON,      // todas as hordas vencidas
@@ -117,6 +126,7 @@ typedef struct {
     Boss         boss;
     Ability      ability;
     Brood        brood;
+    Tunnel       tunnel;
     int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
     // --- rochas e conserto ---

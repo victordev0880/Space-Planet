@@ -86,6 +86,12 @@ typedef enum {
     EV_HIVE_SPIT_WARN, // o coração vai cuspir ácido        (value = segundos)
     EV_SPORE_BLAST,    // um esporo explodiu                (value = 1 se acertou o coração)
     EV_BROOD,          // a Ninhada saiu (núcleo Colmeia)   (value = ferrões)
+    EV_WORM_RUMBLE,    // o chão racha: o Verme vai sair    (pos = saída; value = segundos)
+    EV_WORM_BREACH,    // o Verme saltou para fora          (pos = saída)
+    EV_WORM_DIVE,      // ... e mergulhou de volta          (pos = mergulho)
+    EV_WORM_CORE,      // o Verme mordeu o núcleo           (pos = mordida)
+    EV_WORM_NODULE,    // um nódulo do dorso foi destruído  (value = quantos sobram)
+    EV_TUNNEL,         // a nave atravessou o planeta (núcleo do Verme) (pos = saída)
     EV_TYPE_COUNT
 } EventType;
 

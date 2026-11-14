@@ -938,6 +938,81 @@ static void synth_brood(float *out, int n)
     }
 }
 
+// --- Verme do Núcleo ---------------------------------------------------------------
+
+static void synth_worm_rumble(float *out, int n)
+{
+    // O chão rachando: um ronco grave crescendo, com estalos de pedra.
+    LowPass lp = { 0 };
+    float phase = 0.0f, length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        phase += (32.0f + 18.0f * u) / SAMPLE_RATE;
+        float rumble = lowpass(&lp, noise(), 160.0f + 120.0f * u) * 3.0f + 0.5f * saw(phase);
+        float crack = (noise() > 1.0f - 0.004f * (1.0f + 6.0f * u)) ? noise() : 0.0f;
+        out[i] = (rumble * u + 0.7f * crack) * fminf(u * 4.0f, 1.0f);
+    }
+}
+
+static void synth_worm_breach(float *out, int n)
+{
+    // A erupção: rocha explodindo e um rugido rasgado por cima.
+    explosion(out, n, 1800.0f, 2.2f, 45.0f, 0.02f);
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float vibrato = 1.0f + 0.06f * sinf(2.0f * PI * 9.0f * t);
+        phase += sweep(140.0f, 70.0f, t, 1.5f) * vibrato / SAMPLE_RATE;
+        float roar = lowpass(&lp, saw(phase) + 0.6f * saw(phase * 1.51f) + 0.5f * noise(), 900.0f);
+        out[i] += 0.8f * roar * envelope(t, 0.08f, 1.6f);
+    }
+}
+
+static void synth_worm_dive(float *out, int n)
+{
+    // O mergulho: um baque surdo e terra caindo.
+    explosion(out, n, 900.0f, 4.0f, 50.0f, 0.03f);
+}
+
+static void synth_worm_core(float *out, int n)
+{
+    // A mordida no núcleo: um rangido metálico grave e um zumbido de alarme.
+    LowPass lp = { 0 };
+    float phase = 0.0f, alarm = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        phase += sweep(90.0f, 40.0f, t, 1.0f) / SAMPLE_RATE;
+        float crunch = lowpass(&lp, noise(), 700.0f) * 2.0f + square(phase);
+        alarm += ((fmodf(t, 0.3f) < 0.15f) ? 660.0f : 520.0f) / SAMPLE_RATE;
+        out[i] = crunch * envelope(t, 0.005f, 3.0f) + 0.3f * square(alarm) * envelope(t, 0.01f, 1.5f);
+    }
+}
+
+static void synth_worm_nodule(float *out, int n)
+{
+    // Nódulo arrebentando: estouro em brasa e um chiado de magma.
+    explosion(out, n, 2600.0f, 4.5f, 70.0f, 0.03f);
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float x = noise();
+        out[i] += 0.5f * (x - lowpass(&lp, x, 2500.0f)) * envelope(t, 0.02f, 3.0f);
+    }
+}
+
+static void synth_tunnel(float *out, int n)
+{
+    // Atravessando o planeta: um sopro que mergulha e volta do outro lado.
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float cutoff = (u < 0.4f) ? sweep(4000.0f, 120.0f, t, length * 0.4f) : sweep(120.0f, 3000.0f, t - length * 0.4f, length * 0.6f);
+        out[i] = lowpass(&lp, noise(), cutoff) * 2.2f * sinf(PI * u);
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -1019,6 +1094,12 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_HIVE_SPIT]       = { synth_hive_spit,       0.90f, 0.55f, 1 },   // hive.spit_warn
     [SND_SPORE]           = { synth_spore,           0.80f, 0.85f, 2 },
     [SND_BROOD]           = { synth_brood,           0.90f, 0.60f, 1 },
+    [SND_WORM_RUMBLE]     = { synth_worm_rumble,     1.80f, 0.90f, 1 },   // worm.rumble_time
+    [SND_WORM_BREACH]     = { synth_worm_breach,     2.20f, 1.00f, 1 },
+    [SND_WORM_DIVE]       = { synth_worm_dive,       1.00f, 0.80f, 2 },
+    [SND_WORM_CORE]       = { synth_worm_core,       1.40f, 0.90f, 1 },
+    [SND_WORM_NODULE]     = { synth_worm_nodule,     0.90f, 0.85f, 2 },
+    [SND_TUNNEL]          = { synth_tunnel,          0.90f, 0.70f, 1 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -1241,6 +1322,13 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_HIVE_SPIT_WARN:  s = SND_HIVE_SPIT; floor = 0.5f; break;
         case EV_SPORE_BLAST:     s = SND_SPORE; floor = 0.4f; break;
         case EV_BROOD:           s = SND_BROOD; positional = false; break;
+        // Verme do Núcleo: o aviso de saída tem de ser ouvido de longe.
+        case EV_WORM_RUMBLE:     s = SND_WORM_RUMBLE; floor = 0.55f; break;
+        case EV_WORM_BREACH:     s = SND_WORM_BREACH; floor = 0.5f; break;
+        case EV_WORM_DIVE:       s = SND_WORM_DIVE; floor = 0.35f; break;
+        case EV_WORM_CORE:       s = SND_WORM_CORE; positional = false; break;
+        case EV_WORM_NODULE:     s = SND_WORM_NODULE; floor = 0.5f; break;
+        case EV_TUNNEL:          s = SND_TUNNEL; positional = false; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

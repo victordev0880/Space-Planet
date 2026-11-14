@@ -54,6 +54,7 @@ typedef struct {
     float dash_left;           // segundos restantes do dash (invulnerável enquanto > 0)
     float dash_wait;           // segundos até poder dar outro dash
     float respawn_left;        // segundos até renascer (só quando destruída)
+    float phase_left;          // segundos de invulnerabilidade ao sair do Túnel (núcleo do Verme)
     float sling;               // segundos restantes do estilingue da Lua
 
     // arma principal (controlada por game/combat.c)
@@ -112,6 +113,6 @@ static inline Vector3 ship_forward(const Ship *s) { return quat_forward(s->rot);
 static inline Vector3 ship_right(const Ship *s)   { return quat_right(s->rot); }
 static inline Vector3 ship_up(const Ship *s)      { return quat_up(s->rot); }
 
-static inline bool ship_invulnerable(const Ship *s) { return s->dash_left > 0.0f; }
+static inline bool ship_invulnerable(const Ship *s) { return s->dash_left > 0.0f || s->phase_left > 0.0f; }
 
 #endif

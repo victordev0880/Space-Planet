@@ -454,6 +454,19 @@ typedef struct {
     // Núcleo Colmeia (a recompensa): a Ninhada, na tecla G.
     int   brood_count;
     float brood_damage, brood_speed, brood_turn, brood_life, brood_cooldown;
+
+    // Verme do Núcleo (data/bosses.txt).
+    float worm_hp, worm_points, worm_xp, worm_enter_time, worm_spawn_distance;
+    float worm_scale, worm_spacing, worm_speed, worm_swim_speed, worm_turn, worm_depth;
+    float worm_tunnel_radius, worm_tunnel_spacing, worm_tunnel_life, worm_tunnel_guard;
+    float worm_rumble_time, worm_breach_time, worm_breach_height, worm_breach_reach;
+    float worm_breach_radius, worm_breach_depth, worm_breach_blast, worm_breach_damage;
+    float worm_mouth_armor, worm_nodule_hp, worm_nodule_damage, worm_tail_hp, worm_panic_time;
+    float worm_phase_2, worm_phase_3, worm_core_bite;
+    int   worm_larvae;
+    float worm_swim_depth, worm_swim_time, worm_furrow_radius;
+    // Núcleo do Verme (a recompensa): o Túnel, na tecla X.
+    float tunnel_cooldown, tunnel_altitude, tunnel_time;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4

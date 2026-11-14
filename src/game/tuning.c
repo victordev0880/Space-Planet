@@ -590,6 +590,44 @@ static const TuneField BOSS_FIELDS[] = {
     F("brood.turn",               brood_turn,               0,    50),
     F("brood.life",               brood_life,               0.2,  30),
     F("brood.cooldown",           brood_cooldown,           0,    600),
+    F("worm.hp",                  worm_hp,                  1,    100000),
+    F("worm.points",              worm_points,              0,    10000000),
+    F("worm.xp",                  worm_xp,                  0,    10000),
+    F("worm.enter_time",          worm_enter_time,          0.1,  60),
+    F("worm.spawn_distance",      worm_spawn_distance,      1.5,  20),
+    F("worm.scale",               worm_scale,               0.5,  50),
+    F("worm.spacing",             worm_spacing,             0.5,  50),
+    F("worm.speed",               worm_speed,               1,    500),
+    F("worm.swim_speed",          worm_swim_speed,          1,    500),
+    F("worm.turn",                worm_turn,                0.1,  20),
+    F("worm.depth",               worm_depth,               1,    200),
+    F("worm.tunnel_radius",       worm_tunnel_radius,       1,    40),
+    F("worm.tunnel_spacing",      worm_tunnel_spacing,      0.5,  40),
+    F("worm.tunnel_life",         worm_tunnel_life,         0.5,  600),
+    F("worm.tunnel_guard",        worm_tunnel_guard,        0,    200),
+    F("worm.rumble_time",         worm_rumble_time,         0.1,  20),
+    F("worm.breach_time",         worm_breach_time,         0.5,  30),
+    F("worm.breach_height",       worm_breach_height,       1,    500),
+    F("worm.breach_reach",        worm_breach_reach,        5,    170),
+    F("worm.breach_radius",       worm_breach_radius,       0.5,  40),
+    F("worm.breach_depth",        worm_breach_depth,        0.1,  40),
+    F("worm.breach_blast",        worm_breach_blast,        0,    100),
+    F("worm.breach_damage",       worm_breach_damage,       0,    10000),
+    F("worm.mouth_armor",         worm_mouth_armor,         0,    1),
+    F("worm.nodule_hp",           worm_nodule_hp,           0.1,  10000),
+    F("worm.nodule_damage",       worm_nodule_damage,       0,    1),
+    F("worm.tail_hp",             worm_tail_hp,             0.1,  10000),
+    F("worm.panic_time",          worm_panic_time,          0.5,  30),
+    F("worm.phase_2",             worm_phase_2,             0,    1),
+    F("worm.phase_3",             worm_phase_3,             0,    1),
+    F("worm.core_bite",           worm_core_bite,           0.5,  40),
+    I("worm.larvae",              worm_larvae,              0,    16),
+    F("worm.swim_depth",          worm_swim_depth,          0,    40),
+    F("worm.swim_time",           worm_swim_time,           0.5,  60),
+    F("worm.furrow_radius",       worm_furrow_radius,       0.5,  40),
+    F("tunnel.cooldown",          tunnel_cooldown,          0,    600),
+    F("tunnel.altitude",          tunnel_altitude,          1,    200),
+    F("tunnel.time",              tunnel_time,              0,    10),
 };
 
 #undef I
@@ -754,6 +792,10 @@ bool tuning_bosses_from_config(Tuning *out, const Config *bosses_cfg, char *err,
     }
     if (t.hive_phase_3 >= t.hive_phase_2) {
         snprintf(err, err_len, "%s: hive.phase_3 precisa ser menor que hive.phase_2", BOSSES_FILE);
+        return false;
+    }
+    if (t.worm_phase_3 >= t.worm_phase_2) {
+        snprintf(err, err_len, "%s: worm.phase_3 precisa ser menor que worm.phase_2", BOSSES_FILE);
         return false;
     }
     if (t.hive_moon_min >= t.hive_tide_start) {

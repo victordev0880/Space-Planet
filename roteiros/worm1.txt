@@ -1,0 +1,71 @@
+# Roteiro do marco 11 (Verme do Núcleo): a chegada e o mergulho no planeta,
+# o tremor em cima dele, a rachadura antes da saída, o salto pelo espaço, a
+# vista de dentro do túnel, o piloto automático lutando, as fases 2 e 3, a
+# morte e o Túnel (a recompensa) atravessando o planeta.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/worm1.txt"
+#
+# Ele entra pela direção (0.30 0.80 0.50). "cam boss acima atrás lado": para o
+# Verme, "acima" é para longe do planeta, a partir da cabeça dele.
+
+frames 9000
+seed 15
+
+at 0    waves off
+at 0    ship 34 92 58  0 0 0
+at 0    boss worm 0.3 0.8 0.5
+
+# --- chegada e mergulho ---------------------------------------------------------
+at 150  shot worm1_01_chegando
+at 236  shot worm1_02_mergulhando
+at 262  ship 15.6 41.5 26.0  0 0 0
+at 264  shot worm1_03_no_tunel
+at 266  view ship
+
+# --- debaixo da terra, a rachadura e o salto ------------------------------------
+at 330  cam boss 80 0 20
+at 331  shot worm1_04_debaixo
+at 332  view ship
+at 420  cam boss 80 0 20
+at 421  shot worm1_05_tremor
+at 422  view ship
+at 500  cam boss 80 0 20
+at 501  shot worm1_06
+at 502  view ship
+at 580  cam boss 60 -50 30
+at 581  shot worm1_07
+at 582  view ship
+at 660  cam boss 60 -50 30
+at 661  shot worm1_08
+at 662  view ship
+at 740  cam boss 60 -50 30
+at 741  shot worm1_09
+at 742  view ship
+
+# --- o piloto automático luta ----------------------------------------------------
+at 800  autopilot on
+at 1400 shot worm1_10_luta
+at 2000 shot worm1_11_luta
+at 2600 shot worm1_12_luta
+
+# --- fase 2 (mordida no núcleo) e fase 3 (nadando rente) -----------------------
+at 3000 bosshp 0.55
+at 3600 shot worm1_13_fase2
+at 4200 shot worm1_14_fase2
+at 4800 bosshp 0.28
+at 5400 cam boss 70 -30 20
+at 5401 shot worm1_15_nadando
+at 5402 view ship
+at 6000 shot worm1_16_fase3
+
+# --- a morte e o Túnel --------------------------------------------------------------
+# (o piloto automático não acompanha bem o Verme: o roteiro o mata)
+at 6500 bosshp 0
+at 6560 cam boss 60 -40 20
+at 6561 shot worm1_17_morte
+at 6562 view ship
+at 7000 autopilot off
+at 7100 press ability3
+at 7106 shot worm1_18_tunel
+at 7160 shot worm1_19_outro_lado
+at 8999 shot worm1_20_fim

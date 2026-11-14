@@ -122,6 +122,60 @@ brood.turn     = 6            # quão rápido o ferrão vira para o alvo
 brood.life     = 3            # segundos até o ferrão se desfazer
 brood.cooldown = 18
 
+# --- Verme do Núcleo ------------------------------------------------------------
+# Um verme de segmentos que nada dentro do planeta. Debaixo da terra, o chão
+# treme sobre ele; antes de sair, racha em vermelho onde ele vai saltar. No
+# salto (um arco pelo espaço) a boca abre e os nódulos do dorso ficam à
+# mostra: é a hora de atacar. O túnel que ele cava desmorona sozinho depois de
+# um tempo (se a nave não estiver dentro): entre atrás dele e acerte o ferrão
+# da cauda, e ele sai antes, atordoado. Fase 2: passa pelo núcleo e o morde.
+# Fase 3: nada rente à superfície, com o dorso para fora, abrindo um sulco.
+worm.hp             = 450     # vida
+worm.points         = 20000
+worm.xp             = 50
+worm.enter_time     = 4       # segundos até ele entrar no planeta (invulnerável)
+worm.spawn_distance = 4       # de onde vem, em raios do planeta
+worm.scale          = 4.5     # raio da cabeça (os segmentos afinam até a cauda)
+worm.spacing        = 4.2     # distância entre os segmentos (são 14)
+worm.speed          = 26      # debaixo da terra
+worm.swim_speed     = 30      # fase 3, rente à superfície
+worm.turn           = 1.8     # quão rápido a cabeça vira (radianos por segundo)
+worm.depth          = 18      # profundidade do mergulho, abaixo da superfície original
+
+worm.tunnel_radius  = 6       # raio do túnel (a nave cabe e a câmera também)
+worm.tunnel_spacing = 4.5     # distância entre as mordidas do túnel (mais perto = mais chunks a remalhar)
+worm.tunnel_life    = 10      # segundos até um trecho do túnel desmoronar...
+worm.tunnel_guard   = 16      # ... a não ser que a nave esteja a menos disto dele
+
+worm.rumble_time   = 1.8      # aviso: o chão racha este tanto antes de ele sair
+worm.breach_time   = 4.5      # segundos do salto (o arco pelo espaço)
+worm.breach_height = 45       # altura do arco
+worm.breach_reach  = 55       # graus de planeta entre a saída e o mergulho
+worm.breach_radius = 7        # cratera da saída e do mergulho
+worm.breach_depth  = 3
+worm.breach_blast  = 12       # a nave a menos disto da saída leva...
+worm.breach_damage = 25       # ... este dano
+
+worm.mouth_armor   = 0.05     # fração do dano que entra fora do salto (boca fechada)
+worm.nodule_hp     = 14       # vida de cada nódulo do dorso (são quatro)
+worm.nodule_damage = 0.08     # fração da vida que ele perde a cada nódulo destruído
+worm.tail_hp       = 8        # ferrão: acertado este tanto debaixo da terra, ele sai atordoado...
+worm.panic_time    = 7        # ... num salto lento, com este tanto de segundos
+worm.phase_2       = 0.6
+worm.phase_3       = 0.3
+worm.core_bite     = 5        # fase 2: raio da mordida no núcleo
+worm.larvae        = 2        # fase 2: Kamikazes que ele cospe a cada salto
+worm.swim_depth    = 2.5      # fase 3: nada este tanto abaixo da superfície original...
+worm.swim_time     = 9        # ... por este tanto de segundos entre os saltos
+worm.furrow_radius = 4.5      # ... abrindo um sulco deste raio
+
+# --- Núcleo do Verme (a recompensa) ---------------------------------------------
+# Tecla X (no controle, direcional para baixo): a nave mergulha no planeta e
+# sai do outro lado, na hora. Para correr defender o lado oposto.
+tunnel.cooldown = 22
+tunnel.altitude = 14          # sai a esta altura sobre a superfície
+tunnel.time     = 0.8         # invulnerável este tanto ao sair
+
 # --- Núcleo Rompe-Mundos (a recompensa) ----------------------------------------
 # Derrotado, o boss deixa o núcleo dele: o botão direito passa a carregar um
 # raio que atravessa todos os inimigos numa linha.

@@ -42,6 +42,7 @@ typedef enum {
     ACT_BUY2,
     ACT_BUY3,
     ACT_ABILITY2,      // G: Ninhada (núcleo Colmeia)
+    ACT_ABILITY3,      // X: Túnel (núcleo do Verme)
     ACT_COUNT
 } Action;
 

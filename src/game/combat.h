@@ -44,6 +44,9 @@ void combat_ability(World *w, const InputState *in, const Tuning *t, float dt);
 // A Ninhada do núcleo Colmeia (tecla G): solta os ferrões e os guia.
 void combat_brood(World *w, const InputState *in, const Tuning *t, float dt);
 
+// O Túnel do núcleo do Verme (tecla X): a nave atravessa o planeta.
+void combat_tunnel(World *w, const InputState *in, const Tuning *t, float dt);
+
 // Esporo da Colmeia explodindo em `index` (das rochas). `thrown`: arremessado
 // pela nave (aí ele fere o coração mesmo fechado).
 void combat_spore_blast(World *w, const Tuning *t, int index, bool thrown);

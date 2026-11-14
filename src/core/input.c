@@ -31,6 +31,7 @@ static const char *const ACTION_NAMES[ACT_COUNT] = {
     [ACT_BUY2]         = "buy2",
     [ACT_BUY3]         = "buy3",
     [ACT_ABILITY2]     = "ability2",
+    [ACT_ABILITY3]     = "ability3",
 };
 
 void input_init(InputTracker *t)

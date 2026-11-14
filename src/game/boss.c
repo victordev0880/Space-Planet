@@ -13,33 +13,53 @@ const char *boss_name(BossType type)
 {
     switch (type) {
     case BOSS_HIVE: return "COLMEIA LUNAR";
+    case BOSS_WORM: return "VERME DO NÚCLEO";
     default:        return "ROMPE-MUNDOS";
     }
 }
 
 float boss_enter_time(const Boss *b, const Tuning *t)
 {
-    return (b->type == BOSS_HIVE) ? t->hive_enter_time : t->breaker_enter_time;
+    switch ((BossType)b->type) {
+    case BOSS_HIVE: return t->hive_enter_time;
+    case BOSS_WORM: return t->worm_enter_time;
+    default:        return t->breaker_enter_time;
+    }
 }
 
 float boss_points(BossType type, const Tuning *t)
 {
-    return (type == BOSS_HIVE) ? t->hive_points : t->breaker_points;
+    switch (type) {
+    case BOSS_HIVE: return t->hive_points;
+    case BOSS_WORM: return t->worm_points;
+    default:        return t->breaker_points;
+    }
 }
 
 float boss_xp(BossType type, const Tuning *t)
 {
-    return (type == BOSS_HIVE) ? t->hive_xp : t->breaker_xp;
+    switch (type) {
+    case BOSS_HIVE: return t->hive_xp;
+    case BOSS_WORM: return t->worm_xp;
+    default:        return t->breaker_xp;
+    }
 }
 
 void boss_phase_marks(BossType type, const Tuning *t, float out[2])
 {
-    if (type == BOSS_HIVE) {
+    switch (type) {
+    case BOSS_HIVE:
         out[0] = t->hive_phase_2;
         out[1] = t->hive_phase_3;
-    } else {
+        break;
+    case BOSS_WORM:
+        out[0] = t->worm_phase_2;
+        out[1] = t->worm_phase_3;
+        break;
+    default:
         out[0] = t->breaker_phase_2;
         out[1] = t->breaker_phase_3;
+        break;
     }
 }
 
@@ -74,6 +94,7 @@ int boss_parts(const Boss *b, const Tuning *t, BossPart *out)
     if (!boss_active(b)) return 0;
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_parts(b, t, out);
+    case BOSS_WORM: return worm_parts(b, t, out);
     default:        return breaker_parts(b, t, out);
     }
 }
@@ -83,6 +104,7 @@ float boss_core_factor(const Boss *b, const Tuning *t)
     if (!boss_vulnerable(b)) return 0.0f;
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_core_factor(b, t);
+    case BOSS_WORM: return worm_core_factor(b, t);
     default:        return breaker_core_factor(b, t);
     }
 }
@@ -112,6 +134,7 @@ void boss_spawn(Boss *b, BossType type, const BossContext *ctx, Vector3 dir)
     b->phase = 1;
     switch (type) {
     case BOSS_HIVE: hive_spawn(b, ctx, Vector3Normalize(dir)); break;
+    case BOSS_WORM: worm_spawn(b, ctx, Vector3Normalize(dir)); break;
     default:        breaker_spawn(b, ctx, Vector3Normalize(dir)); break;
     }
 }
@@ -125,7 +148,7 @@ static void dying_tick(Boss *b, const BossContext *ctx)
     b->blast_wait -= dt;
     if (b->type == BOSS_HIVE && ctx->moon != NULL) {
         b->pos = ctx->moon->pos;   // a Colmeia morre agarrada à Lua
-    } else {
+    } else if (b->type != BOSS_WORM) {   // o Verme morre onde está (o corpo não anda)
         b->vel = Vector3Scale(b->vel, 1.0f - dt);
         b->pos = Vector3Add(b->pos, Vector3Scale(b->vel, dt));
     }
@@ -161,6 +184,12 @@ void boss_tick(Boss *b, const BossContext *ctx)
     b->launch_count = 0;
     b->blast_now = false;
     // (hive.spore_count não: os esporos nascem de tiros, entre um passo e outro; o mundo esvazia.)
+    WormState *m = &b->worm;
+    memcpy(m->seg_prev, m->seg, sizeof m->seg);
+    m->restore_count = 0;
+    m->crater_count = 0;
+    m->ship_damage = 0.0f;
+    m->dust_now = false;
     if (b->state == BOSS_OFF) return;
     float dt = ctx->dt;
     b->age += dt;
@@ -169,15 +198,23 @@ void boss_tick(Boss *b, const BossContext *ctx)
     for (int i = 0; i < BOSS_CAPACITORS; i++) b->breaker.cap_flash[i] = fmaxf(b->breaker.cap_flash[i] - dt, 0.0f);
     for (int i = 0; i < HIVE_SACS; i++) b->hive.sac_flash[i] = fmaxf(b->hive.sac_flash[i] - dt, 0.0f);
     for (int i = 0; i < HIVE_THRUSTERS; i++) b->hive.thr_flash[i] = fmaxf(b->hive.thr_flash[i] - dt, 0.0f);
+    for (int i = 0; i < WORM_NODULES; i++) m->nodule_flash[i] = fmaxf(m->nodule_flash[i] - dt, 0.0f);
+    m->tail_flash = fmaxf(m->tail_flash - dt, 0.0f);
 
     switch (b->state) {
     case BOSS_ENTER:
-        if (b->type == BOSS_HIVE) hive_enter(b, ctx);
-        else                      breaker_enter(b, ctx);
+        switch ((BossType)b->type) {
+        case BOSS_HIVE: hive_enter(b, ctx); break;
+        case BOSS_WORM: worm_enter(b, ctx); break;
+        default:        breaker_enter(b, ctx); break;
+        }
         break;
     case BOSS_FIGHT:
-        if (b->type == BOSS_HIVE) hive_fight(b, ctx);
-        else                      breaker_fight(b, ctx);
+        switch ((BossType)b->type) {
+        case BOSS_HIVE: hive_fight(b, ctx); break;
+        case BOSS_WORM: worm_fight(b, ctx); break;
+        default:        breaker_fight(b, ctx); break;
+        }
         break;
     default:
         dying_tick(b, ctx);
@@ -195,6 +232,7 @@ static void update_phase(Boss *b, const Tuning *t, Events *events, uint32_t tick
     int phase = (ratio < marks[1]) ? 3 : (ratio < marks[0]) ? 2 : 1;
     if (phase > b->phase) {
         b->phase = (uint8_t)phase;
+        if (b->type == BOSS_WORM) worm_new_phase(b, t);
         events_push(events, tick, EV_BOSS_PHASE, b->type, b->pos, (float)phase);
     }
 }
@@ -223,6 +261,7 @@ float boss_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, u
     if (!boss_vulnerable(b)) return 0.0f;
     switch ((BossType)b->type) {
     case BOSS_HIVE: return hive_hit(b, t, id, amount, events, tick);
+    case BOSS_WORM: return worm_hit(b, t, id, amount, events, tick);
     default:        return breaker_hit(b, t, id, amount, events, tick);
     }
 }
@@ -235,6 +274,10 @@ float boss_hit_core_raw(Boss *b, const Tuning *t, float amount, Events *events, 
 void boss_set_health(Boss *b, const Tuning *t, float fraction, Events *events, uint32_t tick)
 {
     if (!boss_vulnerable(b)) return;
+    if (fraction <= 0.0f) {   // zero: mata (começa a explodir)
+        boss_damage_core(b, t, b->hp + 1.0f, 1.0f, events, tick);
+        return;
+    }
     b->hp = fmaxf(b->hp_max * Clamp(fraction, 0.0f, 1.0f), 0.01f);
     update_phase(b, t, events, tick);
 }

@@ -30,6 +30,8 @@
 #define BROOD_SPREAD     0.55f    // os ferrões saem num leque desta abertura
 #define BROOD_SEEK       220.0f   // e procuram alvos até esta distância
 #define SPORE_JOLT       3.0f
+#define TUNNEL_FLASH     0.5f     // segundos do clarão na tela depois do Túnel
+#define TUNNEL_JOLT      10.0f
 
 // Os canhões, em eixos da nave: nas raízes das asas, um pouco à frente.
 static const Vector3 GUNS[2] = { { 0.55f, -0.05f, -0.45f }, { -0.55f, -0.05f, -0.45f } };
@@ -61,6 +63,9 @@ static const Rgb8 CRIT_SPARK   = { 255, 250, 170 };
 static const Rgb8 SPORE_HOT    = { 230, 255, 190 };
 static const Rgb8 SPORE_GLOW   = { 140, 255, 90 };
 static const Rgb8 SPORE_GOO    = { 70, 120, 50 };
+static const Rgb8 TUNNEL_HOT   = { 255, 220, 170 };
+static const Rgb8 TUNNEL_GLOW  = { 255, 140, 60 };
+static const Rgb8 TUNNEL_DUST  = { 120, 100, 80 };
 static const Blast SHIP_BLAST  = { { 230, 250, 255 }, { 90, 180, 255 }, { 60, 90, 130 } };
 
 // Pesados empurram a nave quando ela tromba neles; os leves se despedaçam.
@@ -828,6 +833,60 @@ void combat_brood(World *w, const InputState *in, const Tuning *t, float dt)
     }
     br->cooldown = t->brood_cooldown;
     events_push(&w->events, (uint32_t)w->tick, EV_BROOD, 0, s->pos, (float)count);
+}
+
+// ---------------------------------------------------------------------------
+//  Núcleo do Verme: o Túnel
+// ---------------------------------------------------------------------------
+
+void combat_tunnel(World *w, const InputState *in, const Tuning *t, float dt)
+{
+    Tunnel *tu = &w->tunnel;
+    Ship *s = &w->ship;
+    tu->cooldown = fmaxf(tu->cooldown - dt, 0.0f);
+    tu->flash = fmaxf(tu->flash - dt, 0.0f);
+    s->phase_left = fmaxf(s->phase_left - dt, 0.0f);
+    if (!tu->owned || !s->alive || !(in->pressed & ACT_BIT(ACT_ABILITY3)) || tu->cooldown > 0.0f) return;
+
+    // Do outro lado do planeta, na mesma altura relativa: o chão de lá é
+    // achado por um raio vindo de fora.
+    float radius = w->planet.params.radius;
+    Vector3 dir = Vector3Negate(Vector3Normalize(s->pos));
+    Vector3 outside = Vector3Scale(dir, radius * 2.0f);
+    Vector3 ground = Vector3Scale(dir, radius);
+    planet_raycast(&w->planet, outside, Vector3Negate(dir), radius * 2.0f, &ground);
+    Vector3 to = Vector3Add(ground, Vector3Scale(dir, t->tunnel_altitude));
+
+    // A frente continua a mesma (o plano do chão lá é paralelo ao daqui).
+    Vector3 forward = ship_forward(s);
+    forward = Vector3Subtract(forward, Vector3Scale(dir, Vector3DotProduct(forward, dir)));
+    if (Vector3LengthSqr(forward) < 1e-6f) forward = Vector3Perpendicular(dir);
+    forward = Vector3Normalize(forward);
+    float speed = Vector3Length(s->vel);
+
+    tu->from = s->pos;
+    particles_explosion(&w->particles, &w->rng, s->pos, (Vector3){ 0.0f, 0.0f, 0.0f }, 3.0f, TUNNEL_HOT, TUNNEL_GLOW,
+                        TUNNEL_DUST);
+    // A rocha a reboque vai junto: o mesmo lugar em relação à nave, com o
+    // "para baixo" virado (lá, baixo é o contrário daqui).
+    if (w->rocks.towed >= 0) {
+        Rock *k = &w->rocks.items[w->rocks.towed];
+        Vector3 offset = Vector3Subtract(k->pos, s->pos);
+        offset = Vector3Subtract(offset, Vector3Scale(dir, 2.0f * Vector3DotProduct(offset, dir)));
+        k->pos = k->pos_prev = Vector3Add(to, offset);
+        k->vel = Vector3Scale(forward, speed);
+    }
+    s->pos = s->pos_prev = to;
+    s->rot = s->rot_prev = quat_look(forward, dir);
+    s->vel = Vector3Scale(forward, speed);
+    s->fall = (Vector3){ 0.0f, 0.0f, 0.0f };
+    s->phase_left = t->tunnel_time;
+    tu->cooldown = t->tunnel_cooldown;
+    tu->flash = TUNNEL_FLASH;
+    particles_explosion(&w->particles, &w->rng, to, Vector3Scale(dir, 6.0f), 3.5f, TUNNEL_HOT, TUNNEL_GLOW, TUNNEL_DUST);
+    world_set_view(w, t, CAM_SHIP);   // a câmera vai junto, sem deslizar pelo planeta
+    world_jolt(w, TUNNEL_JOLT);
+    events_push(&w->events, (uint32_t)w->tick, EV_TUNNEL, 0, to, 0.0f);
 }
 
 // ---------------------------------------------------------------------------

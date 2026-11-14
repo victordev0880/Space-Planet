@@ -264,8 +264,8 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         e.count = (int)amount;
         e.cmd = AP_ORE;
     } else if (strcmp(cmd, "bosshp") == 0) {
-        if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f && e.speed <= 1.0f)) {
-            return fail(ap, line_no, "esperado: at <quadro> bosshp <fracao da vida, de 0 a 1>");
+        if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed >= 0.0f && e.speed <= 1.0f)) {
+            return fail(ap, line_no, "esperado: at <quadro> bosshp <fracao da vida, de 0 a 1> (0 mata)");
         }
         e.cmd = AP_BOSS_HP;
     } else if (strcmp(cmd, "xp") == 0) {
@@ -573,7 +573,7 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     }
     if (frame->xp > 0.0f) world_give_xp(w, t, frame->xp);
     if (frame->boss >= 0) world_spawn_boss(w, t, (BossType)frame->boss, frame->boss_dir);
-    if (frame->boss_hp > 0.0f) boss_set_health(&w->boss, t, frame->boss_hp, &w->events, (uint32_t)w->tick);
+    if (frame->boss_hp >= 0.0f) boss_set_health(&w->boss, t, frame->boss_hp, &w->events, (uint32_t)w->tick);
     w->ore += frame->ore;
     for (int i = 0; i < frame->rock_count; i++) {
         world_spawn_rock(w, t, (RockKind)frame->rocks[i].kind, frame->rocks[i].pos, frame->rocks[i].vel);

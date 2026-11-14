@@ -46,7 +46,7 @@
 //   at 130 evolve escort 2        põe uma evolução direto no nível 2 (nomes de
 //                                 data/evolutions.txt: escort, spread, crit...)
 //   at 140 boss breaker 0 1 0     põe um boss em cena, chegando da direção (x y z)
-//   at 145 bosshp 0.2             põe a vida do boss em 20% (com a troca de fase)
+//   at 145 bosshp 0.2             põe a vida do boss em 20% (com a troca de fase; 0 mata)
 //   at 146 rock meteor 0 90 40 -12 0 0   um meteoro em (x y z) voando com a
 //                                 velocidade (vx vy vz)
 //   at 147 rock fragment 0 80 30  um fragmento já em órbita, passando por (x y z)

@@ -52,6 +52,9 @@ static const Color ORE_COLOR           = { 255, 206, 90, 255 };
 static const Color SPORE_COLOR         = { 170, 255, 120, 255 };
 static const Color SAC_COLOR           = { 150, 255, 140, 255 };
 static const Color THRUSTER_COLOR      = { 255, 140, 60, 255 };
+static const Color WORM_COLOR          = { 255, 160, 90, 255 };
+static const Color STINGER_COLOR       = { 255, 90, 200, 255 };
+static const Color TUNNEL_COLOR        = { 255, 180, 110, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -421,6 +424,19 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
 
     // Núcleos dos bosses: prontos, carregando ou em recarga, logo acima do painel.
     int ability_y = y - 44;
+    const Tunnel *tu = &w->tunnel;
+    if (tu->owned) {
+        int ay = ability_y;
+        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
+        ui_draw_text("TÚNEL", x, ay, LABEL_SIZE - 2, TUNNEL_COLOR);
+        float ready = 1.0f - tu->cooldown / fmaxf(t->tunnel_cooldown, 1e-3f);
+        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, ready, (tu->cooldown <= 0.0f) ? TUNNEL_COLOR : with_alpha(TUNNEL_COLOR, 0.45f));
+        if (tu->cooldown <= 0.0f) {
+            const char *key = hud_keys("X", "baixo");
+            ui_draw_text(key, x + 96 + SHIP_BAR_WIDTH - ui_measure_text(key, SMALL_SIZE + 2), ay - 12, SMALL_SIZE + 2, DIM_COLOR);
+        }
+        ability_y -= 34;
+    }
     const Brood *br = &w->brood;
     if (br->owned) {
         int ay = ability_y;
@@ -685,6 +701,34 @@ static int hive_alerts(const World *w, const Tuning *t, int center_x, int y, flo
     return y;
 }
 
+// Avisos do Verme do Núcleo: onde ele vai sair, o salto, o mergulho no núcleo.
+static int worm_alerts(const World *w, const Tuning *t, int center_x, int y, float now)
+{
+    const Boss *b = &w->boss;
+    const WormState *m = &b->worm;
+    if (b->action == WORM_BREACH) {
+        const char *msg = m->panic ? "ATORDOADO! ACERTE A BOCA E OS NÓDULOS!" : "ELE SALTOU: ACERTE A BOCA E OS NÓDULOS!";
+        text_centered(msg, center_x, y, ALERT_SIZE + 6, mix_color(CORE_OPEN_COLOR, WHITE, 0.25f + 0.25f * sinf(now * 8.0f)));
+        y += ALERT_SIZE + 12;
+    } else if (b->action == WORM_RUMBLE) {
+        float blink = (sinf(now * 26.0f) > 0.0f) ? 0.5f : 0.0f;
+        text_centered("O CHÃO ESTÁ RACHANDO: ELE VAI SAIR!", center_x, y, ALERT_SIZE + 6, mix_color(BOSS_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 12;
+    } else if (b->action == WORM_BURROW && m->to_core && !m->bit_core && m->stage == 0) {
+        float blink = (sinf(now * 10.0f) > 0.0f) ? 0.45f : 0.0f;
+        text_centered("VERME RUMO AO NÚCLEO: ENTRE NO TÚNEL E ACERTE O FERRÃO!", center_x, y, ALERT_SIZE + 4,
+                      mix_color(BOSS_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 10;
+    } else {
+        const char *msg = (b->action == WORM_SWIM) ? "ELE NADA RENTE AO CHÃO: CACE O DORSO EM VOO RASANTE"
+                                                   : "DEBAIXO DA TERRA: SIGA O TREMOR, OU ENTRE NO TÚNEL ATRÁS DO FERRÃO";
+        text_centered(msg, center_x, y, ALERT_SIZE, with_alpha(WORM_COLOR, 0.85f));
+        y += ALERT_SIZE + 8;
+    }
+    (void)t;
+    return y;
+}
+
 static void draw_alerts(const World *w, const Tuning *t, int center_x)
 {
     const Enemies *e = &w->enemies;
@@ -711,6 +755,8 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
     const Boss *b = &w->boss;
     if (boss_vulnerable(b) && b->type == BOSS_HIVE) {
         y = hive_alerts(w, t, center_x, y, now);
+    } else if (boss_vulnerable(b) && b->type == BOSS_WORM) {
+        y = worm_alerts(w, t, center_x, y, now);
     } else if (boss_vulnerable(b)) {
         if (b->action == BREAKER_CHARGE) {
             float left = b->timer;
@@ -798,6 +844,7 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
         text_centered("ALERTA", sw / 2, y - 14, LABEL_SIZE + 10, with_alpha(BOSS_COLOR, fade * blink));
         text_centered(name, sw / 2, y + 18, BANNER_SIZE + 6, with_alpha(BOSS_COLOR, fade));
         const char *hint = (e->sub == BOSS_HIVE) ? "ela se agarrou à Lua: estoure as bolsas para abrir o coração"
+                         : (e->sub == BOSS_WORM) ? "ele nada dentro do planeta: ataque quando ele saltar para fora"
                                                  : "quando ele carregar o canhão, destrua os 4 capacitores";
         text_centered(hint, sw / 2, y + BANNER_SIZE + 34, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
         break;
@@ -812,6 +859,14 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
                       with_alpha(PRIZE_COLOR, fade));
         break;
     default:   // EV_REWARD
+        if (e->sub == BOSS_WORM) {
+            text_centered("NÚCLEO DO VERME ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(TUNNEL_COLOR, fade));
+            text_centered(TextFormat(hud_keys("tecla X: atravesse o planeta e saia do outro lado (recarga de %.0f s)",
+                                              "direcional para baixo: atravesse o planeta (recarga de %.0f s)"),
+                                     (double)t->tunnel_cooldown),
+                          sw / 2, y + BANNER_SIZE - 6, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+            break;
+        }
         if (e->sub == BOSS_HIVE) {
             text_centered("NÚCLEO COLMEIA ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(SAC_COLOR, fade));
             text_centered(TextFormat(hud_keys("tecla G: uma revoada de ferrões caça os inimigos (recarga de %.0f s)",
@@ -1213,6 +1268,16 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         Color mc = (h->tide > 0.0f) ? mix_color(BOSS_COLOR, WHITE, (sinf(now * 10.0f) > 0.0f) ? 0.4f : 0.0f)
                  : (w->moon.scale < 0.999f) ? THRUSTER_COLOR : DIM_COLOR;
         ui_draw_text(moon, x + BOSS_BAR_WIDTH - ui_measure_text(moon, SMALL_SIZE + 4), y + 15, SMALL_SIZE + 4, mc);
+    } else if (b->type == BOSS_WORM && b->state == BOSS_FIGHT) {
+        const WormState *m = &b->worm;
+        int px = sw / 2 - (WORM_NODULES * 22) / 2;
+        for (int k = 0; k < WORM_NODULES; k++) {
+            Color c = (m->nodule_hp[k] <= 0.0f) ? with_alpha(DIM_COLOR, 0.5f) : m->nodule_open[k] ? WORM_COLOR
+                                                                                  : with_alpha(WORM_COLOR, 0.4f);
+            DrawRectangle(px + k * 22, y + 17, 16, 7, c);
+        }
+        const char *where = worm_underground(b, &w->planet) ? "DEBAIXO DA TERRA" : "NA SUPERFÍCIE";
+        ui_draw_text(where, x + BOSS_BAR_WIDTH - ui_measure_text(where, SMALL_SIZE + 4), y + 15, SMALL_SIZE + 4, DIM_COLOR);
     }
 
     // Marcadores na tela.
@@ -1232,6 +1297,10 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         if (part->role == PART_CORE) {
             DrawCircleLines((int)p.x, (int)p.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
             text_centered(b->type == BOSS_HIVE ? "CORAÇÃO" : "NÚCLEO", (int)p.x, (int)p.y - 34, 18, CORE_OPEN_COLOR);
+        } else if (b->type == BOSS_WORM) {
+            bool tail = part->id >= WORM_NODULES;
+            diamond(p, (tail ? 10.0f : 7.0f) + 2.0f * sinf(now * 10.0f), tail ? STINGER_COLOR : WORM_COLOR);
+            if (tail) text_centered("FERRÃO", (int)p.x, (int)p.y - 30, 16, STINGER_COLOR);
         } else if (b->type == BOSS_HIVE) {
             bool thruster = part->id >= HIVE_SACS;
             bool inflating = !thruster && b->hive.inflating == part->id;
@@ -1242,9 +1311,24 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         }
         any_visible = true;
     }
+    // O Verme debaixo da terra: um alvo no chão em cima da cabeça dele.
+    Vector3 where = b->pos;
+    if (b->type == BOSS_WORM && worm_underground(b, &w->planet)) {
+        Vector3 up = Vector3Normalize(b->pos);
+        Terrain ground = planet_terrain(&w->planet.params, up);
+        where = Vector3Scale(up, w->planet.params.radius + (ground.land ? ground.elevation : 0.0f));
+        Vector2 gp;
+        if (project(camera, where, &gp) && on_screen(gp)) {
+            float r = 12.0f + 4.0f * sinf(now * 7.0f);
+            DrawCircleLines((int)gp.x, (int)gp.y, r, WORM_COLOR);
+            DrawCircleLines((int)gp.x, (int)gp.y, r * 0.5f, with_alpha(WORM_COLOR, 0.6f));
+            text_centered("VERME", (int)gp.x, (int)(gp.y - r - 22.0f), 16, WORM_COLOR);
+            any_visible = true;
+        }
+    }
     Vector2 bp;
-    if (!any_visible && (!project(camera, b->pos, &bp) || !on_screen(bp))) {
-        edge_arrow(camera, b->pos, ARROW_SIZE * 2.0f, with_alpha(BOSS_COLOR, 0.7f + 0.3f * sinf(now * 6.0f)));
+    if (!any_visible && (!project(camera, where, &bp) || !on_screen(bp))) {
+        edge_arrow(camera, where, ARROW_SIZE * 2.0f, with_alpha(BOSS_COLOR, 0.7f + 0.3f * sinf(now * 6.0f)));
     }
 }
 
@@ -1458,6 +1542,9 @@ void hud_draw(const World *w, const Tuning *t, const HudContext *ctx)
 
     if (playing) {
         draw_damage_vignette(w);
+        if (w->tunnel.flash > 0.0f) {   // acabou de atravessar o planeta
+            DrawRectangle(0, 0, screen_w, screen_h, with_alpha(TUNNEL_COLOR, w->tunnel.flash * 0.7f));
+        }
         draw_markers(w, t, ctx->camera);
         if (!w->evo.choosing) draw_rocks(w, t, ctx->camera);
         draw_popups(w, t, ctx->camera);

@@ -32,4 +32,12 @@ int   hive_parts(const Boss *b, const Tuning *t, BossPart *out);
 float hive_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, uint32_t tick);
 float hive_core_factor(const Boss *b, const Tuning *t);
 
+void  worm_spawn(Boss *b, const BossContext *ctx, Vector3 dir);
+void  worm_enter(Boss *b, const BossContext *ctx);
+void  worm_fight(Boss *b, const BossContext *ctx);
+int   worm_parts(const Boss *b, const Tuning *t, BossPart *out);
+float worm_hit(Boss *b, const Tuning *t, int id, float amount, Events *events, uint32_t tick);
+float worm_core_factor(const Boss *b, const Tuning *t);
+void  worm_new_phase(Boss *b, const Tuning *t);
+
 #endif
