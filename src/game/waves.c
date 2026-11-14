@@ -31,6 +31,7 @@ int enemy_type_from_name(const char *name)
 
 static const char *const BOSS_NAMES[BOSS_TYPE_COUNT] = {
     [BOSS_BREAKER] = "breaker",
+    [BOSS_HIVE]    = "hive",
 };
 
 int boss_type_from_name(const char *name)

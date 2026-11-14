@@ -41,6 +41,16 @@ void combat_dash_blast(World *w, const Tuning *t);
 // O raio do núcleo Rompe-Mundos (botão direito, segurando), se a nave o tem.
 void combat_ability(World *w, const InputState *in, const Tuning *t, float dt);
 
+// A Ninhada do núcleo Colmeia (tecla G): solta os ferrões e os guia.
+void combat_brood(World *w, const InputState *in, const Tuning *t, float dt);
+
+// Esporo da Colmeia explodindo em `index` (das rochas). `thrown`: arremessado
+// pela nave (aí ele fere o coração mesmo fechado).
+void combat_spore_blast(World *w, const Tuning *t, int index, bool thrown);
+
+// Esporos arremessados: explodem no que tocarem (boss, inimigos, planeta, Lua).
+void combat_spores(World *w, const Tuning *t);
+
 // O boss contra a nave: o laser que a queima e o casco em que ela tromba.
 void combat_boss(World *w, const Tuning *t);
 void combat_resolve(World *w, const Tuning *t);

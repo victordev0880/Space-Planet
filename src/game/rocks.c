@@ -13,6 +13,8 @@
 #define ORE_SPIN        3.0f    // giro dos cristais (rad/s, só desenho)
 #define ORE_SCATTER     7.0f    // velocidade máxima com que os cristais se espalham da rocha quebrada
 #define ORE_SIDE_DRAG   4.0f    // cristal puxado pela nave: o quanto perde da velocidade de lado
+#define SPORE_DRAG      0.6f    // esporo boiando: o quanto da velocidade perde por segundo
+#define SPORE_FLIGHT    4.0f    // esporo arremessado: some se não acertar nada neste tempo
 
 void rocks_reset(Rocks *r)
 {
@@ -96,6 +98,27 @@ Rock *rocks_spawn_meteor(Rocks *r, Rng *rng, const Tuning *t, Vector3 pos, Vecto
     k->pos = k->pos_prev = pos;
     k->vel = vel;
     return k;
+}
+
+Rock *rocks_spawn_spore(Rocks *r, Rng *rng, const Tuning *t, Vector3 pos, Vector3 vel)
+{
+    Rock *k = new_rock(r, rng, ROCK_SPORE, t->hive_spore_size);
+    if (k == NULL) return NULL;
+    k->hp = 0.5f;   // um tiro basta
+    k->state = ROCK_DRIFT;
+    k->pos = k->pos_prev = pos;
+    k->vel = vel;
+    return k;
+}
+
+void rocks_throw(Rocks *r, Vector3 vel)
+{
+    if (r->towed < 0) return;
+    Rock *k = &r->items[r->towed];
+    k->state = ROCK_THROWN;
+    k->vel = vel;
+    k->age = 0.0f;
+    r->towed = -1;
 }
 
 // A rocha encostou no chão (com parte do corpo dentro do solo)?
@@ -296,13 +319,27 @@ void rocks_tick(Rocks *r, const RockContext *ctx)
         case ROCK_TOWED:
             tick_towed(r, i, ctx);
             break;
+        case ROCK_DRIFT:
+            // Esporo boiando: vai freando; passado o tempo, murcha.
+            k->vel = Vector3Scale(k->vel, 1.0f - Clamp(SPORE_DRAG * dt, 0.0f, 1.0f));
+            k->pos = Vector3Add(k->pos, Vector3Scale(k->vel, dt));
+            if (k->age > t->hive_spore_life) k->alive = false;
+            continue;
+        case ROCK_THROWN:
+            // Arremessado: reto, até explodir em alguma coisa (o mundo confere) ou sumir.
+            k->pos = Vector3Add(k->pos, Vector3Scale(k->vel, dt));
+            if (k->age > SPORE_FLIGHT) k->alive = false;
+            continue;
         default:   // ROCK_FALLING
             tick_falling(k, ctx);
             break;
         }
 
-        // Só a rocha puxada ou solta toca o chão: as outras voam alto.
-        if ((k->state == ROCK_TOWED || k->state == ROCK_FALLING) && touches_ground(ctx->planet, k)) deposit(r, i);
+        // Só a rocha puxada ou solta toca o chão: as outras voam alto. (O
+        // esporo não conserta nada: o mundo o explode antes.)
+        if (k->kind != ROCK_SPORE && (k->state == ROCK_TOWED || k->state == ROCK_FALLING) && touches_ground(ctx->planet, k)) {
+            deposit(r, i);
+        }
     }
 }
 
@@ -315,7 +352,7 @@ int rocks_find_grab(const Rocks *r, const Ship *s, const Tuning *t)
     float best_score = 0.0f;
     for (int i = 0; i < ROCKS_MAX; i++) {
         const Rock *k = &r->items[i];
-        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING) continue;
+        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING || k->state == ROCK_THROWN) continue;
         Vector3 to = Vector3Subtract(k->pos, s->pos);
         float distance = Vector3Length(to);
         if (distance - k->radius > t->tractor_range) continue;

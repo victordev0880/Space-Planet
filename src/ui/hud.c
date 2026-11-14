@@ -49,6 +49,9 @@ static const Color METEOR_COLOR        = { 255, 150, 70, 255 };
 static const Color FRAGMENT_COLOR      = { 210, 196, 180, 255 };
 static const Color REPAIR_COLOR        = { 120, 255, 170, 255 };
 static const Color ORE_COLOR           = { 255, 206, 90, 255 };
+static const Color SPORE_COLOR         = { 170, 255, 120, 255 };
+static const Color SAC_COLOR           = { 150, 255, 140, 255 };
+static const Color THRUSTER_COLOR      = { 255, 140, 60, 255 };
 
 // Cores de cada tipo de inimigo nos marcadores (as do brilho da variação
 // principal deles, um pouco mais claras para ler sobre o planeta).
@@ -416,10 +419,24 @@ static void draw_ship(const World *w, const Tuning *t, Camera3D camera)
     ship_bar(x, y + SHIP_ROW * 2, "ENERGIA", s->energy, t->ship_energy_max, s->boost_spent ? DIM_COLOR : ENERGY_COLOR);
     draw_level(w, t, x, y + SHIP_ROW * 3, x + 96 + SHIP_BAR_WIDTH + 28);
 
-    // Núcleo Rompe-Mundos: pronto, carregando ou em recarga, logo acima do painel.
+    // Núcleos dos bosses: prontos, carregando ou em recarga, logo acima do painel.
+    int ability_y = y - 44;
+    const Brood *br = &w->brood;
+    if (br->owned) {
+        int ay = ability_y;
+        DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
+        ui_draw_text("NINHADA", x, ay, LABEL_SIZE - 2, SAC_COLOR);
+        float ready = 1.0f - br->cooldown / fmaxf(t->brood_cooldown, 1e-3f);
+        draw_bar(x + 96, ay + 4, SHIP_BAR_WIDTH, 8, ready, (br->cooldown <= 0.0f) ? SAC_COLOR : with_alpha(SAC_COLOR, 0.45f));
+        if (br->cooldown <= 0.0f) {
+            const char *key = hud_keys("G", "R3");
+            ui_draw_text(key, x + 96 + SHIP_BAR_WIDTH - ui_measure_text(key, SMALL_SIZE + 2), ay - 12, SMALL_SIZE + 2, DIM_COLOR);
+        }
+        ability_y -= 34;
+    }
     const Ability *ab = &w->ability;
     if (ab->owned) {
-        int ay = y - 44;
+        int ay = ability_y;
         DrawRectangle(x - 10, ay - 6, 96 + SHIP_BAR_WIDTH + 20, 28, FRAME_COLOR);
         ui_draw_text("RAIO", x, ay, LABEL_SIZE - 2, ABILITY_COLOR);
         float ready = 1.0f - ab->cooldown / fmaxf(t->ability_cooldown, 1e-3f);
@@ -632,6 +649,42 @@ static int below_planet(const World *w)
     return y;
 }
 
+// Avisos da Colmeia Lunar: o coração aberto, a bolsa inchando, a Lua caindo.
+static int hive_alerts(const World *w, const Tuning *t, int center_x, int y, float now)
+{
+    const Boss *b = &w->boss;
+    const HiveState *h = &b->hive;
+    if (b->action == HIVE_OPEN) {
+        text_centered(TextFormat("CORAÇÃO EXPOSTO: ATAQUE O CORAÇÃO! (%.0f s)", (double)ceilf(b->timer)), center_x, y,
+                      ALERT_SIZE + 6, mix_color(CORE_OPEN_COLOR, WHITE, 0.25f + 0.25f * sinf(now * 8.0f)));
+        y += ALERT_SIZE + 12;
+    } else if (h->inflating >= 0) {
+        float fill = 1.0f - h->inflate / fmaxf(t->hive_inflate_time, 1e-3f);
+        float blink = (sinf(now * (8.0f + 16.0f * fill)) > 0.0f) ? 0.5f : 0.0f;
+        text_centered("BOLSA INCHANDO: ESTOURE ANTES DOS DRONES!", center_x, y, ALERT_SIZE + 4,
+                      mix_color(SAC_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 10;
+    }
+    int left = hive_thrusters_left(b);
+    if (h->pushing) {
+        const char *what = (h->tide > 0.0f) ? "A LUA ESTÁ ARRANCANDO A CROSTA" : "A COLMEIA ESTÁ EMPURRANDO A LUA";
+        float blink = (sinf(now * (5.0f + 12.0f * h->tide)) > 0.0f) ? 0.45f : 0.0f;
+        text_centered(TextFormat("%s: DESTRUA OS PROPULSORES (%d/%d)", what, HIVE_THRUSTERS - left, HIVE_THRUSTERS), center_x,
+                      y, ALERT_SIZE + 4, mix_color(THRUSTER_COLOR, WHITE, blink));
+        y += ALERT_SIZE + 10;
+    } else if (h->thr_born && left == 0 && h->moon_scale < 0.999f) {
+        text_centered(TextFormat("PROPULSORES DESTRUÍDOS: A LUA ESTÁ VOLTANDO (renascem em %.0f s)", (double)ceilf(h->thr_regrow)),
+                      center_x, y, ALERT_SIZE, with_alpha(REPAIR_COLOR, 0.85f));
+        y += ALERT_SIZE + 8;
+    }
+    if (h->spit_charge > 0.0f && w->ship.alive) {
+        text_centered("O CORAÇÃO VAI CUSPIR ÁCIDO: DESVIE!", center_x, y, ALERT_SIZE,
+                      with_alpha(SPORE_COLOR, (sinf(now * 30.0f) > 0.0f) ? 1.0f : 0.5f));
+        y += ALERT_SIZE + 8;
+    }
+    return y;
+}
+
 static void draw_alerts(const World *w, const Tuning *t, int center_x)
 {
     const Enemies *e = &w->enemies;
@@ -656,7 +709,9 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
 
     // O boss vem antes de tudo: é o que mais fere o planeta.
     const Boss *b = &w->boss;
-    if (boss_vulnerable(b)) {
+    if (boss_vulnerable(b) && b->type == BOSS_HIVE) {
+        y = hive_alerts(w, t, center_x, y, now);
+    } else if (boss_vulnerable(b)) {
         if (b->action == BREAKER_CHARGE) {
             float left = b->timer;
             float urgency = 1.0f - left / fmaxf(t->breaker_charge[b->phase - 1], 1e-3f);
@@ -695,7 +750,14 @@ static void draw_alerts(const World *w, const Tuning *t, int center_x)
     }
 
     // Rochas: o que fazer com a que está no raio, e o aviso de meteoro novo.
-    if (rocks_towed(&w->rocks) != NULL) {
+    const Rock *towed = rocks_towed(&w->rocks);
+    if (towed != NULL && towed->kind == ROCK_SPORE) {
+        text_centered(hud_keys("ESPORO NO RAIO: aponte para o coração e solte (F)", "ESPORO NO RAIO: aponte para o coração e solte (X)"),
+                      center_x, y, ALERT_SIZE, with_alpha(SPORE_COLOR, 0.9f));
+    } else if (towed == NULL && rocks_count(&w->rocks, ROCK_SPORE) > 0 && boss_vulnerable(b)) {
+        text_centered(hud_keys("ESPOROS SOLTOS: puxe com F e arremesse no coração", "ESPOROS SOLTOS: puxe com X e arremesse no coração"),
+                      center_x, y, ALERT_SIZE, with_alpha(SPORE_COLOR, 0.7f + 0.2f * sinf(now * 4.0f)));
+    } else if (towed != NULL) {
         text_centered(hud_keys("REBOCANDO: solte (F) em cima de uma cratera", "REBOCANDO: solte (X) em cima de uma cratera"), center_x, y, ALERT_SIZE, with_alpha(TRACTOR_COLOR, 0.9f));
     } else if (rocks_count(&w->rocks, ROCK_METEOR) > 0) {
         for (uint32_t id = w->events.count; id >= 1 && id + EVENTS_CAPACITY > w->events.count; id--) {
@@ -735,8 +797,9 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
         float blink = (sinf(age * 12.0f) > 0.0f) ? 1.0f : 0.45f;
         text_centered("ALERTA", sw / 2, y - 14, LABEL_SIZE + 10, with_alpha(BOSS_COLOR, fade * blink));
         text_centered(name, sw / 2, y + 18, BANNER_SIZE + 6, with_alpha(BOSS_COLOR, fade));
-        text_centered("quando ele carregar o canhão, destrua os 4 capacitores", sw / 2, y + BANNER_SIZE + 34,
-                      LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+        const char *hint = (e->sub == BOSS_HIVE) ? "ela se agarrou à Lua: estoure as bolsas para abrir o coração"
+                                                 : "quando ele carregar o canhão, destrua os 4 capacitores";
+        text_centered(hint, sw / 2, y + BANNER_SIZE + 34, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
         break;
     }
     case EV_BOSS_PHASE:
@@ -749,6 +812,14 @@ static void boss_banner(const World *w, const Tuning *t, const GameEvent *e, flo
                       with_alpha(PRIZE_COLOR, fade));
         break;
     default:   // EV_REWARD
+        if (e->sub == BOSS_HIVE) {
+            text_centered("NÚCLEO COLMEIA ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(SAC_COLOR, fade));
+            text_centered(TextFormat(hud_keys("tecla G: uma revoada de ferrões caça os inimigos (recarga de %.0f s)",
+                                              "analógico direito (apertar): uma revoada de ferrões (recarga de %.0f s)"),
+                                     (double)t->brood_cooldown),
+                          sw / 2, y + BANNER_SIZE - 6, LABEL_SIZE, with_alpha(TEXT_COLOR, fade));
+            break;
+        }
         text_centered("NÚCLEO ROMPE-MUNDOS ADQUIRIDO", sw / 2, y, BANNER_SIZE - 16, with_alpha(ABILITY_COLOR, fade));
         text_centered(TextFormat(hud_keys("segure o botão direito: um raio que atravessa tudo (recarga de %.0f s)", "segure LT: um raio que atravessa tudo (recarga de %.0f s)"),
                                  (double)t->ability_cooldown),
@@ -1105,23 +1176,43 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
     ui_draw_text(phase, x + BOSS_BAR_WIDTH - ui_measure_text(phase, LABEL_SIZE), top + 6, LABEL_SIZE, TEXT_COLOR);
     // Na entrada, a barra enche (e ele ainda é invulnerável).
     float fill = b->hp / fmaxf(b->hp_max, 1e-3f);
-    if (b->state == BOSS_ENTER) fill *= 1.0f - Clamp(b->timer / t->breaker_enter_time, 0.0f, 1.0f);
+    if (b->state == BOSS_ENTER) fill *= 1.0f - Clamp(b->timer / boss_enter_time(b, t), 0.0f, 1.0f);
     bool open = boss_core_factor(b, t) >= 0.99f;
     Color bar = open ? mix_color(CORE_OPEN_COLOR, WHITE, 0.3f + 0.3f * sinf(now * 8.0f)) : BOSS_COLOR;
     draw_bar(x, y, BOSS_BAR_WIDTH, 12, fill, bar);
     // Marcas das fases.
+    float marks[2];
+    boss_phase_marks((BossType)b->type, t, marks);
     for (int k = 0; k < 2; k++) {
-        float mark = (k == 0) ? t->breaker_phase_2 : t->breaker_phase_3;
-        int mx = x + (int)((float)BOSS_BAR_WIDTH * mark);
+        int mx = x + (int)((float)BOSS_BAR_WIDTH * marks[k]);
         DrawRectangle(mx - 1, y - 3, 2, 18, MARKER_COLOR);
     }
-    // Capacitores: um quadradinho por capacitor, aceso enquanto carregado.
+    // Alvos: um quadradinho por alvo, aceso enquanto vivo.
     if (boss_capacitors_armed(b)) {
         int px = sw / 2 - (BOSS_CAPACITORS * 22) / 2;
         for (int k = 0; k < BOSS_CAPACITORS; k++) {
-            Color c = (b->cap_hp[k] > 0.0f) ? CAPACITOR_COLOR : with_alpha(DIM_COLOR, 0.5f);
+            Color c = (b->breaker.cap_hp[k] > 0.0f) ? CAPACITOR_COLOR : with_alpha(DIM_COLOR, 0.5f);
             DrawRectangle(px + k * 22, y + 17, 16, 7, c);
         }
+    } else if (b->type == BOSS_HIVE && b->state == BOSS_FIGHT) {
+        const HiveState *h = &b->hive;
+        int thrusters = h->thr_born ? HIVE_THRUSTERS : 0;
+        int px = sw / 2 - ((HIVE_SACS + thrusters) * 22 + (thrusters > 0 ? 14 : 0)) / 2;
+        for (int k = 0; k < HIVE_SACS; k++) {
+            bool alive = h->sac_hp[k] > 0.0f;
+            Color c = !alive ? with_alpha(DIM_COLOR, 0.5f) : (h->inflating == k) ? mix_color(SAC_COLOR, WHITE, 0.5f + 0.5f * sinf(now * 16.0f))
+                                                                                  : with_alpha(SAC_COLOR, 0.4f + 0.6f * h->sac_grow[k]);
+            DrawRectangle(px + k * 22, y + 17, 16, 7, c);
+        }
+        for (int k = 0; k < thrusters; k++) {
+            Color c = (h->thr_hp[k] > 0.0f) ? THRUSTER_COLOR : with_alpha(DIM_COLOR, 0.5f);
+            DrawRectangle(px + (HIVE_SACS + k) * 22 + 14, y + 17, 16, 7, c);
+        }
+        // A distância da Lua, à direita: vermelha quando a maré começa.
+        const char *moon = TextFormat("LUA %.0f%%", (double)w->moon.scale * 100.0);
+        Color mc = (h->tide > 0.0f) ? mix_color(BOSS_COLOR, WHITE, (sinf(now * 10.0f) > 0.0f) ? 0.4f : 0.0f)
+                 : (w->moon.scale < 0.999f) ? THRUSTER_COLOR : DIM_COLOR;
+        ui_draw_text(moon, x + BOSS_BAR_WIDTH - ui_measure_text(moon, SMALL_SIZE + 4), y + 15, SMALL_SIZE + 4, mc);
     }
 
     // Marcadores na tela.
@@ -1131,22 +1222,24 @@ static void draw_boss(const World *w, const Tuning *t, Camera3D camera)
         return;
     }
     bool any_visible = false;
-    if (boss_capacitors_armed(b)) {
-        for (int k = 0; k < BOSS_CAPACITORS; k++) {
-            if (b->cap_hp[k] <= 0.0f) continue;
-            Vector2 p;
-            Vector3 pos = boss_point(b, t, BREAKER_CAPACITOR[k]);
-            if (project(camera, pos, &p) && on_screen(p)) {
-                diamond(p, 9.0f + 2.0f * sinf(now * 10.0f), CAPACITOR_COLOR);
-                any_visible = true;
-            }
+    BossPart parts[BOSS_PARTS_MAX];
+    int count = boss_parts(b, t, parts);
+    for (int k = 0; k < count; k++) {
+        const BossPart *part = &parts[k];
+        if (!part->open) continue;
+        Vector2 p;
+        if (!project(camera, part->center, &p) || !on_screen(p)) continue;
+        if (part->role == PART_CORE) {
+            DrawCircleLines((int)p.x, (int)p.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
+            text_centered(b->type == BOSS_HIVE ? "CORAÇÃO" : "NÚCLEO", (int)p.x, (int)p.y - 34, 18, CORE_OPEN_COLOR);
+        } else if (b->type == BOSS_HIVE) {
+            bool thruster = part->id >= HIVE_SACS;
+            bool inflating = !thruster && b->hive.inflating == part->id;
+            Color c = thruster ? THRUSTER_COLOR : inflating ? mix_color(BOSS_COLOR, WHITE, 0.5f + 0.5f * sinf(now * 16.0f)) : SAC_COLOR;
+            diamond(p, (inflating ? 11.0f : 7.0f) + 2.0f * sinf(now * 10.0f), c);
+        } else {
+            diamond(p, 9.0f + 2.0f * sinf(now * 10.0f), CAPACITOR_COLOR);
         }
-    }
-    Vector3 core = boss_point(b, t, BREAKER_CORE);
-    Vector2 cp;
-    if (open && project(camera, core, &cp) && on_screen(cp)) {
-        DrawCircleLines((int)cp.x, (int)cp.y, 14.0f + 3.0f * sinf(now * 8.0f), CORE_OPEN_COLOR);
-        text_centered("NÚCLEO", (int)cp.x, (int)cp.y - 34, 18, CORE_OPEN_COLOR);
         any_visible = true;
     }
     Vector2 bp;

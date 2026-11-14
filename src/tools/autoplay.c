@@ -162,6 +162,16 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
         else if (count == 4 && strcmp(tokens[3], "orbit") == 0) e.count = (int)CAM_ORBIT;
         else return fail(ap, line_no, "esperado: at <quadro> view ship|orbit");
         e.cmd = AP_VIEW;
+    } else if (strcmp(cmd, "ship") == 0 && count >= 4 && strcmp(tokens[3], "boss") == 0) {
+        if (count != 5 || !parse_float(tokens[4], &e.speed) || !(e.speed > 0.0f && e.speed < 5000.0f)) {
+            return fail(ap, line_no, "esperado: at <quadro> ship boss <distancia>");
+        }
+        e.cmd = AP_SHIP_BOSS;
+    } else if (strcmp(cmd, "spore") == 0) {
+        if (count != 4 || !parse_float(tokens[3], &e.speed) || !(e.speed > 0.0f && e.speed < 1000.0f)) {
+            return fail(ap, line_no, "esperado: at <quadro> spore <distancia a frente da nave>");
+        }
+        e.cmd = AP_SPORE;
     } else if (strcmp(cmd, "ship") == 0) {
         // Posição e alvo obrigatórios; a velocidade é opcional.
         bool ok = (count == 9 || count == 10)
@@ -220,10 +230,11 @@ static bool parse_event(Autoplay *ap, char *tokens[], int count, int line_no)
             ok = parse_float(tokens[7], &e.target.x) && parse_float(tokens[8], &e.target.y)
               && parse_float(tokens[9], &e.target.z);
         }
-        if (!ok) return fail(ap, line_no, "esperado: at <quadro> rock meteor|fragment <x> <y> <z> [<vx> <vy> <vz>]");
+        if (!ok) return fail(ap, line_no, "esperado: at <quadro> rock meteor|fragment|spore <x> <y> <z> [<vx> <vy> <vz>]");
         if (strcmp(tokens[3], "meteor") == 0)        e.action = ROCK_METEOR;
         else if (strcmp(tokens[3], "fragment") == 0) e.action = ROCK_FRAGMENT;
-        else return fail(ap, line_no, "rock: tipo desconhecido: \"%s\" (meteor ou fragment)", tokens[3]);
+        else if (strcmp(tokens[3], "spore") == 0)    e.action = ROCK_SPORE;
+        else return fail(ap, line_no, "rock: tipo desconhecido: \"%s\" (meteor, fragment ou spore)", tokens[3]);
         int same_frame = 0;
         for (int i = 0; i < ap->event_count; i++) {
             if (ap->events[i].cmd == AP_ROCK && ap->events[i].frame == e.frame) same_frame++;
@@ -401,6 +412,8 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
     out->ore = 0;
     out->screen = AP_SCREEN_KEEP;
     out->pad_hints = -1;
+    out->ship_boss = -1.0f;
+    out->spore_ahead = -1.0f;
     out->evolve_count = 0;
     out->spawn_count = 0;
     out->crater_count = 0;
@@ -473,6 +486,12 @@ void autoplay_step(Autoplay *ap, int frame, AutoplayFrame *out)
         case AP_PAD:
             out->pad_hints = e->count;
             break;
+        case AP_SHIP_BOSS:
+            out->ship_boss = e->speed;
+            break;
+        case AP_SPORE:
+            out->spore_ahead = e->speed;
+            break;
         case AP_ROCK:
             if (out->rock_count < AUTOPLAY_MAX_ROCKS) {
                 AutoplayRock *k = &out->rocks[out->rock_count++];
@@ -511,16 +530,36 @@ void autoplay_apply(const AutoplayFrame *frame, World *w, const Tuning *t)
     // A troca de câmera e a nave vêm antes: um "cam" no mesmo quadro parte delas.
     if (frame->has_view) world_set_view(w, t, frame->view);
     if (frame->has_ship) world_place_ship(w, t, frame->ship_pos, frame->ship_target, frame->ship_speed);
+    if (frame->ship_boss > 0.0f) {
+        // De frente para o núcleo do boss, do lado em que ele se mostra.
+        BossPart parts[BOSS_PARTS_MAX];
+        int count = boss_parts(&w->boss, t, parts);
+        for (int i = 0; i < count; i++) {
+            if (parts[i].role != PART_CORE) continue;
+            Vector3 facing = (Vector3LengthSqr(parts[i].facing) > 1e-6f) ? Vector3Normalize(parts[i].facing)
+                                                                          : (Vector3){ 0.0f, 1.0f, 0.0f };
+            Vector3 pos = Vector3Add(parts[i].center, Vector3Scale(facing, frame->ship_boss));
+            world_place_ship(w, t, pos, parts[i].center, 0.0f);
+            break;
+        }
+    }
+    if (frame->spore_ahead > 0.0f && w->ship_active) {
+        Vector3 pos = Vector3Add(w->ship.pos, Vector3Scale(ship_forward(&w->ship), frame->spore_ahead));
+        world_spawn_rock(w, t, ROCK_SPORE, pos, (Vector3){ 0.0f, 0.0f, 0.0f });
+    }
     if (frame->has_cam && frame->cam_boss) {
         // Segue o boss: na carga e no disparo, olha para o meio do corte.
         const Boss *b = &w->boss;
         if (boss_active(b)) {
+            // A Colmeia não tem órbita própria: o eixo é o "para cima" do mundo.
+            Vector3 axis = (Vector3LengthSqr(b->axis) > 0.5f) ? b->axis : (Vector3){ 0.0f, 1.0f, 0.0f };
             Vector3 radial = Vector3Normalize(b->pos);
-            Vector3 ahead = Vector3Normalize(Vector3CrossProduct(b->axis, radial));
+            Vector3 ahead = Vector3Normalize(Vector3CrossProduct(axis, radial));
             Vector3 pos = Vector3Add(b->pos, Vector3Scale(radial, frame->cam_pos.x));
             pos = Vector3Add(pos, Vector3Scale(ahead, -frame->cam_pos.y));
-            pos = Vector3Add(pos, Vector3Scale(b->axis, frame->cam_pos.z));
-            bool cutting = b->state == BOSS_FIGHT && (b->action == BREAKER_CHARGE || b->action == BREAKER_FIRE);
+            pos = Vector3Add(pos, Vector3Scale(axis, frame->cam_pos.z));
+            bool cutting = b->type == BOSS_BREAKER && b->state == BOSS_FIGHT
+                        && (b->action == BREAKER_CHARGE || b->action == BREAKER_FIRE);
             Vector3 look = cutting ? Vector3Scale(boss_cut_direction(b, 0.5f), w->planet.params.radius) : b->pos;
             world_place_camera(w, pos, look);
         }
@@ -697,6 +736,7 @@ bool autoplay_write_report(const char *path, const AutoplayReport *r)
             fprintf(f, "boss_down_frame = %d\n", r->boss_down_frames[i]);
         }
         fprintf(f, "ability = %s\n", r->ability_owned ? "sim" : "nao");
+        fprintf(f, "brood = %s\n", r->brood_owned ? "sim" : "nao");
         fprintf(f, "\n");
     }
     if (r->rocks_delivered > 0 || r->rocks_alive > 0) {

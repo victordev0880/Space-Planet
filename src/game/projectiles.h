@@ -23,8 +23,9 @@ typedef enum {
 } ShotKind;
 
 // De quem é um SHOT_BOLT. Só os do jogador quebram rochas: um aliado (ou uma
-// torre) não pode destruir o meteoro que o jogador queria rebocar.
-enum { BOLT_PLAYER = 0, BOLT_ALLY = 1 };
+// torre) não pode destruir o meteoro que o jogador queria rebocar. BOLT_BROOD
+// é um ferrão da Ninhada (núcleo Colmeia): persegue um inimigo.
+enum { BOLT_PLAYER = 0, BOLT_ALLY = 1, BOLT_BROOD = 2 };
 
 typedef struct {
     Vector3 pos;
@@ -42,6 +43,7 @@ typedef struct {
     uint8_t source;          // tipo do inimigo que disparou (EnemyType); nos tiros SHOT_BOLT, BOLT_PLAYER ou BOLT_ALLY
     uint8_t pierce;          // tiro da nave: inimigos que ainda pode atravessar (evolução)
     int16_t last_hit;        // ... e o último que atravessou (-1 = nenhum), para não acertá-lo de novo
+    int16_t homing;          // ferrão da Ninhada: o inimigo que ele persegue (-1 = o mais perto)
 } Shot;
 
 typedef struct {

@@ -16,6 +16,7 @@ void moon_init(Moon *m, const Tuning *t, float planet_radius)
 {
     m->angle = t->moon_start_angle * DEG2RAD;
     m->radius = t->moon_radius * planet_radius;
+    m->scale = 1.0f;
     m->pos = moon_orbit_point(t, planet_radius, m->angle);
     m->pos_prev = m->pos;
 }
@@ -28,5 +29,5 @@ void moon_tick(Moon *m, const Tuning *t, float planet_radius, float dt)
 
     // Raio e órbita são relidos a cada passo: assim o F5 vale na hora.
     m->radius = t->moon_radius * planet_radius;
-    m->pos = moon_orbit_point(t, planet_radius, m->angle);
+    m->pos = Vector3Scale(moon_orbit_point(t, planet_radius, m->angle), m->scale);
 }

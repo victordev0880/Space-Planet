@@ -440,6 +440,20 @@ typedef struct {
     float breaker_ram_damage;
     // Núcleo Rompe-Mundos (a recompensa): o raio no botão direito.
     float ability_damage, ability_range, ability_width, ability_cooldown, ability_charge;
+
+    // Colmeia Lunar (data/bosses.txt).
+    float hive_hp, hive_points, hive_xp, hive_enter_time, hive_spawn_distance;
+    float hive_sac_hp, hive_sac_regrow, hive_inflate_time;
+    float hive_inflate[3];           // segundos entre uma bolsa e a próxima inchar, por fase
+    int   hive_brood, hive_brood_cap;
+    float hive_open_time, hive_core_armor, hive_core_open, hive_phase_2, hive_phase_3;
+    float hive_thruster_hp, hive_thruster_regrow, hive_push_rate, hive_recede_rate, hive_moon_min;
+    float hive_tide_start, hive_tide_radius, hive_tide_sink, hive_tide_spread, hive_tide_slow, hive_tide_fast;
+    float hive_spit_interval, hive_spit_warn, hive_spit_damage, hive_spit_speed;
+    float hive_spore_size, hive_spore_life, hive_spore_throw, hive_spore_damage, hive_spore_blast;
+    // Núcleo Colmeia (a recompensa): a Ninhada, na tecla G.
+    int   brood_count;
+    float brood_damage, brood_speed, brood_turn, brood_life, brood_cooldown;
 } Tuning;
 
 #define CRATER_SIZE_COUNT 4

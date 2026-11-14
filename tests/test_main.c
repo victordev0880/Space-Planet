@@ -56,6 +56,7 @@ int main(void)
     suite_rocks();
     suite_autoplay();
     suite_settings();
+    suite_hive();
     finish_current();
 
     printf("\n%d testes, %d verificacoes, %d falhas\n", test_count, test_checks, test_failures);

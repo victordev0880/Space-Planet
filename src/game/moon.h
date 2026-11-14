@@ -11,6 +11,7 @@
 typedef struct {
     float   angle;      // posição na órbita, em radianos
     float   radius;     // raio da Lua, em unidades do mundo
+    float   scale;      // distância ao planeta, em frações da órbita normal (a Colmeia Lunar empurra)
     Vector3 pos;
     Vector3 pos_prev;   // um passo antes: para interpolar o desenho e saber a velocidade
 } Moon;

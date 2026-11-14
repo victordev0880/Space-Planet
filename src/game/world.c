@@ -48,6 +48,8 @@ static const Rgb8 BOSS_BLAST_GLOW   = { 255, 90, 60 };
 static const Rgb8 BOSS_BLAST_DEBRIS = { 70, 66, 80 };
 static const Rgb8 SHIELD_SPARK      = { 130, 210, 255 };
 #define BOSS_BLAST_JOLT 6.0f
+#define SPORE_DRIFT     3.0f     // velocidade com que o esporo sai da bolsa estourada
+#define MOON_RETURN     0.01f    // sem a Colmeia, a Lua recupera este tanto da distância por segundo
 
 // ---------------------------------------------------------------------------
 //  Câmeras
@@ -585,6 +587,8 @@ BossContext world_boss_context(World *w, const Tuning *t)
 {
     BossContext c;
     c.planet = &w->planet;
+    c.moon = &w->moon;
+    c.drones = w->enemies.alive_by_type[ENEMY_SWARM];
     c.ship = (w->ship_active && w->ship.alive) ? &w->ship : NULL;
     c.shots = &w->shots;
     c.events = &w->events;
@@ -609,23 +613,34 @@ static void tick_boss(World *w, const Tuning *t)
     BossContext ctx = world_boss_context(w, t);
     boss_tick(b, &ctx);
     for (int i = 0; i < b->carve_count; i++) world_carve(w, t, b->carves[i].center, b->carves[i].radius);
-    if (b->launch_request > 0) world_spawn(w, t, ENEMY_SWARM, b->launch_request, boss_point(b, t, BREAKER_BAY));
+    if (b->launch_count > 0) world_spawn(w, t, (EnemyType)b->launch_type, b->launch_count, b->launch_from);
+    for (int i = 0; i < b->hive.spore_count; i++) {
+        Vector3 out = Vector3Normalize(Vector3Subtract(b->hive.spore_at[i], b->pos));
+        rocks_spawn_spore(&w->rocks, &w->rng, t, b->hive.spore_at[i], Vector3Scale(out, SPORE_DRIFT));
+    }
+    b->hive.spore_count = 0;
+    // A Colmeia empurra a Lua; sem ela, a Lua volta devagar à órbita.
+    float dt = 1.0f / (float)t->sim_hz;
+    if (boss_active(b) && b->type == BOSS_HIVE) w->moon.scale = b->hive.moon_scale;
+    else if (w->moon.scale < 1.0f)             w->moon.scale = fminf(w->moon.scale + MOON_RETURN * dt, 1.0f);
     if (b->blast_now) {
-        particles_explosion(&w->particles, &w->rng, b->blast_at, b->vel, t->breaker_scale * 0.45f, BOSS_BLAST_HOT,
+        particles_explosion(&w->particles, &w->rng, b->blast_at, b->vel, b->scale * 0.45f, BOSS_BLAST_HOT,
                             BOSS_BLAST_GLOW, BOSS_BLAST_DEBRIS);
         world_jolt(w, BOSS_BLAST_JOLT);
     }
     if (!b->defeated) return;
     b->defeated = false;
-    particles_explosion(&w->particles, &w->rng, b->pos, b->vel, t->breaker_scale * 1.6f, BOSS_BLAST_HOT, BOSS_BLAST_GLOW,
+    particles_explosion(&w->particles, &w->rng, b->pos, b->vel, b->scale * 1.6f, BOSS_BLAST_HOT, BOSS_BLAST_GLOW,
                         BOSS_BLAST_DEBRIS);
     world_jolt(w, BOSS_BLAST_JOLT * 4.0f);
     if (w->state != GAME_PLAYING) return;
-    score_kill(&w->score, t, t->breaker_points);
+    score_kill(&w->score, t, boss_points((BossType)b->type, t));
     w->score.bosses++;
-    world_give_xp(w, t, t->breaker_xp);
-    if (!w->ability.owned) {
-        w->ability.owned = true;
+    world_give_xp(w, t, boss_xp((BossType)b->type, t));
+    // A recompensa: o núcleo do boss (cada um dá uma habilidade).
+    bool *owned = (b->type == BOSS_HIVE) ? &w->brood.owned : &w->ability.owned;
+    if (!*owned) {
+        *owned = true;
         events_push(&w->events, (uint32_t)w->tick, EV_REWARD, b->type, w->ship.pos, 0.0f);
     }
 }
@@ -656,6 +671,8 @@ void world_restart(World *w, const Tuning *t)
     allies_reset(&w->allies);
     boss_reset(&w->boss);
     memset(&w->ability, 0, sizeof w->ability);
+    memset(&w->brood, 0, sizeof w->brood);
+    w->moon.scale = 1.0f;
     rocks_reset(&w->rocks);
     defenses_reset(&w->defenses);
     w->ore = 0;
@@ -808,6 +825,7 @@ Rock *world_spawn_rock(World *w, const Tuning *t, RockKind kind, Vector3 pos, Ve
         if (k != NULL) events_push(&w->events, (uint32_t)w->tick, EV_METEOR, 0, k->pos, k->radius);
         return k;
     }
+    if (kind == ROCK_SPORE) return rocks_spawn_spore(&w->rocks, &w->rng, t, pos, vel);
     // Fragmento já em órbita, passando por `pos`.
     Rock *k = rocks_spawn_fragment(&w->rocks, &w->rng, t, w->planet.params.radius, pos, VMAT_GRASS);
     if (k == NULL) return NULL;
@@ -853,7 +871,14 @@ static void tick_tractor(World *w, const InputState *in, const Tuning *t)
     const Rock *towed = rocks_towed(&w->rocks);
     if (towed != NULL) {
         events_push(&w->events, tick, EV_TRACTOR_RELEASE, towed->kind, towed->pos, 0.0f);
-        rocks_release(&w->rocks);
+        if (towed->kind == ROCK_SPORE) {
+            // O esporo sai arremessado para onde o nariz aponta.
+            Vector3 vel = Vector3Add(Vector3Scale(ship_forward(&w->ship), t->hive_spore_throw),
+                                     Vector3Add(w->ship.vel, w->ship.fall));
+            rocks_throw(&w->rocks, vel);
+        } else {
+            rocks_release(&w->rocks);
+        }
         return;
     }
     int index = rocks_find_grab(&w->rocks, &w->ship, t);
@@ -908,7 +933,7 @@ static void rock_collisions(World *w, const Tuning *t)
     if (!s->alive) return;
     for (int i = 0; i < ROCKS_MAX; i++) {
         const Rock *k = &w->rocks.items[i];
-        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING) continue;
+        if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING || k->state == ROCK_THROWN) continue;
         Vector3 away = Vector3Subtract(s->pos, k->pos);
         float distance = Vector3Length(away);
         float reach = k->radius + t->ship_radius;
@@ -931,6 +956,10 @@ void world_damage_rock(World *w, const Tuning *t, int index, float damage, Vecto
 {
     if (index < 0 || index >= ROCKS_MAX || !w->rocks.items[index].alive) return;
     const Rock *k = &w->rocks.items[index];
+    if (k->kind == ROCK_SPORE) {
+        combat_spore_blast(w, t, index, false);   // um tiro estoura o esporo
+        return;
+    }
     uint8_t kind = k->kind;
     Vector3 pos = k->pos, vel = k->vel;
     float radius = k->radius;
@@ -1182,6 +1211,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         tick_shop(w, &input, t);
         combat_fire(w, &input, t, dt);
         combat_ability(w, &input, t, dt);
+        combat_brood(w, &input, t, dt);
         tick_allies(w, t, dt);
         run_director(w, &input, t, dt);
         tick_meteors(w, t, dt);
@@ -1194,6 +1224,7 @@ void world_tick(World *w, const InputState *in, const Tuning *base)
         w->enemies.carve_count = 0;
         tick_boss(w, t);
         tick_rocks(w, t, dt);
+        combat_spores(w, t);
         tick_defenses(w, t, dt);
         projectiles_move(&w->shots, dt);
         combat_resolve(w, t);
@@ -1322,8 +1353,18 @@ uint64_t world_hash(const World *w)
         h = hash_vec3(h, w->boss.pos);
         HASH(h, w->boss.hp);
         HASH(h, w->boss.action);
-        HASH(h, w->boss.cap_hp);
+        HASH(h, w->boss.breaker.cap_hp);
+        if (w->boss.type == BOSS_HIVE) {
+            HASH(h, w->boss.type);
+            HASH(h, w->boss.hive.sac_hp);
+            HASH(h, w->boss.hive.thr_hp);
+            HASH(h, w->boss.hive.moon_scale);
+            HASH(h, w->boss.hive.inflating);
+        }
     }
+    // Só entram no resumo quando existem (os roteiros antigos não mudam de hash).
+    if (w->moon.scale < 1.0f) HASH(h, w->moon.scale);
+    if (w->brood.owned) HASH(h, w->brood.cooldown);
     HASH(h, w->ability.owned);
     HASH(h, w->evo.level);
     HASH(h, w->evo.xp);

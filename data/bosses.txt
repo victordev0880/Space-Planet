@@ -61,6 +61,67 @@ breaker.launch_interval = 14     # a partir da fase 2, solta drones do Enxame
 breaker.launch_count    = 4
 breaker.ram_damage      = 30     # dano na nave ao trombar no casco
 
+# --- Colmeia Lunar ------------------------------------------------------------
+# Uma massa viva que se agarra à Lua. Bolsas pelo corpo dela incham (aviso) e
+# soltam drones; estourada antes, a ninhada morre junto. Todas as bolsas
+# estouradas, o coração (voltado para o planeta) abre. Da fase 2 em diante
+# nascem propulsores atrás da Lua que a empurram contra a Terra; perto, um
+# tentáculo arranca a crosta. Destruir os propulsores faz a Lua voltar.
+# Bolsas estouradas deixam esporos: pegue com o raio trator e arremesse no coração.
+hive.hp             = 300     # vida do coração
+hive.points         = 15000
+hive.xp             = 40
+hive.enter_time     = 6       # segundos da chegada à Lua (invulnerável)
+hive.spawn_distance = 9       # de onde vem, em raios da Lua a partir dela
+
+hive.sac_hp       = 12        # vida de cada bolsa (são seis)
+hive.sac_regrow   = 4         # segundos para as bolsas renascerem depois que o coração fecha
+hive.inflate_time = 2.6       # aviso: a bolsa incha este tanto antes de soltar os drones
+hive.inflate_1    = 6         # segundos entre uma bolsa e a próxima inchar, por fase
+hive.inflate_2    = 5
+hive.inflate_3    = 3.8
+hive.brood        = 3         # drones do Enxame por bolsa
+hive.brood_cap    = 12        # com este tanto de drones em cena, a bolsa espera
+
+hive.open_time  = 8           # segundos com o coração aberto
+hive.core_armor = 0.05        # fração do dano que chega ao coração fechado
+hive.core_open  = 0.3         # ... e na fase 3
+hive.phase_2    = 0.65        # fração da vida em que começa a fase 2 (propulsores)
+hive.phase_3    = 0.3         # ... e a fase 3 (cuspe e pressa)
+
+hive.thruster_hp     = 16     # vida de cada propulsor (são três)
+hive.thruster_regrow = 20     # segundos até renascerem, depois de destruídos os três
+hive.push_rate       = 0.012  # quanto da distância da Lua ela perde por segundo (três propulsores)
+hive.recede_rate     = 0.008  # ... e quanto recupera, sem propulsores
+hive.moon_min        = 0.6    # a Lua chega até esta fração da distância normal
+hive.tide_start      = 0.82   # abaixo disto, o tentáculo arranca a crosta
+hive.tide_radius     = 5      # raio de cada mordida do tentáculo
+hive.tide_sink       = 2      # o centro dela fica este tanto abaixo da superfície original
+hive.tide_spread     = 14     # as mordidas caem a até este tanto do ponto embaixo da Lua
+hive.tide_slow       = 1.8    # segundos entre mordidas com a maré fraca...
+hive.tide_fast       = 0.6    # ... e com a Lua no ponto mais perto
+
+hive.spit_interval = 4        # fase 3: segundos entre cuspes de ácido na nave
+hive.spit_warn     = 0.9      # aviso (o coração brilha) antes do cuspe
+hive.spit_damage   = 14
+hive.spit_speed    = 55
+
+hive.spore_size   = 1.6       # raio do esporo
+hive.spore_life   = 22        # segundos que ele fica boiando
+hive.spore_throw  = 60        # arremessado (F de novo), sai a esta velocidade à frente da nave
+hive.spore_damage = 30        # no coração, mesmo fechado
+hive.spore_blast  = 9         # raio da explosão (estoura bolsas e propulsores por perto)
+
+# --- Núcleo Colmeia (a recompensa) --------------------------------------------
+# Tecla G (no controle, apertar o analógico direito): uma revoada de ferrões
+# que caçam os inimigos mais perto.
+brood.count    = 8
+brood.damage   = 7            # dano de cada ferrão
+brood.speed    = 90
+brood.turn     = 6            # quão rápido o ferrão vira para o alvo
+brood.life     = 3            # segundos até o ferrão se desfazer
+brood.cooldown = 18
+
 # --- Núcleo Rompe-Mundos (a recompensa) ----------------------------------------
 # Derrotado, o boss deixa o núcleo dele: o botão direito passa a carregar um
 # raio que atravessa todos os inimigos numa linha.

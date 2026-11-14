@@ -12,7 +12,7 @@
 // Eixos do modelo: frente -Z, topo +Y. A torre mira com o cano (frente); o
 // satélite voa de frente, com os painéis abertos para os lados.
 
-enum { PART_HULL, PART_DARK, PART_PANEL, PART_LIGHT, PART_TRIM };
+enum { D_HULL, D_DARK, D_PANEL, D_LIGHT, D_TRIM };
 
 #define TURRET_SCALE    2.0f
 #define SATELLITE_SCALE 1.5f
@@ -43,39 +43,39 @@ static Vector3 V(float x, float y, float z)
 static void build_turret(LowPoly *m)
 {
     lowpoly_clear(m);
-    lowpoly_part(m, PART_HULL, HULL_COLOR, false);
-    lowpoly_part(m, PART_DARK, DARK_COLOR, false);
-    lowpoly_part(m, PART_PANEL, PANEL_COLOR, false);
-    lowpoly_part(m, PART_LIGHT, LIGHT_COLOR, true);
-    lowpoly_part(m, PART_TRIM, TRIM_COLOR, true);
+    lowpoly_part(m, D_HULL, HULL_COLOR, false);
+    lowpoly_part(m, D_DARK, DARK_COLOR, false);
+    lowpoly_part(m, D_PANEL, PANEL_COLOR, false);
+    lowpoly_part(m, D_LIGHT, LIGHT_COLOR, true);
+    lowpoly_part(m, D_TRIM, TRIM_COLOR, true);
     // Corpo: um disco grosso, com um anel de luz na borda.
-    lp_tube(m, V(0.0f, -0.35f, 0.0f), V(0.0f, 0.25f, 0.0f), 0.85f, 0.7f, 8, PART_HULL, PART_DARK, false);
-    lp_ring(m, V(0.0f, -0.05f, 0.0f), V(0.0f, 1.0f, 0.0f), 0.86f, 0.98f, 0.12f, 8, PART_LIGHT, PART_DARK, false);
+    lp_tube(m, V(0.0f, -0.35f, 0.0f), V(0.0f, 0.25f, 0.0f), 0.85f, 0.7f, 8, D_HULL, D_DARK, false);
+    lp_ring(m, V(0.0f, -0.05f, 0.0f), V(0.0f, 1.0f, 0.0f), 0.86f, 0.98f, 0.12f, 8, D_LIGHT, D_DARK, false);
     // Domo e o cano duplo, apontando para a frente (-Z).
-    lp_tube(m, V(0.0f, 0.25f, 0.0f), V(0.0f, 0.6f, 0.0f), 0.55f, 0.3f, 6, PART_DARK, PART_HULL, false);
-    lp_tube(m, V(0.18f, 0.42f, -0.2f), V(0.18f, 0.42f, -1.45f), 0.11f, 0.09f, 5, PART_HULL, PART_TRIM, true);
-    lp_box(m, V(0.0f, 0.42f, -0.35f), V(0.32f, 0.12f, 0.22f), PART_DARK, false);
+    lp_tube(m, V(0.0f, 0.25f, 0.0f), V(0.0f, 0.6f, 0.0f), 0.55f, 0.3f, 6, D_DARK, D_HULL, false);
+    lp_tube(m, V(0.18f, 0.42f, -0.2f), V(0.18f, 0.42f, -1.45f), 0.11f, 0.09f, 5, D_HULL, D_TRIM, true);
+    lp_box(m, V(0.0f, 0.42f, -0.35f), V(0.32f, 0.12f, 0.22f), D_DARK, false);
     // Antenas de baixo, apontando para o planeta.
-    lp_spike(m, V(0.45f, -0.35f, 0.0f), V(0.6f, -1.1f, 0.0f), 0.08f, 4, PART_DARK, true);
+    lp_spike(m, V(0.45f, -0.35f, 0.0f), V(0.6f, -1.1f, 0.0f), 0.08f, 4, D_DARK, true);
 }
 
 static void build_satellite(LowPoly *m)
 {
     lowpoly_clear(m);
-    lowpoly_part(m, PART_HULL, HULL_COLOR, false);
-    lowpoly_part(m, PART_DARK, DARK_COLOR, false);
-    lowpoly_part(m, PART_PANEL, PANEL_COLOR, false);
-    lowpoly_part(m, PART_LIGHT, LIGHT_COLOR, true);
-    lowpoly_part(m, PART_TRIM, TRIM_COLOR, true);
-    lp_box(m, V(0.0f, 0.0f, 0.0f), V(0.35f, 0.35f, 0.55f), PART_HULL, false);
+    lowpoly_part(m, D_HULL, HULL_COLOR, false);
+    lowpoly_part(m, D_DARK, DARK_COLOR, false);
+    lowpoly_part(m, D_PANEL, PANEL_COLOR, false);
+    lowpoly_part(m, D_LIGHT, LIGHT_COLOR, true);
+    lowpoly_part(m, D_TRIM, TRIM_COLOR, true);
+    lp_box(m, V(0.0f, 0.0f, 0.0f), V(0.35f, 0.35f, 0.55f), D_HULL, false);
     // Painéis solares, dos dois lados.
-    lp_box(m, V(0.5f, 0.0f, 0.0f), V(0.15f, 0.05f, 0.05f), PART_DARK, true);
+    lp_box(m, V(0.5f, 0.0f, 0.0f), V(0.15f, 0.05f, 0.05f), D_DARK, true);
     lp_plate(m, V(0.65f, 0.0f, -0.4f), V(2.1f, 0.0f, -0.4f), V(2.1f, 0.0f, 0.4f), V(0.65f, 0.0f, 0.4f),
-             V(0.0f, 1.0f, 0.0f), 0.04f, 0.04f, PART_PANEL, PART_PANEL, PART_DARK, true);
+             V(0.0f, 1.0f, 0.0f), 0.04f, 0.04f, D_PANEL, D_PANEL, D_DARK, true);
     // Emissor na frente (o raio sai daqui) e uma antena atrás.
-    lp_tube(m, V(0.0f, 0.0f, -0.55f), V(0.0f, 0.0f, -0.9f), 0.22f, 0.1f, 6, PART_DARK, PART_LIGHT, false);
-    lp_spike(m, V(0.0f, 0.3f, 0.4f), V(0.0f, 1.0f, 0.6f), 0.05f, 4, PART_TRIM, false);
-    lp_box(m, V(0.0f, -0.36f, 0.0f), V(0.2f, 0.05f, 0.3f), PART_LIGHT, false);
+    lp_tube(m, V(0.0f, 0.0f, -0.55f), V(0.0f, 0.0f, -0.9f), 0.22f, 0.1f, 6, D_DARK, D_LIGHT, false);
+    lp_spike(m, V(0.0f, 0.3f, 0.4f), V(0.0f, 1.0f, 0.6f), 0.05f, 4, D_TRIM, false);
+    lp_box(m, V(0.0f, -0.36f, 0.0f), V(0.2f, 0.05f, 0.3f), D_LIGHT, false);
 }
 
 static void build_models(void)

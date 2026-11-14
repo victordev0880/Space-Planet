@@ -794,6 +794,7 @@ int main(int argc, char **argv)
         report.boss_downs = boss_downs;
         for (int i = 0; i < boss_downs; i++) report.boss_down_frames[i] = boss_down_frames[i];
         report.ability_owned = world.ability.owned;
+        report.brood_owned = world.brood.owned;
         report.rocks_delivered = world.rocks.delivered;
         report.rocks_alive = rocks_alive(&world.rocks);
         report.planet_restored = (float)((double)world.repair.restored_total / (double)world.planet.initial_volume);

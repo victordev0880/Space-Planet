@@ -59,6 +59,9 @@
 //   at 160 menu title             abre uma tela: title (com a câmera de
 //                                 apresentação), pause, options, controls, ou
 //                                 game (fecha o menu e volta à partida)
+//   at 165 ship boss 40           põe a nave a 40 do núcleo do boss, no lado em que
+//                                 ele se mostra, de frente para ele
+//   at 166 spore 9                solta um esporo da Colmeia 9 à frente da nave
 //   at 170 pad on                 as dicas na tela mostram os botões do controle
 //                                 (off volta ao teclado)
 //
@@ -90,7 +93,8 @@
 
 typedef enum {
     AP_HOLD, AP_RELEASE, AP_PRESS, AP_LOOK, AP_SHOT, AP_CAM, AP_CRATER, AP_BARRAGE, AP_VIEW, AP_SHIP,
-    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP, AP_ROCK, AP_ORE, AP_MENU, AP_PAD
+    AP_WAVES, AP_SPAWN, AP_AUTOPILOT, AP_CLEAR, AP_XP, AP_EVOLVE, AP_BOSS, AP_BOSS_HP, AP_ROCK, AP_ORE, AP_MENU, AP_PAD,
+    AP_SHIP_BOSS, AP_SPORE
 } AutoplayCmd;
 
 // Telas que o comando "menu" abre (mesma ordem de Screen, em ui/menus.h).
@@ -165,6 +169,8 @@ typedef struct {
     int           ore;            // minério a dar à nave neste quadro
     int           screen;         // tela a abrir (AutoplayScreen; AP_SCREEN_KEEP = nenhuma)
     int           pad_hints;      // dicas de controle: 1 liga, 0 desliga, -1 mantém
+    float         ship_boss;      // > 0: põe a nave a esta distância do núcleo do boss, de frente para ele
+    float         spore_ahead;    // > 0: solta um esporo a esta distância à frente da nave
 
     AutoplayCrater craters[AUTOPLAY_MAX_CRATERS];
     int            crater_count;
@@ -289,6 +295,7 @@ typedef struct {
     int         boss_downs;
     int         boss_down_frames[AUTOPLAY_MAX_BOSS_DOWNS];
     bool        ability_owned;     // a nave tem o núcleo do Rompe-Mundos
+    bool        brood_owned;       // ... e o da Colmeia (a Ninhada)
 
     // Conserto: rochas que tocaram o chão e a fração do planeta devolvida.
     int         rocks_delivered;

@@ -6,6 +6,7 @@
 #include <math.h>
 
 #include "core/vmath.h"
+#include "render/hive_render.h"
 #include "render/lowpoly.h"
 
 // --- modelos ------------------------------------------------------------------
@@ -176,7 +177,8 @@ typedef struct {
 
 static BossPose boss_pose(const Boss *b, const Tuning *t, float alpha)
 {
-    BossPose p = { Vector3Lerp(b->pos_prev, b->pos, alpha), QuaternionSlerp(b->rot_prev, b->rot, alpha), t->breaker_scale };
+    (void)t;
+    BossPose p = { Vector3Lerp(b->pos_prev, b->pos, alpha), QuaternionSlerp(b->rot_prev, b->rot, alpha), b->scale };
     return p;
 }
 
@@ -205,6 +207,10 @@ void boss_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Cam
 {
     const Boss *b = &w->boss;
     if (!boss_active(b)) return;
+    if (b->type == BOSS_HIVE) {
+        hive_draw(w, t, alpha, glow, camera);
+        return;
+    }
     if (!built) build_hull();
     float time = (float)w->tick / (float)t->sim_hz;
     BossPose p = boss_pose(b, t, alpha);
@@ -230,9 +236,9 @@ void boss_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Cam
     // depois de destruídos.
     for (int k = 0; k < BOSS_CAPACITORS; k++) {
         LowPolyPose cp = base_pose(w, t, at(&p, BREAKER_CAPACITOR[k]), p.rot, p.scale, camera);
-        bool dead = charging && b->cap_hp[k] <= 0.0f;
+        bool dead = charging && b->breaker.cap_hp[k] <= 0.0f;
         cp.glow = dead ? CAP_DEAD : charging ? mix(CAP_ARMED, WHITE, pulse * 0.4f) : CAP_IDLE;
-        cp.whiten = Clamp(b->cap_flash[k] / 0.12f, 0.0f, 1.0f) * 0.7f;
+        cp.whiten = Clamp(b->breaker.cap_flash[k] / 0.12f, 0.0f, 1.0f) * 0.7f;
         if (dead) cp.tint = (Color){ 90, 80, 80, 255 };
         lowpoly_draw(&capacitor_model, &cp);
     }
@@ -267,7 +273,7 @@ void boss_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Cam
         DrawBillboard(camera, glow, at(&p, BREAKER_MUZZLE), p.scale * (0.3f + 0.9f * charge), faded(LASER_OUTER, 0.5f + 0.5f * pulse));
         DrawBillboard(camera, glow, at(&p, BREAKER_MUZZLE), p.scale * 0.25f * (0.5f + charge), faded(WHITE, 0.8f));
         for (int k = 0; k < BOSS_CAPACITORS; k++) {
-            if (b->cap_hp[k] <= 0.0f) continue;
+            if (b->breaker.cap_hp[k] <= 0.0f) continue;
             DrawBillboard(camera, glow, at(&p, BREAKER_CAPACITOR[k]), p.scale * 0.55f * (0.7f + 0.3f * pulse), faded(CAP_ARMED, 0.6f));
         }
     }
@@ -355,7 +361,8 @@ void boss_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D g
     const Ability *ab = &w->ability;
     float time = (float)w->tick / (float)t->sim_hz;
     Vector3 eye = camera.position;
-    bool fighting = boss_active(b) && b->state == BOSS_FIGHT;
+    hive_effects_draw(w, t, alpha, glow, camera);
+    bool fighting = boss_active(b) && b->state == BOSS_FIGHT && b->type == BOSS_BREAKER;
     bool charging = fighting && b->action == BREAKER_CHARGE;
     bool firing = fighting && b->action == BREAKER_FIRE;
     if (!charging && !firing && ab->beam_left <= 0.0f) return;
@@ -384,8 +391,8 @@ void boss_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D g
         } else {
             // Disparando: o que já foi cortado é a própria vala (com o manto à
             // mostra); só o que falta continua marcado.
-            trace(b, b->cut_done, 1.0f, trench, faded(TRACE_COLOR, 0.2f), eye);
-            trace(b, b->cut_done, 1.0f, fmaxf(trench * 0.16f, TRACE_WIDTH * 0.5f), faded(TRACE_COLOR, 0.75f), eye);
+            trace(b, b->breaker.cut_done, 1.0f, trench, faded(TRACE_COLOR, 0.2f), eye);
+            trace(b, b->breaker.cut_done, 1.0f, fmaxf(trench * 0.16f, TRACE_WIDTH * 0.5f), faded(TRACE_COLOR, 0.75f), eye);
         }
         rlEnd();
         rlSetTexture(0);
@@ -400,9 +407,9 @@ void boss_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D g
         BossPose p = boss_pose(b, t, alpha);
         Vector3 muzzle = at(&p, BREAKER_MUZZLE);
         float flicker = 0.85f + 0.15f * sinf(time * 47.0f);
-        streak(muzzle, b->beam_point, t->breaker_beam_width * 3.4f, faded(LASER_OUTER, 0.35f * flicker), eye);
-        streak(muzzle, b->beam_point, t->breaker_beam_width * 1.4f, faded(LASER_OUTER, 0.8f * flicker), eye);
-        streak(muzzle, b->beam_point, t->breaker_beam_width * 0.45f, faded(LASER_INNER, flicker), eye);
+        streak(muzzle, b->breaker.beam_point, t->breaker_beam_width * 3.4f, faded(LASER_OUTER, 0.35f * flicker), eye);
+        streak(muzzle, b->breaker.beam_point, t->breaker_beam_width * 1.4f, faded(LASER_OUTER, 0.8f * flicker), eye);
+        streak(muzzle, b->breaker.beam_point, t->breaker_beam_width * 0.45f, faded(LASER_INNER, flicker), eye);
     }
     if (ab->beam_left > 0.0f) {
         float fade = Clamp(ab->beam_left / 0.45f, 0.0f, 1.0f);
@@ -414,8 +421,8 @@ void boss_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D g
     rlSetTexture(0);
     if (firing) {
         float flicker = 0.8f + 0.2f * sinf(time * 33.0f);
-        DrawBillboard(camera, glow, b->beam_point, 14.0f * flicker, faded(LASER_OUTER, 0.8f));
-        DrawBillboard(camera, glow, b->beam_point, 6.0f, faded(WHITE, 0.9f));
+        DrawBillboard(camera, glow, b->breaker.beam_point, 14.0f * flicker, faded(LASER_OUTER, 0.8f));
+        DrawBillboard(camera, glow, b->breaker.beam_point, 6.0f, faded(WHITE, 0.9f));
         BossPose p = boss_pose(b, t, alpha);
         DrawBillboard(camera, glow, at(&p, BREAKER_MUZZLE), p.scale * 1.2f * flicker, faded(LASER_INNER, 0.9f));
     }

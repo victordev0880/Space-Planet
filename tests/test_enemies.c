@@ -505,7 +505,7 @@ static void waves_grow_and_use_every_type(void)
             total += n;
         }
         if (i == 0) first = total;
-        last = total;
+        if (wave_boss(&plan.waves[i]) < 0) last = total;   // a última horda sem boss
     }
     for (int type = 0; type < ENEMY_TYPE_COUNT; type++) CHECK(used[type]);
     CHECK(first >= 10);          // pedido do Victor: começa com uns 10

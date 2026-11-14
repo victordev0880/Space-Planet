@@ -41,6 +41,7 @@ typedef enum {
     ACT_BUY1,          // 4, 5, 6: compra uma defesa (torre, escudo, satélite)
     ACT_BUY2,
     ACT_BUY3,
+    ACT_ABILITY2,      // G: Ninhada (núcleo Colmeia)
     ACT_COUNT
 } Action;
 

@@ -78,6 +78,14 @@ typedef enum {
     EV_INTERCEPT,      // um satélite derrubou um tiro ou bomba (pos = onde)
     EV_SHIELD_BLOCK,   // um escudo segurou uma cratera     (value = raio dela)
     EV_SHIELD_DOWN,    // um escudo acabou                  (value = 1 se quebrou, 0 se o tempo acabou)
+    EV_HIVE_INFLATE,   // uma bolsa da Colmeia começou a inchar (pos = bolsa; value = segundos até soltar)
+    EV_HIVE_POP,       // a nave estourou uma bolsa         (value = quantas sobram)
+    EV_HIVE_BIRTH,     // uma bolsa soltou drones           (value = quantos)
+    EV_HIVE_THRUSTER,  // um propulsor foi destruído        (value = quantos sobram)
+    EV_HIVE_PUSH,      // a Colmeia começou (value = 1) ou parou (0) de empurrar a Lua
+    EV_HIVE_SPIT_WARN, // o coração vai cuspir ácido        (value = segundos)
+    EV_SPORE_BLAST,    // um esporo explodiu                (value = 1 se acertou o coração)
+    EV_BROOD,          // a Ninhada saiu (núcleo Colmeia)   (value = ferrões)
     EV_TYPE_COUNT
 } EventType;
 

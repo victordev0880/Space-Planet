@@ -29,8 +29,10 @@
 #define ROCK_SHAPES   4     // desenhos diferentes
 #define ROCK_DEPOSITS 4     // rochas que podem tocar o chão no mesmo passo
 
-typedef enum { ROCK_FRAGMENT, ROCK_METEOR, ROCK_KIND_COUNT } RockKind;
-typedef enum { ROCK_EJECT, ROCK_ORBIT, ROCK_FLYBY, ROCK_TOWED, ROCK_FALLING } RockState;
+// ROCK_SPORE: esporo da Colmeia Lunar. Boia perto dela; o raio trator o pega
+// e, solto, ele sai arremessado à frente da nave e explode no que tocar.
+typedef enum { ROCK_FRAGMENT, ROCK_METEOR, ROCK_SPORE, ROCK_KIND_COUNT } RockKind;
+typedef enum { ROCK_EJECT, ROCK_ORBIT, ROCK_FLYBY, ROCK_TOWED, ROCK_FALLING, ROCK_DRIFT, ROCK_THROWN } RockState;
 
 typedef struct {
     bool       alive;
@@ -99,6 +101,12 @@ Rock *rocks_spawn_fragment(Rocks *r, Rng *rng, const Tuning *t, float planet_rad
 
 // Um meteoro em `pos`, voando com a velocidade `vel`. NULL se não há espaço.
 Rock *rocks_spawn_meteor(Rocks *r, Rng *rng, const Tuning *t, Vector3 pos, Vector3 vel);
+
+// Um esporo em `pos`, boiando com a velocidade `vel` (que vai freando).
+Rock *rocks_spawn_spore(Rocks *r, Rng *rng, const Tuning *t, Vector3 pos, Vector3 vel);
+
+// Solta a rocha a reboque arremessada com a velocidade `vel` (esporos).
+void rocks_throw(Rocks *r, Vector3 vel);
 
 void rocks_tick(Rocks *r, const RockContext *ctx);
 

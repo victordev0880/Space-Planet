@@ -33,8 +33,13 @@ static const Color TAIL_HOT       = { 255, 226, 160, 255 };
 static const Color TAIL_COOL      = { 255, 84, 30, 255 };
 static const Color REPAIR_COLOR   = { 120, 255, 170, 255 };
 
+static const Color SPORE_SKIN     = { 70, 110, 50, 255 };
+static const Color SPORE_SPIKE    = { 180, 200, 140, 255 };
+static const Color SPORE_GLOW     = { 150, 255, 90, 255 };
+
 static LowPoly fragment_models[ROCK_SHAPES];
 static LowPoly meteor_models[ROCK_SHAPES];
+static LowPoly spore_model;
 static bool    built = false;
 
 static float bump(Vector3 d, int shape)
@@ -91,12 +96,30 @@ static void build_rock(LowPoly *m, int shape, bool meteor)
     }
 }
 
+// Esporo da Colmeia: uma vagem viva, acesa por dentro, com espinhos.
+static void build_spore(LowPoly *m)
+{
+    lowpoly_clear(m);
+    lowpoly_part(m, PART_BODY, SPORE_SKIN, false);
+    lowpoly_part(m, PART_BODY2, SPORE_SPIKE, false);
+    lowpoly_part_glow(m, PART_CRACK, SPORE_GLOW);
+    const LpRing pod[] = { { -1.1f, 0.0f, 0.0f, 0.0f }, { -0.7f, 0.75f, 0.75f, 0.0f }, { 0.0f, 0.95f, 0.95f, 0.0f },
+                           { 0.7f, 0.75f, 0.75f, 0.0f }, { 1.1f, 0.0f, 0.0f, 0.0f } };
+    lp_loft(m, pod, 5, 8, 0.0f, PART_CRACK, PART_BODY, -1, 0.35f, false);
+    for (int k = 0; k < 8; k++) {
+        float a = (float)k * PI * 0.25f, z = (k % 2 == 0) ? -0.3f : 0.35f;
+        Vector3 base = { cosf(a) * 0.85f, sinf(a) * 0.85f, z };
+        lp_spike(m, base, Vector3Scale(base, 1.75f), 0.16f, 4, PART_BODY2, false);
+    }
+}
+
 static void build_models(void)
 {
     for (int s = 0; s < ROCK_SHAPES; s++) {
         build_rock(&fragment_models[s], s, false);
         build_rock(&meteor_models[s], s, true);
     }
+    build_spore(&spore_model);
     built = true;
 }
 
@@ -177,6 +200,16 @@ void rocks_draw(const World *w, const Tuning *t, float alpha, Texture2D glow, Ca
             pose.whiten = 0.06f + 0.06f * sinf(time * 9.0f);
             pose.flash = TRACTOR_COLOR;
         }
+        if (k->kind == ROCK_SPORE) {
+            // O esporo pulsa como um coração; quanto mais velho, mais rápido.
+            float beat = 0.5f + 0.5f * sinf(time * (5.0f + k->age * 0.4f) + (float)i);
+            pose.glow = (Color){ (unsigned char)(150 + 80 * beat), 255, (unsigned char)(90 + 60 * beat), 255 };
+            pose.rim = 0.6f;
+            pose.rim_color = SPORE_GLOW;
+            pose.scale = k->radius * (1.0f + 0.08f * beat);
+            lowpoly_draw(&spore_model, &pose);
+            continue;
+        }
         LowPoly *model = meteor ? &meteor_models[k->shape % ROCK_SHAPES] : &fragment_models[k->shape % ROCK_SHAPES];
         if (!meteor) model->colors[PART_TOP] = top_color(t, k->material);
         lowpoly_draw(model, &pose);
@@ -207,7 +240,7 @@ void rocks_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D 
     bool any_job = repair_active_jobs(&w->repair) > 0;
     bool any = towed != NULL || any_job;
     for (int i = 0; i < ROCKS_MAX && !any; i++) {
-        any = w->rocks.items[i].alive && (w->rocks.items[i].kind == ROCK_METEOR || w->rocks.items[i].state == ROCK_EJECT);
+        any = w->rocks.items[i].alive && (w->rocks.items[i].kind != ROCK_FRAGMENT || w->rocks.items[i].state == ROCK_EJECT);
     }
     if (!any) return;
 
@@ -233,6 +266,16 @@ void rocks_effects_draw(const World *w, const Tuning *t, float alpha, Texture2D 
             }
         } else if (k->kind == ROCK_METEOR) {
             DrawBillboard(camera, glow, pos, k->radius * 2.4f, faded(METEOR_RIM, 0.25f));   // ainda em brasa
+        } else if (k->kind == ROCK_SPORE) {
+            // Halo verde; arremessado, deixa um rastro.
+            DrawBillboard(camera, glow, pos, k->radius * 4.0f, faded(SPORE_GLOW, 0.3f + 0.15f * sinf(time * 7.0f + (float)i)));
+            if (k->state == ROCK_THROWN) {
+                Vector3 back = Vector3Scale(Vector3Normalize(k->vel), -1.0f);
+                for (int s = 1; s <= 6; s++) {
+                    DrawBillboard(camera, glow, Vector3Add(pos, Vector3Scale(back, k->radius * 1.3f * (float)s)),
+                                  k->radius * (2.6f - 0.3f * (float)s), faded(SPORE_GLOW, 0.5f - 0.07f * (float)s));
+                }
+            }
         } else if (k->state == ROCK_EJECT) {
             // Fragmento recém-arrancado: quente, esfriando na subida.
             float u = Clamp(k->age / fmaxf(t->fragment_eject_time, 1e-3f), 0.0f, 1.0f);

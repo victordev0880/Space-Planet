@@ -7,6 +7,7 @@
 
 typedef enum {
     BOSS_BREAKER,     // Rompe-Mundos: canhão que corta uma fatia do planeta
+    BOSS_HIVE,        // Colmeia Lunar: agarrada à Lua, solta drones e empurra a Lua
     BOSS_TYPE_COUNT
 } BossType;
 

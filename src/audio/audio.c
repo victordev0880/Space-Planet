@@ -821,6 +821,123 @@ static void synth_ui_start(float *out, int n)
     }
 }
 
+// --- Colmeia Lunar (sons orgânicos) ----------------------------------------------
+
+static void synth_hive_inflate(float *out, int n)
+{
+    // Bolsa inchando: um borbulhar que acelera e um gemido grave subindo.
+    LowPass lp = { 0 }, lp2 = { 0 };
+    float phase = 0.0f, length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float rate = 6.0f + 26.0f * u * u;                       // bolhas por segundo
+        float bubble = powf(fabsf(sinf(PI * rate * t)), 12.0f);
+        float wet = lowpass(&lp, noise(), 500.0f + 1500.0f * bubble) * bubble * 2.5f;
+        phase += sweep(70.0f, 210.0f, t, length) / SAMPLE_RATE;
+        float groan = lowpass(&lp2, saw(phase), 400.0f + 500.0f * u);
+        out[i] = (wet + 0.6f * groan) * fminf(u * 3.0f, 1.0f) * (0.4f + 0.6f * u);
+    }
+}
+
+static void synth_hive_pop(float *out, int n)
+{
+    // Bolsa estourando: um "plof" molhado.
+    LowPass lp = { 0 };
+    float phase = 0.0f;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float splat = lowpass(&lp, noise(), sweep(2600.0f, 180.0f, t, 0.3f)) * 2.0f;
+        phase += sweep(160.0f, 55.0f, t, 0.25f) / SAMPLE_RATE;
+        out[i] = (splat * envelope(t, 0.002f, 9.0f) + 0.9f * sine(phase) * envelope(t, 0.002f, 12.0f));
+    }
+}
+
+static void synth_hive_birth(float *out, int n)
+{
+    // Drones saindo da bolsa: chilreios agudos e desencontrados.
+    memset(out, 0, sizeof(float) * (size_t)n);
+    for (int k = 0; k < 7; k++) {
+        int start = (int)((float)k * 0.07f * SAMPLE_RATE);
+        float f0 = 1700.0f + 180.0f * (float)(k % 4), f1 = f0 * 1.5f;
+        float phase = 0.0f;
+        for (int i = start; i < n; i++) {
+            float t = (float)(i - start) / SAMPLE_RATE;
+            if (t > 0.12f) break;
+            phase += sweep(f0, f1, t, 0.08f) / SAMPLE_RATE;
+            out[i] += 0.35f * square(phase) * envelope(t, 0.003f, 30.0f);
+        }
+    }
+}
+
+static void synth_hive_thruster(float *out, int n)
+{
+    // Propulsor arrebentando: explosão grave e um chiado de gás escapando.
+    explosion(out, n, 1600.0f, 3.2f, 52.0f, 0.012f);
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        float x = noise();
+        out[i] += 0.5f * (x - lowpass(&lp, x, 3000.0f)) * envelope(t, 0.05f, 2.5f);
+    }
+}
+
+static void synth_hive_push(float *out, int n)
+{
+    // A Lua sendo empurrada: um rangido grave e enorme, que cresce e some.
+    LowPass lp = { 0 };
+    float phase = 0.0f, length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float vibrato = 1.0f + 0.04f * sinf(2.0f * PI * 3.3f * t);
+        phase += 44.0f * vibrato / SAMPLE_RATE;
+        float body = lowpass(&lp, saw(phase) + 0.5f * saw(phase * 1.49f) + 0.3f * noise(), 260.0f);
+        out[i] = body * sinf(PI * u) * 1.4f;
+    }
+}
+
+static void synth_hive_spit(float *out, int n)
+{
+    // O coração prepara o cuspe: um chiado ácido crescendo.
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float x = noise();
+        float hiss = x - lowpass(&lp, x, 1800.0f + 3000.0f * u);
+        out[i] = hiss * u * u * (0.8f + 0.2f * sinf(2.0f * PI * 40.0f * t));
+    }
+}
+
+static void synth_spore(float *out, int n)
+{
+    // Esporo explodindo: estouro molhado e brilhante.
+    explosion(out, n, 3000.0f, 5.0f, 85.0f, 0.02f);
+    LowPass lp = { 0 };
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE;
+        out[i] += 0.8f * lowpass(&lp, noise(), sweep(3000.0f, 300.0f, t, 0.2f)) * envelope(t, 0.001f, 14.0f);
+    }
+}
+
+static void synth_brood(float *out, int n)
+{
+    // A Ninhada saindo: um enxame zumbindo que passa.
+    static const float VOICES[4] = { 180.0f, 211.0f, 247.0f, 263.0f };
+    float phase[4] = { 0 };
+    LowPass lp = { 0 };
+    float length = (float)n / SAMPLE_RATE;
+    for (int i = 0; i < n; i++) {
+        float t = (float)i / SAMPLE_RATE, u = t / length;
+        float v = 0.0f;
+        for (int k = 0; k < 4; k++) {
+            phase[k] += VOICES[k] * (1.0f + 0.3f * u) / SAMPLE_RATE;
+            v += saw(phase[k]);
+        }
+        float buzz = 0.6f + 0.4f * sinf(2.0f * PI * 55.0f * t);
+        out[i] = lowpass(&lp, v * buzz, 2400.0f) * sinf(PI * u) * 0.6f;
+    }
+}
+
 typedef struct {
     SynthFn fn;
     float   seconds;
@@ -894,6 +1011,14 @@ static const SoundDef DEFS[SND_COUNT] = {
     [SND_UI_CONFIRM]      = { synth_ui_confirm,      0.25f, 0.40f, 2 },
     [SND_UI_BACK]         = { synth_ui_back,         0.25f, 0.35f, 2 },
     [SND_UI_START]        = { synth_ui_start,        1.60f, 0.60f, 1 },
+    [SND_HIVE_INFLATE]    = { synth_hive_inflate,    2.60f, 0.70f, 2 },   // dura o mesmo que hive.inflate_time
+    [SND_HIVE_POP]        = { synth_hive_pop,        0.50f, 0.80f, 3 },
+    [SND_HIVE_BIRTH]      = { synth_hive_birth,      0.70f, 0.55f, 2 },
+    [SND_HIVE_THRUSTER]   = { synth_hive_thruster,   1.60f, 0.95f, 2 },
+    [SND_HIVE_PUSH]       = { synth_hive_push,       2.80f, 0.90f, 1 },
+    [SND_HIVE_SPIT]       = { synth_hive_spit,       0.90f, 0.55f, 1 },   // hive.spit_warn
+    [SND_SPORE]           = { synth_spore,           0.80f, 0.85f, 2 },
+    [SND_BROOD]           = { synth_brood,           0.90f, 0.60f, 1 },
 };
 
 static Sound make_sound(const SoundDef *def)
@@ -1107,6 +1232,15 @@ void audio_update(Audio *a, const World *w, const Tuning *t, Camera3D camera)
         case EV_INTERCEPT:       s = SND_INTERCEPT; floor = 0.15f; break;
         case EV_SHIELD_BLOCK:    s = SND_SHIELD_BLOCK; floor = 0.25f; break;
         case EV_SHIELD_DOWN:     s = SND_SHIELD_DOWN; floor = 0.4f; break;
+        // Colmeia Lunar: os avisos têm de ser ouvidos de longe (a luta é na Lua).
+        case EV_HIVE_INFLATE:    s = SND_HIVE_INFLATE; floor = 0.45f; break;
+        case EV_HIVE_POP:        s = SND_HIVE_POP; floor = 0.35f; break;
+        case EV_HIVE_BIRTH:      s = SND_HIVE_BIRTH; floor = 0.35f; break;
+        case EV_HIVE_THRUSTER:   s = SND_HIVE_THRUSTER; floor = 0.5f; break;
+        case EV_HIVE_PUSH:       s = (e->value > 0.5f) ? SND_HIVE_PUSH : SND_CHIME; positional = false; break;
+        case EV_HIVE_SPIT_WARN:  s = SND_HIVE_SPIT; floor = 0.5f; break;
+        case EV_SPORE_BLAST:     s = SND_SPORE; floor = 0.4f; break;
+        case EV_BROOD:           s = SND_BROOD; positional = false; break;
         default:             break;
         }
         if (s == SND_COUNT || played[s]++ >= PER_FRAME) continue;

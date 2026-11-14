@@ -1,0 +1,96 @@
+# Roteiro do marco 11 (Colmeia Lunar): a chegada à Lua, as bolsas brotando,
+# uma bolsa inchando e soltando a ninhada, o piloto automático lutando, a
+# fase 2 (propulsores empurrando a Lua contra a Terra e o tentáculo da maré),
+# um esporo arremessado no coração, a fase 3, a morte, a recompensa e a
+# Ninhada usada contra um bando.
+#
+#   mingw32-make run ARGS="--autoplay roteiros/hive1.txt"
+#
+# A Lua começa em (121 40 -206), a 242 do centro, e anda 1 grau por segundo.
+# "cam boss acima atrás lado": para a Colmeia, "acima" é para longe do
+# planeta (negativo = entre a Lua e o planeta, vendo o coração).
+
+frames 7400
+seed 11
+
+at 0    waves off
+at 0    ship 70 23 -120  121 40 -206
+at 0    boss hive 0.3 0.7 -0.6
+
+# --- chegada e as bolsas brotando ----------------------------------------------
+at 90   shot hive1_01_chegando
+at 300  shot hive1_02_agarrando
+at 380  cam boss -58 0 16
+at 381  shot hive1_03_coracao
+at 382  cam boss 20 -40 30
+at 383  shot hive1_04_de_lado
+at 384  view ship
+
+# --- uma bolsa incha e solta a ninhada (ninguém atira) -------------------------
+at 640  cam boss -58 0 16
+at 641  shot hive1_05_bolsas
+at 642  view ship
+at 860  cam boss -45 -10 10
+at 861  shot hive1_06_inchando
+at 862  view ship
+at 960  shot hive1_07_ninhada
+
+# --- o piloto automático luta --------------------------------------------------
+at 1000 autopilot on
+at 1400 shot hive1_08_luta
+at 1800 shot hive1_09_luta
+at 2200 shot hive1_10_luta
+
+# --- fase 2: propulsores, a Lua caindo e o tentáculo ---------------------------
+at 2400 autopilot off
+at 2400 bosshp 0.6
+at 2600 cam boss 55 10 25
+at 2601 shot hive1_11_propulsores
+at 2602 view ship
+at 4100 cam -60 140 40  0 0 0
+at 4101 shot hive1_12_lua_perto
+at 4102 view ship
+at 4300 cam boss -150 30 60
+at 4301 shot hive1_13_tentaculo
+at 4302 view ship
+
+# --- um esporo arremessado no coração -----------------------------------------
+# A nave de frente para o coração; o esporo logo à frente; F pega, F arremessa.
+at 4400 autopilot on
+at 4690 autopilot off
+at 4700 ship boss 34
+at 4701 spore 9
+at 4706 press tractor
+at 4735 shot hive1_14_esporo_no_raio
+at 4745 press tractor
+at 4753 shot hive1_15_esporo_voando
+at 4790 shot hive1_16_esporo_acertou
+
+# --- fase 3 e a morte ----------------------------------------------------------
+at 5100 autopilot on
+at 5150 bosshp 0.25
+at 5400 shot hive1_17_fase3
+# O golpe final: de frente para o coração (entreaberto na fase 3), atirando.
+at 5790 autopilot off
+at 5800 bosshp 0.01
+at 5800 ship boss 32
+at 5801 hold fire
+at 5880 shot hive1_18_golpe
+at 5960 release fire
+# Morta, o piloto volta (ele escolhe as cartas que o XP do boss abrir).
+at 5960 autopilot on
+at 5990 shot hive1_19_morte
+at 6200 shot hive1_20_recompensa
+
+# --- a Ninhada contra um bando ---------------------------------------------------
+at 6400 autopilot off
+at 6450 clear
+at 6450 ship 45.06 35.05 82.11  45.06 35.05 -20
+at 6450 spawn swarm 8  45.0 40.0 30.0
+at 6460 press ability2
+at 6475 shot hive1_21_ninhada
+at 6477 cam 75.0 45.0 60.0  45.06 35.05 50.0
+at 6478 shot hive1_22_ninhada_de_lado
+at 6479 view ship
+at 6520 shot hive1_23_depois
+at 7399 shot hive1_24_fim

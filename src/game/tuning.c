@@ -546,6 +546,50 @@ static const TuneField BOSS_FIELDS[] = {
     F("ability.width",            ability_width,            0.1,  100),
     F("ability.cooldown",         ability_cooldown,         0,    600),
     F("ability.charge",           ability_charge,           0,    10),
+    F("hive.hp",                  hive_hp,                  1,    100000),
+    F("hive.points",              hive_points,              0,    10000000),
+    F("hive.xp",                  hive_xp,                  0,    10000),
+    F("hive.enter_time",          hive_enter_time,          0.1,  60),
+    F("hive.spawn_distance",      hive_spawn_distance,      1,    100),
+    F("hive.sac_hp",              hive_sac_hp,              0.1,  10000),
+    F("hive.sac_regrow",          hive_sac_regrow,          0.1,  60),
+    F("hive.inflate_time",        hive_inflate_time,        0.1,  30),
+    F("hive.inflate_1",           hive_inflate[0],          0.2,  120),
+    F("hive.inflate_2",           hive_inflate[1],          0.2,  120),
+    F("hive.inflate_3",           hive_inflate[2],          0.2,  120),
+    I("hive.brood",               hive_brood,               0,    16),
+    I("hive.brood_cap",           hive_brood_cap,           0,    64),
+    F("hive.open_time",           hive_open_time,           0.5,  60),
+    F("hive.core_armor",          hive_core_armor,          0,    1),
+    F("hive.core_open",           hive_core_open,           0,    1),
+    F("hive.phase_2",             hive_phase_2,             0,    1),
+    F("hive.phase_3",             hive_phase_3,             0,    1),
+    F("hive.thruster_hp",         hive_thruster_hp,         0.1,  10000),
+    F("hive.thruster_regrow",     hive_thruster_regrow,     0.5,  300),
+    F("hive.push_rate",           hive_push_rate,           0,    1),
+    F("hive.recede_rate",         hive_recede_rate,         0,    1),
+    F("hive.moon_min",            hive_moon_min,            0.3,  1),
+    F("hive.tide_start",          hive_tide_start,          0.3,  1),
+    F("hive.tide_radius",         hive_tide_radius,         0.5,  40),
+    F("hive.tide_sink",           hive_tide_sink,           0,    40),
+    F("hive.tide_spread",         hive_tide_spread,         0,    200),
+    F("hive.tide_slow",           hive_tide_slow,           0.05, 60),
+    F("hive.tide_fast",           hive_tide_fast,           0.05, 60),
+    F("hive.spit_interval",       hive_spit_interval,       0.2,  60),
+    F("hive.spit_warn",           hive_spit_warn,           0,    10),
+    F("hive.spit_damage",         hive_spit_damage,         0,    10000),
+    F("hive.spit_speed",          hive_spit_speed,          1,    1000),
+    F("hive.spore_size",          hive_spore_size,          0.2,  20),
+    F("hive.spore_life",          hive_spore_life,          1,    600),
+    F("hive.spore_throw",         hive_spore_throw,         0,    1000),
+    F("hive.spore_damage",        hive_spore_damage,        0,    10000),
+    F("hive.spore_blast",         hive_spore_blast,         0.5,  100),
+    I("brood.count",              brood_count,              1,    32),
+    F("brood.damage",             brood_damage,             0,    10000),
+    F("brood.speed",              brood_speed,              1,    1000),
+    F("brood.turn",               brood_turn,               0,    50),
+    F("brood.life",               brood_life,               0.2,  30),
+    F("brood.cooldown",           brood_cooldown,           0,    600),
 };
 
 #undef I
@@ -706,6 +750,14 @@ bool tuning_bosses_from_config(Tuning *out, const Config *bosses_cfg, char *err,
     if (!apply_table(&t, &TABLES[3], bosses_cfg, err, err_len)) return false;
     if (t.breaker_phase_3 >= t.breaker_phase_2) {
         snprintf(err, err_len, "%s: breaker.phase_3 precisa ser menor que breaker.phase_2", BOSSES_FILE);
+        return false;
+    }
+    if (t.hive_phase_3 >= t.hive_phase_2) {
+        snprintf(err, err_len, "%s: hive.phase_3 precisa ser menor que hive.phase_2", BOSSES_FILE);
+        return false;
+    }
+    if (t.hive_moon_min >= t.hive_tide_start) {
+        snprintf(err, err_len, "%s: hive.moon_min precisa ser menor que hive.tide_start", BOSSES_FILE);
         return false;
     }
     *out = t;

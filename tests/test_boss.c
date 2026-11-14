@@ -72,7 +72,7 @@ static void boss_enters_then_fights(void)
     CHECK(w.boss.state == BOSS_ENTER && saw_event(&w, EV_BOSS_ENTER));
     CHECK(!boss_vulnerable(&w.boss));
     float hp = w.boss.hp;
-    CHECK(boss_damage_core(&w.boss, &t, 100.0f, &w.events, 0u) == 0.0f);   // invulnerável na entrada
+    CHECK(boss_hit(&w.boss, &t, BOSS_CAPACITORS, 100.0f, &w.events, 0u) == 0.0f);   // invulnerável na entrada
     CHECK(w.boss.hp == hp);
 
     skip_entrance(&w, &t);
@@ -98,12 +98,12 @@ static void boss_capacitors_cancel_the_cut(void)
     float armor = boss_core_factor(&w.boss, &t);
     CHECK(armor < 0.5f);
     for (int k = 0; k < BOSS_CAPACITORS; k++) {
-        CHECK(boss_damage_capacitor(&w.boss, &t, k, 1000.0f, &w.events, (uint32_t)w.tick) > 0.0f);
+        CHECK(boss_hit(&w.boss, &t, k, 1000.0f, &w.events, (uint32_t)w.tick) > 0.0f);
     }
     CHECK(w.boss.action == BREAKER_STAGGER && saw_event(&w, EV_BOSS_STAGGER));
     CHECK(boss_core_factor(&w.boss, &t) == 1.0f);
     float hp = w.boss.hp;
-    CHECK_NEAR(boss_damage_core(&w.boss, &t, 10.0f, &w.events, (uint32_t)w.tick), 10.0f, 1e-4);
+    CHECK_NEAR(boss_hit(&w.boss, &t, BOSS_CAPACITORS, 10.0f, &w.events, (uint32_t)w.tick), 10.0f, 1e-4);
     CHECK_NEAR(w.boss.hp, hp - 10.0f, 1e-4);
 
     run(&w, &t, keys(0u), seconds(t.breaker_charge[0] + 1.0f));
@@ -121,7 +121,7 @@ static void boss_cut_carves_the_planet(void)
     int64_t volume = w.planet.volume;
     for (int i = 0; i < seconds(40.0f) && !saw_event(&w, EV_BOSS_FIRE); i++) run(&w, &t, keys(0u), 1);
     CHECK(saw_event(&w, EV_BOSS_FIRE));
-    Vector3 from = w.boss.cut_from, mid = boss_cut_direction(&w.boss, 0.5f), to = boss_cut_direction(&w.boss, 1.0f);
+    Vector3 from = w.boss.breaker.cut_from, mid = boss_cut_direction(&w.boss, 0.5f), to = boss_cut_direction(&w.boss, 1.0f);
     uint32_t impacts = w.impact_count;
     // Cada mordida fica na mesma profundidade em relação ao solo de antes do
     // corte (se medisse o chão já cavado, o corte desceria em escada até o núcleo).
@@ -188,13 +188,13 @@ static void boss_phases_and_drones(void)
     skip_entrance(&w, &t);
     w.boss.action = BREAKER_STAGGER;
     w.boss.timer = 100.0f;
-    boss_damage_core(&w.boss, &t, w.boss.hp_max * (1.0f - t.breaker_phase_2) + 1.0f, &w.events, (uint32_t)w.tick);
+    boss_hit(&w.boss, &t, BOSS_CAPACITORS, w.boss.hp_max * (1.0f - t.breaker_phase_2) + 1.0f, &w.events, (uint32_t)w.tick);
     CHECK(w.boss.phase == 2 && saw_event(&w, EV_BOSS_PHASE));
     for (int i = 0; i < seconds(t.breaker_launch_interval + 1.0f) && enemies_alive(&w.enemies) == 0; i++) {
         run(&w, &t, keys(0u), 1);
     }
     CHECK(w.enemies.alive_by_type[ENEMY_SWARM] == t.breaker_launch_count);
-    boss_damage_core(&w.boss, &t, w.boss.hp - w.boss.hp_max * t.breaker_phase_3 + 1.0f, &w.events, (uint32_t)w.tick);
+    boss_hit(&w.boss, &t, BOSS_CAPACITORS, w.boss.hp - w.boss.hp_max * t.breaker_phase_3 + 1.0f, &w.events, (uint32_t)w.tick);
     CHECK(w.boss.phase == 3);
     w.boss.action = BREAKER_REST;
     CHECK_NEAR(boss_core_factor(&w.boss, &t), t.breaker_core_open, 1e-6);   // fase 3: meio aberto
@@ -222,7 +222,7 @@ static void boss_death_ends_the_wave_and_rewards(void)
 
     w.boss.action = BREAKER_STAGGER;
     w.boss.timer = 100.0f;
-    boss_damage_core(&w.boss, &t, 1e6f, &w.events, (uint32_t)w.tick);
+    boss_hit(&w.boss, &t, BOSS_CAPACITORS, 1e6f, &w.events, (uint32_t)w.tick);
     CHECK(w.boss.state == BOSS_DYING);
     int64_t points = w.score.points;
     for (int i = 0; i < seconds(8.0f) && boss_active(&w.boss); i++) run(&w, &t, keys(0u), 1);
@@ -298,9 +298,10 @@ static void boss_is_wave_five(void)
     bool ok = waves_load(&plan, "data/waves.txt", err, sizeof err);
     if (!ok) test_fail(__FILE__, __LINE__, err);
     CHECK(ok);
-    CHECK(plan.count >= 5);
+    CHECK(plan.count >= 10);
     for (int i = 0; i < plan.count; i++) {
-        CHECK(wave_boss(&plan.waves[i]) == ((i == 4) ? BOSS_BREAKER : -1));
+        int expected = (i == 4) ? BOSS_BREAKER : (i == 9) ? BOSS_HIVE : -1;
+        CHECK(wave_boss(&plan.waves[i]) == expected);
     }
 }
 

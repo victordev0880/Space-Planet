@@ -51,5 +51,6 @@ void suite_tuning(void);
 void suite_world(void);
 void suite_autoplay(void);
 void suite_settings(void);
+void suite_hive(void);
 
 #endif

@@ -26,6 +26,7 @@ Shot *projectiles_spawn(Projectiles *p, ShotKind kind, Vector3 pos, Vector3 vel,
     s->vel = vel;
     s->life = life;
     s->last_hit = -1;
+    s->homing = -1;
     return s;
 }
 

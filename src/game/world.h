@@ -70,6 +70,13 @@ typedef struct {
     Vector3 beam_from, beam_to;
 } Ability;
 
+// Núcleo Colmeia, a recompensa do segundo boss: a tecla G solta uma revoada
+// de ferrões que caçam os inimigos mais perto.
+typedef struct {
+    bool  owned;
+    float cooldown;   // segundos até poder usar de novo
+} Brood;
+
 typedef enum {
     GAME_PLAYING,
     GAME_WON,      // todas as hordas vencidas
@@ -109,6 +116,7 @@ typedef struct {
     // --- boss ---
     Boss         boss;
     Ability      ability;
+    Brood        brood;
     int          beam_ticks;    // passos desde o último dano do laser do boss na nave
 
     // --- rochas e conserto ---

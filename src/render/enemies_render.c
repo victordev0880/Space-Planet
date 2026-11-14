@@ -420,7 +420,13 @@ void projectiles_draw(const World *w, const Tuning *t, float alpha, Texture2D gl
         if (speed < 1e-3f) continue;
         Vector3 dir = Vector3Scale(s->vel, 1.0f / speed);
 
-        if (s->kind == SHOT_BOLT) {
+        if (s->kind == SHOT_BOLT && s->source == BOLT_BROOD) {
+            // Ferrão da Ninhada: um risco verde, curto e grosso, que ondula.
+            float length = fminf(speed * 0.06f, s->age * speed + 0.3f);
+            Vector3 tail = Vector3Subtract(pos, Vector3Scale(dir, length));
+            streak(tail, pos, 2.6f, faded((Color){ 140, 255, 90, 255 }, 0.45f), eye);
+            streak(tail, pos, 0.8f, faded((Color){ 230, 255, 200, 255 }, 0.95f), eye);
+        } else if (s->kind == SHOT_BOLT) {
             // O risco não passa de onde o tiro saiu. Perto da câmera ele fica
             // mais fino e mais fraco; longe, um pouco mais grosso, para
             // continuar visível.

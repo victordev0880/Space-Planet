@@ -6,7 +6,8 @@
 #     tipo:      swarm (Enxame), bomber (Bombardeiro), kamikaze, digger
 #                (Escavador), siphon (Sifão), sniper (Atirador), shielder
 #                (Escudeiro), carrier (Porta-drones); ou um boss: breaker
-#                (Rompe-Mundos, data/bosses.txt), sempre com quantidade 1
+#                (Rompe-Mundos), hive (Colmeia Lunar; a direção é de onde ela
+#                chega à Lua), todos em data/bosses.txt, sempre com quantidade 1
 #     atraso:    segundos depois do começo da horda em que o grupo aparece
 #     azimute e elevação: de onde o grupo vem, em graus (mesma convenção do
 #     Sol em tuning.txt). A nave começa olhando para o planeta a partir do
@@ -90,14 +91,11 @@ wave.9.group.5 = bomber 2 12 50 15
 wave.9.group.6 = kamikaze 8 16 170 0
 wave.9.group.7 = sniper 2 20 -60 -30
 
-# Horda 10 (40): tudo junto.
+# Horda 10: a Colmeia Lunar (boss), agarrada à Lua. Ela mesma solta drones;
+# a escolta ataca o planeta enquanto o jogador está longe, na Lua.
+#   tipo "hive", sempre 1; a direção é de onde ela chega à Lua.
 wave.10.pause   = 18
-wave.10.group.1 = bomber 2 0 30 10
-wave.10.group.2 = carrier 1 0 -60 30
-wave.10.group.3 = swarm 10 2 90 -15
-wave.10.group.4 = shielder 2 2 90 -11
-wave.10.group.5 = digger 2 8 -150 25
-wave.10.group.6 = kamikaze 10 12 0 -30
-wave.10.group.7 = sniper 3 16 -100 45
-wave.10.group.8 = siphon 2 20 140 5
-wave.10.group.9 = swarm 8 26 -30 -40
+wave.10.group.1 = hive 1 0 40 30
+wave.10.group.2 = bomber 1 20 -60 20
+wave.10.group.3 = kamikaze 6 35 120 -10
+wave.10.group.4 = siphon 1 60 -150 25

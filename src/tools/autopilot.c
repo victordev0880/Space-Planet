@@ -103,24 +103,15 @@ static Target pick_target(const World *w, const Tuning *t)
         offer(&best, s->pos, e->items[i].pos, e->items[i].vel, urgency(w, t, i), i);
     }
 
-    // O boss: na carga, os capacitores antes de tudo; aberto, o núcleo; fechado,
-    // o núcleo só se não houver nada melhor.
-    // Os capacitores ficam nos flancos (voltados para fora do casco); o núcleo,
-    // no dorso (voltado para longe do planeta).
+    // O boss: cada peça diz a própria urgência (na carga do Rompe-Mundos, os
+    // capacitores antes de tudo; aberto, o núcleo...) e de que lado ela se
+    // mostra.
     const Boss *b = &w->boss;
-    if (boss_vulnerable(b)) {
-        if (boss_capacitors_armed(b)) {
-            for (int k = 0; k < BOSS_CAPACITORS; k++) {
-                if (b->cap_hp[k] <= 0.0f) continue;
-                Vector3 local = { BREAKER_CAPACITOR[k].x, 0.0f, 0.0f };
-                Vector3 normal = Vector3Normalize(Vector3RotateByQuaternion(local, b->rot));
-                offer_part(&best, s->pos, boss_point(b, t, BREAKER_CAPACITOR[k]), b->vel, 0.15f, normal);
-            }
-        }
-        float factor = boss_core_factor(b, t);
-        float core_urgency = (factor >= 0.99f) ? 0.2f : (factor >= 0.3f) ? 0.7f : 2.5f;
-        Vector3 up = Vector3RotateByQuaternion((Vector3){ 0.0f, 1.0f, 0.0f }, b->rot);
-        offer_part(&best, s->pos, boss_point(b, t, BREAKER_CORE), b->vel, core_urgency, up);
+    BossPart parts[BOSS_PARTS_MAX];
+    int count = boss_parts(b, t, parts);
+    for (int k = 0; k < count; k++) {
+        if (parts[k].aim <= 0.0f) continue;
+        offer_part(&best, s->pos, parts[k].center, b->vel, parts[k].aim, parts[k].facing);
     }
     return best;
 }
@@ -191,6 +182,7 @@ static int pick_rock(const World *w)
     for (int i = 0; i < ROCKS_MAX; i++) {
         const Rock *k = &w->rocks.items[i];
         if (!k->alive || k->state == ROCK_TOWED || k->state == ROCK_FALLING || k->state == ROCK_EJECT) continue;
+        if (k->kind == ROCK_SPORE) continue;   // esporo não conserta nem dá minério
         float score = Vector3Distance(s->pos, k->pos) * ((k->kind == ROCK_METEOR) ? ROCK_METEOR_PRIORITY : 1.0f);
         if (best < 0 || score < best_score) {
             best = i;
