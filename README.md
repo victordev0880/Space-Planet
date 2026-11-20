@@ -1,4 +1,4 @@
-# Terra Fraturada
+# Space Planet
 
 Jogo 3D de ação espacial escrito em **C puro** (C11 + [raylib](https://www.raylib.com/)). Você pilota uma nave em volta da Terra e a defende de hordas alienígenas e de quatro bosses. **O planeta é destrutível de verdade**: cada ataque arranca pedaços dele, e a vida do planeta é o volume que ainda resta. Crateras expõem o manto e o núcleo incandescente, e rochas arrancadas podem ser rebocadas de volta para consertar o terreno.
 
